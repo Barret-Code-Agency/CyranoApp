@@ -18,8 +18,8 @@ export default function Login({ onLogin, waiting }) {
         if (!password)     return setError("Ingresá tu contraseña.");
         setError(""); setLoading(true);
         try {
-            await login(email, password);
-            onLogin();
+            const loggedUser = await login(email, password);
+            onLogin(loggedUser);
         } catch (e) {
             const msg = e.code || e.message;
             if (msg.includes("user-not-found") || msg.includes("wrong-password") || msg.includes("invalid-credential"))

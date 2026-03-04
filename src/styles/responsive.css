@@ -1,0 +1,429 @@
+/* ═══════════════════════════════════════════════════════
+   CYRANO APP — RESPONSIVE MÓVIL
+   Importar ÚLTIMO en main.jsx o App.jsx
+   Target: 360px–430px (Android/iPhone estándar)
+═══════════════════════════════════════════════════════ */
+
+/* ── 1. VIEWPORT META — asegurar en index.html ──────────
+   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+─────────────────────────────────────────────────────── */
+
+/* ── 2. BASE MÓVIL ───────────────────────────────────── */
+@media (max-width: 600px) {
+
+    /* App shell */
+    .app {
+        min-height: 100dvh;   /* dynamic viewport height para móvil */
+    }
+
+    /* Main content — más padding lateral reducido */
+    .main {
+        padding: var(--space-4) var(--space-3) 80px;
+        max-width: 100%;
+    }
+
+    /* ── HEADER ── */
+    .header {
+        padding: 0 var(--space-3);
+        height: 56px;
+    }
+
+    .header-logo-text {
+        font-size: 16px;
+        letter-spacing: 2px;
+        gap: var(--space-1);
+    }
+
+    .user-name {
+        max-width: 80px;
+        font-size: 11px;
+    }
+
+    .user-chip {
+        padding: 4px 8px 4px 4px;
+        gap: var(--space-1);
+    }
+
+    /* ── SCREEN TITLES ── */
+    .screen-title {
+        font-size: var(--text-2xl);
+    }
+
+    /* ── GRIDS 4 columnas → 2×2 ── */
+    .sup-stats-grid,
+    .usr-stats,
+    .ps-resumen,
+    .veh-resumen-grid {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* ── GRIDS 2 columnas → 1 columna ── */
+    .veh-form-grid,
+    .row,
+    .ps-semanas-check {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Semanas check: 2 columnas en móvil (más compacto que 1) */
+    .ps-semanas-check {
+        grid-template-columns: 1fr 1fr !important;
+        display: grid !important;
+        gap: 6px;
+    }
+
+    /* ── TABS ADMIN — scroll horizontal ── */
+    .admin-tab-bar {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 4px;
+        padding-bottom: 2px;
+    }
+    .admin-tab-bar::-webkit-scrollbar { display: none; }
+
+    .admin-tab-btn {
+        flex-shrink: 0;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    /* ── TABS VEHÍCULOS / SUPERVISOR ── */
+    .veh-tabs,
+    .sup-tabs {
+        gap: 4px;
+    }
+    .veh-tab,
+    .sup-tab {
+        font-size: 11px;
+        padding: 7px 4px;
+    }
+
+    /* ── CARDS ── */
+    .card {
+        padding: var(--space-4);
+    }
+
+    .sup-card {
+        padding: 14px 16px;
+    }
+
+    /* ── SEMANA BANNER ── */
+    .sup-week-banner {
+        flex-direction: row;
+        padding: 14px 16px;
+    }
+
+    .sup-week-num {
+        font-size: 2.2rem;
+    }
+
+    /* ── MES SEMANAS 4 cols → 2×2 ── */
+    .sup-mes-semanas {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* ── PLAN GENERAL ── */
+    .sup-gral-summary {
+        gap: 20px;
+    }
+
+    /* ── OBJETIVOS RESUMEN 4 cols → 2×2 ── */
+    .ps-resumen {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* ── TURNO BASE OPTS — columna ── */
+    .ps-turno-base-opts {
+        flex-direction: column;
+    }
+    .ps-turno-base-btn {
+        flex: unset;
+        width: 100%;
+    }
+
+    /* ── PATRON OPTS — 1 columna ── */
+    .ps-patron-opts {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* ── PLAN SUPERVISOR: form costo ── */
+    .veh-form-row-costo {
+        flex-direction: column;
+    }
+    .veh-form-row-costo > .field {
+        width: 100% !important;
+    }
+
+    /* ── FILTROS VEHÍCULOS ── */
+    .veh-filtros-row {
+        grid-template-columns: 1fr !important;
+        gap: 6px;
+    }
+
+    /* ── TOTALES VEHÍCULOS ── */
+    .veh-totales {
+        flex-direction: column;
+    }
+
+    /* ── USUARIOS STATS ── */
+    .usr-stats {
+        grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* ── USUARIO ROL OPTS ── */
+    .usr-rol-opts {
+        flex-direction: column;
+    }
+
+    /* ── RATING STARS ── */
+    .rating-row {
+        flex-wrap: wrap;
+        gap: var(--space-2);
+    }
+
+    .rating-stars {
+        max-width: 100%;
+    }
+
+    .star {
+        width: 26px;
+        height: 26px;
+        font-size: 11px;
+    }
+
+    /* ── MODAL ── */
+    .modal {
+        padding: var(--space-6) var(--space-4);
+        border-radius: var(--radius-lg);
+    }
+
+    /* ── OVERLAY ── */
+    .overlay {
+        padding: var(--space-3);
+        align-items: flex-end;   /* sheet desde abajo en móvil */
+    }
+
+    /* ── BUTTONS ── */
+    .btn {
+        padding: 13px var(--space-4);
+        font-size: var(--text-sm);
+    }
+
+    /* ── PHOTO GRID 5 cols → mantener pero más pequeño ── */
+    .photo-grid {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 4px;
+    }
+
+    /* ── LOGIN ── */
+    .lw-card {
+        border-radius: 16px;
+    }
+    .lw-header {
+        padding: 28px 24px 24px;
+    }
+    .lw-body {
+        padding: 24px;
+    }
+    .lw-brand-name {
+        font-size: clamp(28px, 8vw, 48px);
+    }
+
+    /* ── MENU SCREEN ── */
+    .menu-card {
+        padding: var(--space-3) var(--space-4);
+    }
+
+    /* ── ADMIN EDITABLE LIST ── */
+    .admin-item {
+        flex-wrap: wrap;
+        gap: var(--space-2);
+    }
+
+    /* ── GRAL OBJ LIST (dashboard) ── */
+    .sup-gral-obj-name {
+        width: 70px;
+        font-size: 10px;
+    }
+
+    /* ── CONDUCTOR/OBJETIVO BADGES ── */
+    .ps-obj-badges {
+        flex-wrap: wrap;
+        gap: 3px;
+    }
+
+    /* ── STEP HEADER ── */
+    .step-header {
+        gap: var(--space-2);
+        margin-bottom: var(--space-4);
+    }
+
+    /* ── PROGRESS BAR ── */
+    .progress-wrap {
+        margin-bottom: var(--space-4);
+    }
+
+    /* ── JORNADA ID BADGE ── */
+    .jornada-id-badge {
+        font-size: 10px;
+    }
+
+    /* ── INPUT TOUCH TARGETS ── */
+    input, select, textarea {
+        font-size: 16px !important; /* evita zoom automático en iOS */
+        min-height: 44px;
+    }
+
+    select {
+        min-height: 44px;
+    }
+
+    /* ── SUPERVISOR DASHBOARD OBJ ROW ── */
+    .sup-obj-name {
+        font-size: 13px;
+    }
+
+    /* ── VISITAS CTRL (plan editor) ── */
+    .ps-visitas-ctrl {
+        gap: 20px;
+    }
+
+    /* ── ALERTA ROWS ── */
+    .sup-alert-row {
+        padding: 8px 10px;
+    }
+
+    /* ── TOAST ── */
+    .admin-toast {
+        left: var(--space-3);
+        right: var(--space-3);
+        bottom: 70px;
+        text-align: center;
+    }
+
+    /* ── SEND MODAL ── */
+    .send-modal-wrap {
+        padding: var(--space-4);
+    }
+
+    /* ── CONTROL SCREEN RATINGS ── */
+    .rating-label {
+        font-size: 12px;
+    }
+
+    /* ── VEH CARD BADGES ── */
+    .veh-card-header {
+        flex-wrap: nowrap;
+        gap: 8px;
+    }
+    .veh-card-right {
+        min-width: 70px;
+    }
+    .veh-alert-badge {
+        font-size: 8px;
+        padding: 2px 5px;
+    }
+
+    /* ── FIN JORNADA ── */
+    .act-item {
+        padding: 8px 12px;
+    }
+
+    /* ── USUARIOS FILTROS ── */
+    .usr-filtros {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .usr-filtro-btn {
+        padding: 5px 10px;
+        font-size: 11px;
+    }
+}
+
+/* ── 3. PANTALLAS MUY PEQUEÑAS (360px) ─────────────── */
+@media (max-width: 380px) {
+
+    .header-logo-text {
+        font-size: 14px;
+        letter-spacing: 1px;
+    }
+
+    .user-name {
+        display: none;  /* solo el avatar en pantallas muy chicas */
+    }
+
+    .sup-stats-grid,
+    .usr-stats {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px;
+    }
+
+    .sup-stat-val,
+    .usr-stat-val {
+        font-size: 1.4rem;
+    }
+
+    .ps-resumen {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px;
+    }
+
+    .ps-resumen-val {
+        font-size: 1.3rem;
+    }
+
+    .star {
+        width: 23px;
+        height: 23px;
+        font-size: 10px;
+    }
+
+    .veh-tabs .veh-tab {
+        font-size: 10px;
+        padding: 7px 2px;
+    }
+
+    .sup-week-num {
+        font-size: 1.8rem;
+    }
+
+    .screen-title {
+        font-size: var(--text-xl);
+    }
+}
+
+/* ── 4. LANDSCAPE MÓVIL ─────────────────────────────── */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+
+    .main {
+        padding-bottom: 40px;
+    }
+
+    .lw-root {
+        align-items: flex-start;
+        padding: 12px 16px;
+    }
+
+    .lw-header {
+        padding: 20px 24px;
+    }
+
+    .sup-week-banner {
+        padding: 10px 14px;
+    }
+
+    .sup-week-num {
+        font-size: 1.8rem;
+    }
+}
+
+/* ── 5. SAFE AREA (iPhone con notch/island) ─────────── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .main {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    }
+
+    .header {
+        padding-top: env(safe-area-inset-top);
+    }
+}

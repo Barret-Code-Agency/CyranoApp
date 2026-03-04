@@ -571,6 +571,12 @@ export function AppDataProvider({ children }) {
         setJornadas(reales);
     };
 
+    // Limpia sesión activa al hacer logout (no borra historial)
+    const resetSesion = () => {
+        setJornadaActiva(null);
+        setActividadActiva(null);
+    };
+
     return (
         <AppDataContext.Provider value={{
             data: config, updateConfig, resetConfig, update: updateConfig, resetToDefaults: resetConfig,
@@ -580,6 +586,7 @@ export function AppDataProvider({ children }) {
             jornadas, jornadaActiva, actividadActiva,
             iniciarJornada, actualizarJornadaActiva,
             iniciarActividad, finalizarActividad, cancelarActividad, cerrarJornada,
+            resetSesion,
             limpiarSimulados,
         }}>
             {children}

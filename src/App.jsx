@@ -1,6 +1,6 @@
-// src/App.jsx — Firebase Auth + AppDataContext
+// src/App.jsx
 import { useState, useEffect } from "react";
-import { useGeo }                from "./utils/helpers";
+import { useGeo }                      from "./utils/helpers";
 import { AppDataProvider, useAppData } from "./context/AppDataContext";
 import { AuthProvider, useAuth }       from "./context/AuthContext";
 
@@ -32,23 +32,17 @@ function AppInner() {
 
     const goTo = (p) => setPhase(p);
 
-    // Avanzar desde "loading" solo cuando AMBAS condiciones se cumplen:
-    // 1. La animación del LoadingScreen terminó
-    // 2. Firebase ya resolvió la sesión
-useEffect(() => {
-    console.log("📍 phase:", phase, "| loadingDone:", loadingDone, "| authLoading:", authLoading, "| user:", user);
-    if (phase !== "loading") return;
-    if (!loadingDone)        return;
-    if (authLoading)         return;
+    // Redirigir cuando loading animación termina + Firebase resolvió
+    useEffect(() => {
+        if (phase !== "loading") return;
+        if (!loadingDone)        return;
+        if (authLoading)         return;
+        goTo(user
+            ? (user.role === "admin" ? "admin" : "supervisor_dash")
+            : "login");
+    }, [phase, loadingDone, authLoading, user]);
 
-    goTo(user
-        ? (user.role === "admin" ? "admin" : "supervisor_dash")
-        : "login");
-}, [phase, loadingDone, authLoading, user]);
-    const handleLoginSuccess = () => {
-        setLoadingDone(false);
-        goTo("loading");
-    };
+    const handleLoginSuccess = () => goTo("loading");
 
     const handleLogout = async () => {
         await logout();
@@ -65,7 +59,7 @@ useEffect(() => {
     return (
         <>
             {phase === "splash" && (
-                <SplashScreen onAdvance={() => { setLoadingDone(false); goTo("loading"); }} />
+                <SplashScreen onAdvance={() => goTo("loading")} />
             )}
 
             {phase === "loading" && (
@@ -115,7 +109,9 @@ useEffect(() => {
                                 <span className="user-name" style={isAdmin ? { color: "#ffffff" } : {}}>
                                     {user.name}
                                 </span>
-                                <span style={{ fontSize: 10, marginLeft: 2, color: isAdmin ? "rgba(255,255,255,0.5)" : "var(--color-muted)" }}>⏏</span>
+                                <span style={{ fontSize: 10, marginLeft: 2, color: isAdmin ? "rgba(255,255,255,0.5)" : "var(--color-muted)" }}>
+                                    ⏏
+                                </span>
                             </div>
                         )}
                     </header>
@@ -142,7 +138,12 @@ useEffect(() => {
                         )}
                     </main>
 
-                    {modal && <SendModal session={modal} onClose={() => { setModal(null); goTo("supervisor_dash"); }} />}
+                    {modal && (
+                        <SendModal
+                            session={modal}
+                            onClose={() => { setModal(null); goTo("supervisor_dash"); }}
+                        />
+                    )}
                 </div>
             )}
         </>
