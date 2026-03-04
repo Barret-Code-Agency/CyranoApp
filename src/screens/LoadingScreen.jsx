@@ -13,7 +13,7 @@ const MESSAGES = [
 
 export default function LoadingScreen({ onFinished }) {
     const [progress, setProgress] = useState(0);
-    const [exiting, setExiting]   = useState(false);
+    const [exiting,  setExiting]  = useState(false);
 
     useEffect(() => {
         const duration     = 3500;
@@ -44,32 +44,22 @@ export default function LoadingScreen({ onFinished }) {
         <div className={`loading-screen${exiting ? " exit" : ""}`}>
             <div className="loading-bg" />
 
+            {/* Logo */}
             <div className="loading-logo-wrap">
-                <div className="loading-logo-bg">
-                    <ShieldLogo size={300} grayscale />
-                </div>
-                <div
-                    className="loading-logo-mask"
-                    style={{ height: `${progress}%` }}
-                >
-                    <div className="loading-logo-mask-inner">
-                        <ShieldLogo size={300} />
-                    </div>
-                </div>
+                <ShieldLogo size={160} />
             </div>
 
+            {/* Marca */}
             <div className="loading-brand">
                 CYRANO<span>APP</span>
             </div>
             <div className="loading-tagline">Supervisión &amp; Seguridad</div>
 
+            {/* Barra */}
             <div className="loading-bar-wrap">
                 <div className="loading-label">{MESSAGES[msgIdx]}</div>
                 <div className="loading-bar-track">
-                    <div
-                        className="loading-bar-fill"
-                        style={{ width: `${progress}%` }}
-                    />
+                    <div className="loading-bar-fill" style={{ width: `${progress}%` }} />
                 </div>
                 <div className="loading-percent">{Math.round(progress)}%</div>
             </div>
