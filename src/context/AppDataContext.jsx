@@ -161,9 +161,11 @@ export function AppDataProvider({ children }) {
                 if (planSnap.exists()) setPlan(planSnap.data().items || DEFAULT_PLAN);
                 else await setDoc(REF_PLAN, { items: DEFAULT_PLAN });
 
-                // Planes supervisores
-                const psSnap = await getDoc(REF_PLANES_SUPER);
-                if (psSnap.exists()) setPlanesSuper(psSnap.data());
+                // Planes supervisores — listener en tiempo real
+                const unsubPS = onSnapshot(REF_PLANES_SUPER, (snap) => {
+                    if (snap.exists()) setPlanesSuper(snap.data());
+                }, (err) => console.error("Error escuchando planesSuper:", err));
+                unsubs.push(unsubPS);
 
                 // Jornada activa desde localStorage (sesión local)
                 try {

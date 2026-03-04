@@ -322,7 +322,7 @@ const TABS = [
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════
 export default function DashboardScreen() {
-    const { jornadas, plan, data, limpiarSimulados, mantenimiento } = useAppData();
+    const { jornadas, plan, data, limpiarSimulados, mantenimiento, getSupervisoresConEmail, getPlanSupervisor } = useAppData();
     const [tab,        setTab]        = useState("resumen");
     const [periodo,    setPeriodo]    = useState("mes");
     const [showBorrar, setShowBorrar] = useState(false);
@@ -398,7 +398,7 @@ export default function DashboardScreen() {
     }, [jornadas]);
 
     const noData = jornadasFiltradas.length === 0;
-    const tieneSimulados = jornadas.some(j => j.jornadaID?.startsWith("J0"));
+    const tieneSimulados = false; // ya no hay datos simulados
 
     return (
         <div className="dash-wrap">
@@ -434,11 +434,11 @@ export default function DashboardScreen() {
                 ))}
             </div>
 
-            {noData && (
+            {noData && tab !== "cumplimiento" && (
                 <div className="dash-empty">
                     <div className="dash-empty-icon">📊</div>
-                    <p>Sin datos para el período seleccionado.</p>
-                    <small>Seleccioná "Todo" para ver los datos simulados.</small>
+                    <p>Sin jornadas registradas en este período.</p>
+                    <small>Seleccioná "Todo" o esperá a que se registren jornadas.</small>
                 </div>
             )}
 
@@ -521,36 +521,191 @@ export default function DashboardScreen() {
             )}
 
             {/* ══ SUPERVISORES ══ */}
-            {tab === "supervisores" && !noData && (
-                <>
-                    <div className="dash-card">
-                        <div className="dash-card-title">Controles por supervisor</div>
-                        <BarChart data={porSup.map(s => ({ label: s.nombre.split(" ")[0], value: s.controles }))} color="var(--color-primary)" />
-                    </div>
-                    <div className="dash-card">
-                        <div className="dash-card-title">Detalle por supervisor</div>
-                        <div className="dash-table-wrap">
-                            <table className="dash-table">
-                                <thead><tr><th>Supervisor</th><th>Ctrl</th><th>🌙Noc</th><th>📅FdS</th><th>Cap</th><th>Otras</th><th>Km</th></tr></thead>
-                                <tbody>
-                                    {porSup.map((s, i) => (
-                                        <tr key={i}>
-                                            <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{s.nombre.split(" ").slice(0, 2).join(" ")}</td>
-                                            <td><span className="tag blue">{s.controles}</span></td>
-                                            <td>{s.nocturnos}</td><td>{s.fds}</td>
-                                            <td>{s.caps}</td><td>{s.otras}</td><td>{s.km}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+            {tab === "supervisores" && (() => {
+                const mesInicio = new Date(); mesInicio.setDate(1); mesInicio.setHours(0,0,0,0);
+                const supervisores = getSupervisoresConEmail();
+
+                const supData = supervisores.map(sup => {
+                    const planSup   = sup.email ? getPlanSupervisor(sup.email) : null;
+                    const semanasDePatron = (patron, custom) => {
+                        if (patron === "todas")   return [1,2,3,4];
+                        if (patron === "impares") return [1,3];
+                        if (patron === "pares")   return [2,4];
+                        if (patron === "custom")  return custom || [];
+                        return [1,2,3,4];
+                    };
+                    const reqMes = planSup
+                        ? (planSup.objetivos || []).reduce((s, o) =>
+                            s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1), 0)
+                        : 0;
+
+                    const jornadasSup = jornadasFiltradas.filter(j =>
+                        j.email === sup.email || j.supervisor === sup.nombre || j.nombre === sup.nombre
+                    );
+                    const ctrlSup = jornadasSup.flatMap(j => (j.actividades || []).filter(a => a.tipo === "ctrl"));
+                    const realMes = jornadas
+                        .filter(j => (j.email === sup.email) && new Date(j.creadaEn || 0) >= mesInicio)
+                        .flatMap(j => (j.actividades || []).filter(a => a.tipo === "ctrl")).length;
+
+                    const pctMes  = reqMes > 0 ? Math.min(Math.round(realMes / reqMes * 100), 100) : null;
+                    const pctColor = pctMes >= 80 ? "var(--color-success)" : pctMes >= 50 ? "#f59e0b" : "var(--color-danger)";
+
+                    // Cumplimiento por objetivo
+                    const objCumpl = planSup ? (planSup.objetivos || []).map(o => {
+                        const real = ctrlSup.filter(c => c.objetivo === o.objetivo).length;
+                        const sems = semanasDePatron(o.patron, o.semanasCustom);
+                        const req  = sems.length * (o.visitasPorSemana || 1);
+                        return { objetivo: o.objetivo, real, req, pct: req > 0 ? Math.min(Math.round(real/req*100),100) : 0 };
+                    }) : [];
+
+                    const noc = ctrlSup.filter(c => c.turno === "nocturno").length;
+                    const fds = ctrlSup.filter(c => c.esFinDeSemana).length;
+                    const km  = jornadasSup.reduce((s,j) => { const k = Number(j.kmFinal||0)-Number(j.kmInicial||0); return s+(k>0?k:0);}, 0);
+
+                    return { ...sup, planSup, reqMes, realMes, pctMes, pctColor, objCumpl, ctrlTotal: ctrlSup.length, noc, fds, km, jornadas: jornadasSup.length };
+                });
+
+                return (
+                    <>
+                        {/* ── Ranking tarjetas ── */}
+                        <div className="dash-card">
+                            <div className="dash-card-title">Avance del mes — por supervisor</div>
+                            {supData.length === 0 && (
+                                <div className="dash-empty-small">Sin supervisores registrados.</div>
+                            )}
+                            {supData.map((s, i) => (
+                                <div key={i} style={{ marginBottom: 18, paddingBottom: 18, borderBottom: i < supData.length-1 ? "1px solid var(--color-border)" : "none" }}>
+                                    {/* Header supervisor */}
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                                        <div style={{
+                                            width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                                            background: "var(--color-primary)", color: "#fff",
+                                            display: "flex", alignItems: "center", justifyContent: "center",
+                                            fontWeight: 800, fontSize: 15,
+                                        }}>{s.nombre[0]}</div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 700, fontSize: 14, color: "var(--color-text)" }}>
+                                                {s.nombre.split(" ").slice(0,3).join(" ")}
+                                            </div>
+                                            <div style={{ fontSize: 11, color: "var(--color-muted)" }}>
+                                                {s.planSup
+                                                    ? `${{"diurno":"☀️ Diurno","nocturno":"🌙 Nocturno","mixto":"🔄 Mixto"}[s.planSup.turnoBase||"mixto"]} · ${s.planSup.objetivos?.length||0} objetivos · ${s.reqMes} visitas req./mes`
+                                                    : "Sin plan individual"}
+                                            </div>
+                                        </div>
+                                        {/* % cumplimiento mes */}
+                                        {s.pctMes !== null ? (
+                                            <div style={{ textAlign: "right" }}>
+                                                <div style={{ fontFamily: "var(--font-display,'Bebas Neue',sans-serif)", fontSize: "1.8rem", lineHeight: 1, color: s.pctColor }}>{s.pctMes}%</div>
+                                                <div style={{ fontSize: 10, color: "var(--color-muted)" }}>{s.realMes}/{s.reqMes} este mes</div>
+                                            </div>
+                                        ) : (
+                                            <div style={{ fontSize: 11, color: "var(--color-muted)" }}>Sin plan</div>
+                                        )}
+                                    </div>
+
+                                    {/* Barra global */}
+                                    {s.pctMes !== null && (
+                                        <div style={{ marginBottom: 10 }}>
+                                            <div className="sup-prog-bar" style={{ height: 6, marginBottom: 4 }}>
+                                                <div className="sup-prog-fill" style={{ width: s.pctMes + "%", background: s.pctColor }} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Mini stats */}
+                                    <div style={{ display: "flex", gap: 12, marginBottom: s.objCumpl.length > 0 ? 10 : 0, flexWrap: "wrap" }}>
+                                        {[
+                                            { l: "Controles", v: s.ctrlTotal, c: "var(--color-primary)" },
+                                            { l: "🌙 Nocturnos", v: s.noc, c: "#6366f1" },
+                                            { l: "📅 Fin sem.", v: s.fds, c: "#ec4899" },
+                                            { l: "Jornadas", v: s.jornadas, c: "var(--color-muted)" },
+                                            { l: "Km", v: s.km > 0 ? s.km + " km" : "—", c: "#10b981" },
+                                        ].map((m, mi) => (
+                                            <div key={mi} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 48 }}>
+                                                <span style={{ fontWeight: 800, fontSize: 15, color: m.c }}>{m.v}</span>
+                                                <span style={{ fontSize: 9, color: "var(--color-muted)", textAlign: "center" }}>{m.l}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Cumplimiento por objetivo */}
+                                    {s.objCumpl.length > 0 && (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                                            {s.objCumpl.map((o, oi) => {
+                                                const oc = o.pct >= 100 ? "var(--color-success)" : o.pct >= 50 ? "#f59e0b" : "var(--color-danger)";
+                                                return (
+                                                    <div key={oi} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                        <div style={{ fontSize: 10, color: "var(--color-text)", width: 130, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                                                            title={o.objetivo}>
+                                                            {o.objetivo.split("—").pop().trim()}
+                                                        </div>
+                                                        <div style={{ flex: 1, height: 5, background: "var(--color-border)", borderRadius: 3, overflow: "hidden" }}>
+                                                            <div style={{ height: "100%", width: Math.min(o.pct,100)+"%", background: oc, borderRadius: 3, transition: "width .4s" }} />
+                                                        </div>
+                                                        <div style={{ fontSize: 10, fontWeight: 700, color: oc, width: 42, textAlign: "right", flexShrink: 0 }}>
+                                                            {o.real}/{o.req}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                    </div>
-                    <div className="dash-card">
-                        <div className="dash-card-title">Km por supervisor</div>
-                        <BarChart data={porSup.map(s => ({ label: s.nombre.split(" ")[0], value: s.km }))} color="var(--color-red)" />
-                    </div>
-                </>
-            )}
+
+                        {/* ── Tabla comparativa ── */}
+                        <div className="dash-card">
+                            <div className="dash-card-title">Comparativo rápido</div>
+                            <div className="dash-table-wrap">
+                                <table className="dash-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Supervisor</th>
+                                            <th>Cumpl. mes</th>
+                                            <th>Real/Req</th>
+                                            <th>Ctrl</th>
+                                            <th>🌙Noc</th>
+                                            <th>📅FdS</th>
+                                            <th>Km</th>
+                                            <th>Jornadas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {supData.map((s, i) => {
+                                            const pc = s.pctMes;
+                                            return (
+                                                <tr key={i}>
+                                                    <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{s.nombre.split(" ").slice(0,2).join(" ")}</td>
+                                                    <td>
+                                                        {pc !== null
+                                                            ? <span className="tag" style={{
+                                                                background: pc>=80?"var(--color-success-ghost)":pc>=50?"#fef3c7":"var(--color-danger-ghost)",
+                                                                color: pc>=80?"var(--color-success)":pc>=50?"#92400e":"var(--color-danger)",
+                                                                fontWeight:800
+                                                            }}>{pc}%</span>
+                                                            : <span style={{color:"var(--color-muted)",fontSize:11}}>Sin plan</span>
+                                                        }
+                                                    </td>
+                                                    <td style={{ fontSize: "var(--text-xs)", color: "var(--color-muted)" }}>
+                                                        {pc !== null ? `${s.realMes}/${s.reqMes}` : "—"}
+                                                    </td>
+                                                    <td><span className="tag blue">{s.ctrlTotal}</span></td>
+                                                    <td>{s.noc}</td>
+                                                    <td>{s.fds}</td>
+                                                    <td>{s.km > 0 ? s.km + " km" : "—"}</td>
+                                                    <td>{s.jornadas}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </>
+                );
+            })()}
 
             {/* ══ TIEMPOS ══ */}
             {tab === "tiempos" && !noData && (
