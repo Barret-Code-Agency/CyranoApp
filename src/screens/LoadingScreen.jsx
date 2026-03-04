@@ -1,6 +1,5 @@
 // src/screens/LoadingScreen.jsx
 import { useState, useEffect } from "react";
-import ShieldLogo from "../components/ShieldLogo";
 import "../styles/LoadingScreen.css";
 
 const MESSAGES = [
@@ -40,19 +39,34 @@ export default function LoadingScreen({ onFinished }) {
         MESSAGES.length - 1
     );
 
+    // clip-path revela el logo de abajo hacia arriba según el progreso
+    const clipY = 100 - progress; // 100% = oculto arriba, 0% = totalmente visible
+
     return (
         <div className={`loading-screen${exiting ? " exit" : ""}`}>
             <div className="loading-bg" />
 
-            {/* Logo */}
+            {/* Logo con efecto de llenado */}
             <div className="loading-logo-wrap">
-                <ShieldLogo size={160} />
+                {/* Logo gris de fondo (siempre visible) */}
+                <img
+                    src="/images/png-transparent-logo.png"
+                    alt=""
+                    className="loading-logo-base"
+                />
+                {/* Logo a color que se revela de abajo hacia arriba */}
+                <img
+                    src="/images/png-transparent-logo.png"
+                    alt="Cyrano App"
+                    className="loading-logo-fill"
+                    style={{
+                        clipPath: `inset(${clipY}% 0% 0% 0%)`,
+                    }}
+                />
             </div>
 
             {/* Marca */}
-            <div className="loading-brand">
-                CYRANO<span>APP</span>
-            </div>
+            <div className="loading-brand">CYRANO<span>APP</span></div>
             <div className="loading-tagline">Supervisión &amp; Seguridad</div>
 
             {/* Barra */}
