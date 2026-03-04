@@ -1,0 +1,203 @@
+/* src/styles/MenuScreen.css — estilo Brink's Argentina */
+
+.menu-session-badge {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: var(--color-primary-ghost);
+    border: 1px solid var(--color-primary-xlight);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-5);
+}
+
+.menu-session-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--color-success);
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+}
+
+.menu-session-text {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    font-weight: 500;
+}
+
+.menu-session-text strong {
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+/* ── Menu grid ── */
+.menu-grid {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.menu-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-5);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    box-shadow: var(--shadow-sm);
+}
+
+.menu-card:hover {
+    border-color: var(--color-primary);
+    border-left: 3px solid var(--color-primary);
+    background: var(--color-primary-ghost);
+    transform: translateX(3px);
+    box-shadow: var(--shadow-md);
+}
+
+.menu-card.danger:hover {
+    border-color: var(--color-danger);
+    border-left: 3px solid var(--color-danger);
+    background: var(--color-danger-ghost);
+    box-shadow: var(--shadow-sm);
+}
+
+.menu-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
+.menu-card:hover .menu-icon {
+    background: var(--color-primary-xlight);
+    border-color: var(--color-primary-xlight);
+}
+
+.menu-card.danger:hover .menu-icon {
+    background: var(--color-danger-ghost);
+    border-color: rgba(226,1,19,0.2);
+}
+
+.menu-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.menu-info h3 {
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 2px;
+}
+
+.menu-info p {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    font-weight: 400;
+}
+
+.menu-card.danger .menu-info h3 {
+    color: var(--color-danger);
+}
+
+.menu-arrow {
+    color: var(--color-muted);
+    font-size: 20px;
+    flex-shrink: 0;
+    transition: transform var(--transition-base);
+}
+
+.menu-card:hover .menu-arrow {
+    transform: translateX(3px);
+    color: var(--color-primary);
+}
+
+.menu-card.danger:hover .menu-arrow {
+    color: var(--color-danger);
+}
+
+/* ── Actividad pendiente banner ── */
+.menu-actividad-pendiente {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: #fffbeb;
+    border: 1.5px solid #f59e0b;
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.menu-pendiente-icon { font-size: 22px; flex-shrink: 0; }
+
+.menu-pendiente-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.menu-pendiente-text strong {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: #92400e;
+}
+
+.menu-pendiente-text small {
+    font-size: var(--text-xs);
+    color: #b45309;
+}
+
+.menu-pendiente-btn {
+    background: #f59e0b;
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-size: var(--text-xs);
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.menu-card.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ── Actividad en curso badge (en pantallas de actividad) ── */
+.act-en-curso-badge {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: var(--color-primary-ghost);
+    border: 1px solid var(--color-primary-xlight);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+}
+
+.act-en-curso-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--color-success);
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+}

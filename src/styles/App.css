@@ -1,0 +1,106 @@
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background-color: var(--wa-bg-app);
+    color: var(--wa-text-primary);
+}
+
+.app-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: var(--wa-bg-app);
+}
+
+.main-content-area {
+    flex-grow: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+}
+
+.chat-page-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--wa-dark-bg);
+    position: relative;
+}
+
+.qr-wrapper-clickable {
+    cursor: pointer;
+    width: 100%;
+    height: 100vh;
+}
+
+.add-contact-aside {
+    width: 30%;
+    min-width: 320px;
+    height: 100%;
+    border-left: 1px solid var(--wa-border);
+    background-color: var(--wa-bg-sidebar);
+}
+
+.typing-text {
+    font-size: 0.85rem;
+    color: var(--wa-green);
+    font-weight: 500;
+    margin: 0; padding: 0;
+    animation: pulse-typing 1.5s infinite;
+}
+
+@keyframes pulse-typing {
+    0%   { opacity: 1; }
+    50%  { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: var(--wa-green);
+    transition: width 0.1s linear;
+}
+
+/* ════════════════════════════════════════
+    RESPONSIVE
+════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+    .add-contact-aside {
+        width: 38%;
+        min-width: 260px;
+    }
+}
+
+@media (max-width: 767px) {
+    .add-contact-aside {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        min-width: unset;
+        z-index: 500;
+    }
+
+    .main-content-area {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+    }
+}
+
+@media (max-width: 480px) {
+    .status-container {
+        width: 100%;
+        max-width: unset;
+        height: 70vh;
+    }
+}

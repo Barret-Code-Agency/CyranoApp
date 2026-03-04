@@ -1,0 +1,206 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,900&family=Barlow+Condensed:wght@300;400;600;700&display=swap');
+
+/* ── Root container ── */
+.splash-root {
+    min-height: 100vh;
+    background: #f4f6f9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px 48px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+}
+.splash-root::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(0,45,114,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 80% 90%, rgba(237,28,36,0.05) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+/* ── Top accent bar ── */
+.splash-accent-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #002d72 0%, #ed1c24 50%, #002d72 100%);
+}
+
+/* ── Header ── */
+.splash-header {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin-bottom: 48px;
+    opacity: 0;
+    transform: translateY(-18px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.splash-header.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ── Logo ── */
+.splash-logo-box {
+    background: transparent;
+    border-radius: 50%;
+    padding: 0;
+    flex-shrink: 0;
+    animation: logoGlow 3s ease-in-out infinite;
+}
+@keyframes logoGlow {
+    0%, 100% { filter: drop-shadow(0 0 8px rgba(0,45,114,0.35)); }
+    50%       { filter: drop-shadow(0 0 22px rgba(0,45,114,0.6))
+                        drop-shadow(0 0 40px rgba(237,28,36,0.18)); }
+}
+.splash-logo-box img {
+    width: 180px;
+    height: 180px;
+    display: block;
+    object-fit: contain;
+    border-radius: 50%;
+}
+
+/* ── Titles ── */
+.splash-title {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 900;
+    font-size: clamp(3.2rem, 8vw, 5.5rem);
+    color: #002d72;
+    line-height: 1;
+    margin: 0;
+}
+.splash-subtitle {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    font-size: clamp(0.95rem, 2.5vw, 1.25rem);
+    letter-spacing: 10px;
+    text-transform: uppercase;
+    color: #495057;
+    margin: 6px 0 4px;
+}
+.splash-tagline {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 300;
+    font-size: clamp(0.8rem, 2vw, 1rem);
+    letter-spacing: 2px;
+    color: #6c757d;
+    font-style: italic;
+    margin: 0;
+}
+
+/* ── Divider ── */
+.splash-divider {
+    width: 100%;
+    max-width: 860px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #ced4da 20%, #ced4da 80%, transparent);
+    margin-bottom: 36px;
+}
+
+/* ── Flags grid ── */
+.splash-flags {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    gap: 14px;
+    width: 100%;
+    max-width: 960px;
+    perspective: 1200px;
+    margin-bottom: 48px;
+}
+.flag-item {
+    opacity: 0;
+    transform: translateY(20px) rotateX(15deg);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.flag-item.shown {
+    opacity: 1;
+    transform: translateY(0) rotateX(0);
+}
+.flag-card-inner {
+    background: #fff;
+    border-radius: 5px;
+    padding: 5px 5px 0;
+    box-shadow: 0 3px 10px rgba(0,48,135,0.10);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    overflow: hidden;
+}
+.flag-card-inner:hover {
+    transform: translateY(-6px) rotateX(6deg);
+    box-shadow: 0 14px 28px rgba(0,45,114,0.18);
+}
+.flag-card-inner img {
+    width: 100%;
+    height: 68px;
+    object-fit: cover;
+    display: block;
+    border-radius: 3px 3px 0 0;
+}
+.flag-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #495057;
+    text-align: center;
+    padding: 5px 4px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── CTA ── */
+.splash-cta {
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.splash-cta.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.cta-btn {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #fff;
+    background: #002d72;
+    border: none;
+    border-radius: 4px;
+    padding: 14px 52px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 4px 16px rgba(0,45,114,0.25);
+}
+.cta-btn::after {
+    content: '';
+    position: absolute;
+    left: -60%; top: 0; bottom: 0;
+    width: 40%;
+    background: rgba(255,255,255,0.15);
+    transform: skewX(-20deg);
+    transition: left 0.4s ease;
+}
+.cta-btn:hover {
+    background: #001a4d;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,45,114,0.3);
+}
+.cta-btn:hover::after { left: 120%; }
+.cta-dot {
+    color: #ed1c24;
+    margin-right: 10px;
+    font-size: 0.65rem;
+}

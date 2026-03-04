@@ -1,0 +1,352 @@
+// src/screens/UsersScreen.jsx
+// Panel del admin para crear, ver, desactivar y resetear contraseñas
+import { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
+import "../styles/UsersScreen.css";
+
+const ROL_LABEL = { admin: "Administrador", operator: "Supervisor" };
+const ROL_COLOR = { admin: "red", operator: "blue" };
+
+// ── Formulario nuevo usuario ──────────────────────────────────────────────────
+function NuevoUsuarioForm({ onCreated, onCancel }) {
+    const { crearUsuario } = useAuth();
+    const [form, setForm]   = useState({ nombre: "", email: "", password: "", rol: "operator" });
+    const [loading, setLoading] = useState(false);
+    const [error,   setError]   = useState("");
+    const [showPass, setShowPass] = useState(false);
+
+    const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+    const handleSubmit = async () => {
+        if (!form.nombre.trim()) return setError("Ingresá el nombre completo.");
+        if (!form.email.includes("@")) return setError("Email inválido.");
+        if (form.password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres.");
+        setError(""); setLoading(true);
+        try {
+            await crearUsuario(form);
+            onCreated(form.nombre);
+        } catch (e) {
+            setError(e.message.includes("email-already-in-use")
+                ? "Ese email ya está registrado."
+                : e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="usr-form">
+            <div className="usr-form-title">Nuevo usuario</div>
+
+            <div className="field">
+                <label className="label">Nombre completo</label>
+                <input
+                    type="text"
+                    placeholder="Fernando Hector Delgado"
+                    value={form.nombre}
+                    onChange={e => set("nombre", e.target.value)}
+                />
+            </div>
+
+            <div className="field">
+                <label className="label">Email (será su usuario de acceso)</label>
+                <input
+                    type="email"
+                    placeholder="fdelgado@empresa.com"
+                    value={form.email}
+                    onChange={e => set("email", e.target.value)}
+                />
+            </div>
+
+            <div className="field">
+                <label className="label">Contraseña inicial</label>
+                <div className="input-wrap">
+                    <input
+                        type={showPass ? "text" : "password"}
+                        placeholder="Mínimo 6 caracteres"
+                        value={form.password}
+                        onChange={e => set("password", e.target.value)}
+                        style={{ paddingRight: 44 }}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowPass(s => !s)}
+                        style={{
+                            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                            background: "none", border: "none", cursor: "pointer", fontSize: 16,
+                            color: "var(--color-muted)"
+                        }}
+                    >
+                        {showPass ? "🙈" : "👁️"}
+                    </button>
+                </div>
+                <p style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4 }}>
+                    El supervisor puede cambiarla luego desde su perfil o recibir un mail de reseteo.
+                </p>
+            </div>
+
+            <div className="field">
+                <label className="label">Rol</label>
+                <div className="usr-rol-opts">
+                    {["operator", "admin"].map(r => (
+                        <button
+                            key={r}
+                            className={`usr-rol-btn ${form.rol === r ? "active " + ROL_COLOR[r] : ""}`}
+                            onClick={() => set("rol", r)}
+                        >
+                            {r === "operator" ? "👤 Supervisor" : "🔐 Administrador"}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {error && <div className="alert alert-danger">{error}</div>}
+
+            <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-primary" disabled={loading} onClick={handleSubmit}>
+                    {loading ? <><span className="spinner" /> Creando...</> : "Crear usuario"}
+                </button>
+                <button className="btn btn-secondary" disabled={loading} onClick={onCancel}>
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ── Tarjeta de usuario ────────────────────────────────────────────────────────
+function UsuarioCard({ u, currentUid, onToggle, onReset }) {
+    const [expanded,   setExpanded]   = useState(false);
+    const [resetting,  setResetting]  = useState(false);
+    const [toggling,   setToggling]   = useState(false);
+    const [resetOk,    setResetOk]    = useState(false);
+    const [confirmDes, setConfirmDes] = useState(false);
+
+    const esMismo = u.uid === currentUid;
+
+    const handleReset = async () => {
+        setResetting(true);
+        await onReset(u.email);
+        setResetOk(true);
+        setResetting(false);
+        setTimeout(() => setResetOk(false), 3000);
+    };
+
+    const handleToggle = async () => {
+        setToggling(true);
+        await onToggle(u.uid, !u.activo);
+        setToggling(false);
+        setConfirmDes(false);
+    };
+
+    const fmtFecha = (ts) => {
+        if (!ts) return "Nunca";
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d.toLocaleDateString("es-AR") + " " + d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+    };
+
+    return (
+        <div className={`usr-card ${!u.activo ? "inactivo" : ""}`}>
+            <div className="usr-card-header" onClick={() => setExpanded(e => !e)}>
+                <div className="usr-avatar-lg">
+                    {u.nombre?.[0]?.toUpperCase() || "?"}
+                </div>
+                <div className="usr-card-info">
+                    <div className="usr-card-nombre">
+                        {u.nombre}
+                        {esMismo && <span className="usr-yo-badge">Vos</span>}
+                        {!u.activo && <span className="usr-inactivo-badge">Inactivo</span>}
+                    </div>
+                    <div className="usr-card-email">{u.email}</div>
+                    <span className={`usr-rol-tag ${ROL_COLOR[u.rol]}`}>
+                        {ROL_LABEL[u.rol] || u.rol}
+                    </span>
+                </div>
+                <span className="usr-chevron">{expanded ? "▲" : "▼"}</span>
+            </div>
+
+            {expanded && (
+                <div className="usr-card-detail">
+                    <div className="info-row">
+                        <span className="info-k">Último acceso</span>
+                        <span className="info-v">{fmtFecha(u.ultimoAcceso)}</span>
+                    </div>
+                    <div className="info-row">
+                        <span className="info-k">Creado</span>
+                        <span className="info-v">{fmtFecha(u.creadoEn)}</span>
+                    </div>
+
+                    <div className="usr-card-actions">
+                        {/* Reset contraseña */}
+                        <button
+                            className="usr-btn usr-btn-reset"
+                            disabled={resetting || !u.activo}
+                            onClick={handleReset}
+                        >
+                            {resetting ? "Enviando..." : resetOk ? "✓ Mail enviado" : "📧 Resetear contraseña"}
+                        </button>
+
+                        {/* Activar/Desactivar */}
+                        {!esMismo && (
+                            u.activo ? (
+                                !confirmDes ? (
+                                    <button className="usr-btn usr-btn-danger" onClick={() => setConfirmDes(true)}>
+                                        🚫 Desactivar acceso
+                                    </button>
+                                ) : (
+                                    <div className="usr-confirm">
+                                        <span>¿Desactivar a {u.nombre.split(" ")[0]}?</span>
+                                        <button className="usr-btn usr-btn-danger" disabled={toggling} onClick={handleToggle}>
+                                            {toggling ? "..." : "Confirmar"}
+                                        </button>
+                                        <button className="usr-btn usr-btn-cancel" onClick={() => setConfirmDes(false)}>
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                )
+                            ) : (
+                                <button className="usr-btn usr-btn-success" disabled={toggling} onClick={handleToggle}>
+                                    {toggling ? "..." : "✅ Reactivar acceso"}
+                                </button>
+                            )
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Pantalla principal ────────────────────────────────────────────────────────
+export default function UsersScreen() {
+    const { user, listarUsuarios, actualizarUsuario, resetPassword } = useAuth();
+
+    const [usuarios,  setUsuarios]  = useState([]);
+    const [loading,   setLoading]   = useState(true);
+    const [showForm,  setShowForm]  = useState(false);
+    const [toast,     setToast]     = useState("");
+    const [filtro,    setFiltro]    = useState("todos");
+
+    const cargar = async () => {
+        setLoading(true);
+        try {
+            const list = await listarUsuarios();
+            setUsuarios(list.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
+        } catch (e) {
+            showToast("Error cargando usuarios: " + e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { cargar(); }, []);
+
+    const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
+
+    const handleCreated = (nombre) => {
+        setShowForm(false);
+        showToast(`✓ Usuario ${nombre} creado correctamente`);
+        cargar();
+    };
+
+    const handleToggle = async (uid, activo) => {
+        await actualizarUsuario(uid, { activo });
+        showToast(activo ? "✓ Usuario reactivado" : "Usuario desactivado");
+        cargar();
+    };
+
+    const handleReset = async (email) => {
+        await resetPassword(email);
+    };
+
+    const filtrados = usuarios.filter(u => {
+        if (filtro === "admin")    return u.rol === "admin";
+        if (filtro === "operator") return u.rol === "operator";
+        if (filtro === "inactivo") return u.activo === false;
+        return true;
+    });
+
+    const activos   = usuarios.filter(u => u.activo !== false).length;
+    const admins    = usuarios.filter(u => u.rol === "admin").length;
+    const operators = usuarios.filter(u => u.rol === "operator").length;
+
+    return (
+        <div className="usr-screen">
+            <div className="screen-title">Usuarios</div>
+            <div className="screen-sub">Gestión de accesos al sistema</div>
+
+            {/* Stats */}
+            <div className="usr-stats">
+                <div className="usr-stat">
+                    <div className="usr-stat-val">{activos}</div>
+                    <div className="usr-stat-label">Activos</div>
+                </div>
+                <div className="usr-stat">
+                    <div className="usr-stat-val blue">{operators}</div>
+                    <div className="usr-stat-label">Supervisores</div>
+                </div>
+                <div className="usr-stat">
+                    <div className="usr-stat-val red">{admins}</div>
+                    <div className="usr-stat-label">Admins</div>
+                </div>
+                <div className="usr-stat">
+                    <div className="usr-stat-val muted">{usuarios.length - activos}</div>
+                    <div className="usr-stat-label">Inactivos</div>
+                </div>
+            </div>
+
+            {/* Filtros */}
+            <div className="usr-filtros">
+                {["todos", "operator", "admin", "inactivo"].map(f => (
+                    <button
+                        key={f}
+                        className={`usr-filtro-btn ${filtro === f ? "active" : ""}`}
+                        onClick={() => setFiltro(f)}
+                    >
+                        {f === "todos" ? "Todos" : f === "operator" ? "Supervisores" : f === "admin" ? "Admins" : "Inactivos"}
+                    </button>
+                ))}
+            </div>
+
+            {/* Formulario nuevo usuario */}
+            {showForm && (
+                <NuevoUsuarioForm
+                    onCreated={handleCreated}
+                    onCancel={() => setShowForm(false)}
+                />
+            )}
+
+            {/* Lista */}
+            {loading ? (
+                <div className="usr-loading">
+                    <span className="spinner" style={{ borderTopColor: "var(--color-primary)", width: 24, height: 24, borderWidth: 3 }} />
+                    Cargando usuarios...
+                </div>
+            ) : filtrados.length === 0 ? (
+                <div className="usr-empty">
+                    {usuarios.length === 0
+                        ? "No hay usuarios aún. Creá el primero."
+                        : "Sin resultados para este filtro."}
+                </div>
+            ) : (
+                filtrados.map(u => (
+                    <UsuarioCard
+                        key={u.uid}
+                        u={u}
+                        currentUid={user?.uid}
+                        onToggle={handleToggle}
+                        onReset={handleReset}
+                    />
+                ))
+            )}
+
+            {!showForm && (
+                <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowForm(true)}>
+                    + Crear usuario
+                </button>
+            )}
+
+            {toast && <div className="admin-toast">{toast}</div>}
+        </div>
+    );
+}

@@ -1,0 +1,349 @@
+/* src/styles/Login.css — CyranoApp login */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
+
+/* ── Root ── */
+.lw-root {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Sans', sans-serif;
+    padding: 24px 16px;
+    background: #e8eaf2;
+    background-image:
+        radial-gradient(ellipse at 15% 10%, rgba(0,48,135,0.12) 0%, transparent 55%),
+        radial-gradient(ellipse at 90% 90%, rgba(226,1,19,0.07) 0%, transparent 45%);
+}
+
+/* ── Barra superior ── */
+.lw-topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #001f6b 0%, #003087 50%, #e20113 100%);
+    z-index: 100;
+}
+
+/* ── Card ── */
+.lw-card {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow:
+        0 2px 4px rgba(0,0,0,0.06),
+        0 12px 32px rgba(0,30,100,0.13),
+        0 40px 80px rgba(0,30,100,0.08);
+    overflow: hidden;
+    animation: lw-up 0.5s cubic-bezier(.22,1,.36,1) both;
+}
+
+@keyframes lw-up {
+    from { opacity: 0; transform: translateY(28px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Header ── */
+.lw-header {
+    background: linear-gradient(160deg, #002070 0%, #003087 45%, #004ab5 100%);
+    padding: 40px 36px 36px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Línea roja inferior */
+.lw-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #e20113 0%, #ff3347 100%);
+}
+
+/* Elementos decorativos */
+.lw-deco-1 {
+    position: absolute;
+    top: -50px; right: -50px;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+    pointer-events: none;
+}
+
+.lw-deco-2 {
+    position: absolute;
+    bottom: -30px; left: -30px;
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: rgba(226,1,19,0.08);
+    pointer-events: none;
+}
+
+.lw-deco-3 {
+    position: absolute;
+    top: 20px; right: 80px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    pointer-events: none;
+}
+
+/* ── Logo row ── */
+.lw-logo-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+    z-index: 1;
+}
+
+.lw-logo-ring {
+    width: 76px; height: 76px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.1);
+    border: 1.5px solid rgba(255,255,255,0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow:
+        0 4px 16px rgba(0,0,0,0.2),
+        inset 0 1px 0 rgba(255,255,255,0.15);
+    backdrop-filter: blur(4px);
+}
+
+.lw-brand-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.lw-brand {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 34px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: #fff;
+    line-height: 1;
+    text-transform: uppercase;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.lw-brand span {
+    color: #ff3347;
+}
+
+.lw-divider-line {
+    width: 100%;
+    height: 1.5px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 1px;
+}
+
+.lw-tagline {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+/* ── Body ── */
+.lw-body {
+    padding: 34px 36px 32px;
+}
+
+.lw-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    color: #0d1b3e;
+    margin-bottom: 5px;
+}
+
+.lw-sub {
+    font-size: 13px;
+    color: #8894ac;
+    margin-bottom: 28px;
+}
+
+/* ── Campos ── */
+.lw-field {
+    margin-bottom: 18px;
+}
+
+.lw-label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #4a5568;
+    margin-bottom: 7px;
+}
+
+.lw-input-wrap {
+    position: relative;
+}
+
+.lw-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 14px;
+    border: 1.5px solid #dde1ea;
+    border-radius: 11px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: #0d1b3e;
+    background: #f7f9fc;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.lw-input::placeholder {
+    color: #b0bac8;
+}
+
+.lw-input:focus {
+    border-color: #003087;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(0,48,135,0.1);
+}
+
+.lw-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.lw-pass-input {
+    padding-right: 48px;
+}
+
+/* ── Toggle password ── */
+.lw-toggle {
+    position: absolute;
+    right: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #8894ac;
+    font-size: 17px;
+    padding: 4px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s;
+}
+
+.lw-toggle:hover {
+    color: #003087;
+}
+
+/* ── Error ── */
+.lw-error {
+    background: #fff2f3;
+    border: 1.5px solid rgba(226,1,19,0.25);
+    border-radius: 9px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #c0000e;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Botón ── */
+.lw-btn {
+    width: 100%;
+    height: 50px;
+    background: linear-gradient(135deg, #003087 0%, #001f6b 100%);
+    color: #fff;
+    border: none;
+    border-radius: 11px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 4px 16px rgba(0,48,135,0.38);
+    margin-top: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+.lw-btn::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: rgba(255,255,255,0.15);
+}
+
+.lw-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,48,135,0.42);
+}
+
+.lw-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.lw-btn:disabled {
+    opacity: 0.75;
+    cursor: not-allowed;
+}
+
+/* ── Spinner ── */
+.lw-spinner {
+    width: 17px; height: 17px;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: lw-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes lw-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Footer ── */
+.lw-footer {
+    font-size: 11.5px;
+    color: #a0aab8;
+    text-align: center;
+    margin-top: 22px;
+    line-height: 1.7;
+    padding: 16px 0 0;
+    border-top: 1px solid #edf0f5;
+}
+
+/* ── Responsive ── */
+@media (max-width: 460px) {
+    .lw-header {
+        padding: 32px 24px 28px;
+    }
+    .lw-body {
+        padding: 28px 24px 26px;
+    }
+    .lw-brand {
+        font-size: 28px;
+        letter-spacing: 3px;
+    }
+    .lw-logo-ring {
+        width: 64px; height: 64px;
+    }
+}
