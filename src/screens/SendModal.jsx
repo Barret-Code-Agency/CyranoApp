@@ -4,17 +4,11 @@ import ShieldLogo from "../components/ShieldLogo";
 import { generarHojaSupervision } from "../utils/generarPDF";
 import "../styles/SendModal.css";
 
-// ── EmailJS config ─────────────────────────────────────────────────────────────
-// 1. Creá cuenta gratis en https://www.emailjs.com  (200 emails/mes sin costo)
-// 2. Creá un Service conectando tu Gmail
-// 3. Creá un Template con estas variables:
-//    {{supervisor}} {{fecha}} {{jornada_id}} {{controles}} {{vehiculo}} {{horario}} {{resumen}}
-// 4. Reemplazá los 3 valores de abajo:
-const EJS_SERVICE  = "Service_bsotr9p";   // ← p.ej. "service_abc123"
-const EJS_TEMPLATE = "Template_tj3tz1t";  // ← p.ej. "template_xyz456"
-const EJS_KEY      = "1wp7DDAJ8xoqGkihA";   // ← p.ej. "abcDEF123456"
+const EJS_SERVICE  = "Service_bsotr9p";
+const EJS_TEMPLATE = "template_tj3tz1t";
+const EJS_KEY      = "1wp7DDAJ8xoqGkihA";
 
-const EJS_OK = EJS_SERVICE !== "YOUR_SERVICE_ID";
+const EJS_OK = EJS_SERVICE !== "service_bsotr9p";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const toMin = (t) => { if (!t) return 0; const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
@@ -184,7 +178,7 @@ export default function SendModal({ session, onClose }) {
 
                 {/* Pasos */}
                 <div style={{ background: "#f8f9fc", borderRadius: 12, padding: "8px 16px", border: "1px solid #e8eaf2", marginBottom: 14 }}>
-                    <Paso icon="📄" label="Generar PDF" sub="Hoja de Supervisión formato Brinks"
+                    <Paso icon="📄" label="Generar PDF" sub="Hoja de Recorrido formato Brinks"
                         estado={pasos.pdf} />
                     <div style={{ width: 2, height: 6, background: "#e8eaf2", marginLeft: 15 }} />
                     <Paso icon="📧" label="Enviar informe"

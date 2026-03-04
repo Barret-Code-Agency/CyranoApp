@@ -55,6 +55,31 @@ function ProgressBar({ value, max }) {
     );
 }
 
+// Fila de turno con barra de progreso
+function TurnoRow({ icon, label, realizado, requerido, color }) {
+    const pct = requerido > 0 ? Math.min(Math.round(realizado / requerido * 100), 100) : 0;
+    const barColor = pct >= 80 ? "var(--color-success)" : pct >= 40 ? color : "var(--color-danger)";
+    return (
+        <div className="sup-turno-row">
+            <span className="sup-turno-row-icon">{icon}</span>
+            <div className="sup-turno-row-body">
+                <div className="sup-turno-row-top">
+                    <span className="sup-turno-row-label">{label}</span>
+                    <span className="sup-turno-row-count" style={{ color }}>
+                        {realizado}
+                        {requerido > 0 && <span className="sup-turno-row-sep">/{requerido}</span>}
+                    </span>
+                </div>
+                {requerido > 0 && (
+                    <div className="sup-prog-bar">
+                        <div className="sup-prog-fill" style={{ width: pct + "%", background: barColor }} />
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function SupervisorDashboard({ user, onIniciarJornada }) {
     const {
         plan: planGlobal,
@@ -81,6 +106,21 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
 
     const getSemanaDeCtrl = (c) => getSemana(new Date(c.iniciadaEn || 0));
 
+    const controlesSemana = useMemo(() =>
+        controlesMes.filter(c => getSemanaDeCtrl(c) === semana),
+        [controlesMes, semana]
+    );
+
+    // Desglose por turno — semana actual
+    const diurnosSem   = controlesSemana.filter(c => c.turno === "diurno"   && !c.esFinDeSemana).length;
+    const nocturnosSem = controlesSemana.filter(c => c.turno === "nocturno" && !c.esFinDeSemana).length;
+    const fdsSem       = controlesSemana.filter(c => c.esFinDeSemana).length;
+
+    // Desglose por turno — mes completo
+    const diurnosMes   = controlesMes.filter(c => c.turno === "diurno"   && !c.esFinDeSemana).length;
+    const nocturnosMes = controlesMes.filter(c => c.turno === "nocturno" && !c.esFinDeSemana).length;
+    const fdsMes       = controlesMes.filter(c => c.esFinDeSemana).length;
+
     const visitasPorObj = useMemo(() => {
         const map = {};
         controlesMes.forEach(c => { map[c.objetivo] = (map[c.objetivo] || 0) + 1; });
@@ -92,10 +132,9 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
         (planGlobal || []).filter(p => (p.visitasPorSemana || 0) > 0),
         [planGlobal]
     );
-    const sinPlanGlobal = objGlobalSemana.length === 0;
-
+    const sinPlanGlobal    = objGlobalSemana.length === 0;
     const reqGlobalSemana  = objGlobalSemana.reduce((s, o) => s + (o.visitasPorSemana || 1), 0);
-    const realGlobalSemana = controlesMes.filter(c => getSemanaDeCtrl(c) === semana).length;
+    const realGlobalSemana = controlesSemana.length;
     const pctGlobalSemana  = reqGlobalSemana > 0 ? Math.min(Math.round(realGlobalSemana / reqGlobalSemana * 100), 100) : 0;
     const reqGlobalMes     = reqGlobalSemana * 4;
     const pctGlobalMes     = reqGlobalMes > 0 ? Math.min(Math.round(controlesMes.length / reqGlobalMes * 100), 100) : 0;
@@ -114,16 +153,33 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
         s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1), 0);
     const pctIndivMes    = reqIndivMes > 0 ? Math.min(Math.round(controlesMes.length / reqIndivMes * 100), 100) : 0;
 
-    // ── Alertas semanas anteriores ────────────────────────────────────────────
+    // Requeridos por turno según plan individual — semana
+    const reqDiurnoSem = !sinPlanIndivid
+        ? objIndivSemana.filter(o => (o.turnoEfectivo || ps.turnoBase) === "diurno").reduce((s,o) => s + (o.visitasPorSemana||1), 0)
+        : reqGlobalSemana;
+    const reqNocturnoSem = !sinPlanIndivid
+        ? objIndivSemana.filter(o => (o.turnoEfectivo || ps.turnoBase) === "nocturno").reduce((s,o) => s + (o.visitasPorSemana||1), 0)
+        : 0;
+
+    // Requeridos por turno según plan individual — mes
+    const reqDiurnoMes = (ps?.objetivos || []).reduce((s, o) => {
+        const t = (!o.turno || o.turno === "base") ? (ps?.turnoBase || "mixto") : o.turno;
+        return t === "diurno" ? s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1) : s;
+    }, 0);
+    const reqNocturnoMes = (ps?.objetivos || []).reduce((s, o) => {
+        const t = (!o.turno || o.turno === "base") ? (ps?.turnoBase || "mixto") : o.turno;
+        return t === "nocturno" ? s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1) : s;
+    }, 0);
+
+    // Alertas semanas anteriores
     const alertasPlan = useMemo(() => {
         if (sinPlanGlobal || !semana || semana <= 1) return [];
         const lista = [];
         for (let w = 1; w < semana; w++) {
             objGlobalSemana.forEach(o => {
                 const real = controlesMes.filter(c => c.objetivo === o.objetivo && getSemanaDeCtrl(c) === w).length;
-                if (real < (o.visitasPorSemana || 1)) {
+                if (real < (o.visitasPorSemana || 1))
                     lista.push({ semana: w, objetivo: o.objetivo, realizadas: real, requeridas: o.visitasPorSemana });
-                }
             });
         }
         return lista;
@@ -134,32 +190,49 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
             <div className="sup-dash-title">Mi Panel</div>
             <div className="sup-dash-sub">{user.name} · {mesNombre()}</div>
 
-            {/* ── Banner semana ── */}
+            {/* ══════════════════════════════════════════
+                BANNER SEMANA
+            ══════════════════════════════════════════ */}
             {semana ? (
                 <div className="sup-week-banner">
                     <div className="sup-week-left">
                         <div className="sup-week-label">SEMANA ACTUAL</div>
                         <div className="sup-week-num">{semana}</div>
                         <div className="sup-week-range">Días {WEEK_RANGES[semana]}</div>
+                        {/* Círculos de % */}
+                        <div className="sup-week-circles" style={{ marginTop: 10 }}>
+                            {!sinPlanGlobal && (
+                                <div className="sup-week-circle-item">
+                                    <div className="sup-circle-label">Plan gral.</div>
+                                    <CircleProgress pct={pctGlobalSemana} size={54} />
+                                    <div className="sup-circle-sub">{realGlobalSemana}/{reqGlobalSemana}</div>
+                                </div>
+                            )}
+                            {!sinPlanIndivid && (
+                                <div className="sup-week-circle-item">
+                                    <div className="sup-circle-label">Mi plan</div>
+                                    <CircleProgress pct={pctIndivSemana} size={54} />
+                                    <div className="sup-circle-sub">{realGlobalSemana}/{reqIndivSemana}</div>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <div className="sup-week-circles">
-                        {!sinPlanGlobal && (
-                            <div className="sup-week-circle-item">
-                                <div className="sup-circle-label">Plan general</div>
-                                <CircleProgress pct={pctGlobalSemana} size={64} />
-                                <div className="sup-circle-sub">{realGlobalSemana}/{reqGlobalSemana}</div>
-                            </div>
-                        )}
-                        {!sinPlanIndivid && (
-                            <div className="sup-week-circle-item">
-                                <div className="sup-circle-label">Mi plan</div>
-                                <CircleProgress pct={pctIndivSemana} size={64} />
-                                <div className="sup-circle-sub">{realGlobalSemana}/{reqIndivSemana}</div>
-                            </div>
-                        )}
-                        {sinPlanGlobal && sinPlanIndivid && (
-                            <div style={{ color: "var(--color-muted)", fontSize: 12 }}>Sin plan asignado</div>
-                        )}
+
+                    {/* Desglose turnos semana */}
+                    <div className="sup-week-turnos">
+                        <div className="sup-turnos-title">DESGLOSE SEMANA</div>
+                        <TurnoRow icon="☀️" label="Diurnas"
+                            realizado={diurnosSem}
+                            requerido={!sinPlanIndivid ? reqDiurnoSem : reqGlobalSemana}
+                            color="#d97706" />
+                        <TurnoRow icon="🌙" label="Nocturnas"
+                            realizado={nocturnosSem}
+                            requerido={!sinPlanIndivid ? reqNocturnoSem : 0}
+                            color="var(--color-primary)" />
+                        <TurnoRow icon="📅" label="Fin de semana"
+                            realizado={fdsSem}
+                            requerido={0}
+                            color="#8b5cf6" />
                     </div>
                 </div>
             ) : (
@@ -190,7 +263,61 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                 </div>
             </div>
 
-            {/* ── Alertas ── */}
+            {/* ══════════════════════════════════════════
+                AVANCE DEL MES — desglose turnos
+            ══════════════════════════════════════════ */}
+            {!sinPlanGlobal && (
+                <div className="sup-card">
+                    <div className="sup-card-title">📅 Avance del mes</div>
+
+                    <div className="sup-mes-banner">
+                        <div className="sup-mes-circle-wrap">
+                            <div className="sup-circle-label" style={{ marginBottom: 4 }}>Total mes</div>
+                            <CircleProgress pct={pctGlobalMes} size={70} />
+                            <div className="sup-circle-sub">{controlesMes.length}/{reqGlobalMes}</div>
+                        </div>
+
+                        <div className="sup-week-turnos" style={{ flex: 1 }}>
+                            <div className="sup-turnos-title">DESGLOSE MES</div>
+                            <TurnoRow icon="☀️" label="Diurnas"
+                                realizado={diurnosMes}
+                                requerido={!sinPlanIndivid ? reqDiurnoMes : reqGlobalMes}
+                                color="#d97706" />
+                            <TurnoRow icon="🌙" label="Nocturnas"
+                                realizado={nocturnosMes}
+                                requerido={!sinPlanIndivid ? reqNocturnoMes : 0}
+                                color="var(--color-primary)" />
+                            <TurnoRow icon="📅" label="Fin de semana"
+                                realizado={fdsMes}
+                                requerido={0}
+                                color="#8b5cf6" />
+                        </div>
+                    </div>
+
+                    <div className="sup-mes-semanas">
+                        {[1, 2, 3, 4].map(w => {
+                            const realW = controlesMes.filter(c => getSemanaDeCtrl(c) === w).length;
+                            const pctW  = reqGlobalSemana > 0 ? Math.min(Math.round(realW / reqGlobalSemana * 100), 100) : null;
+                            return (
+                                <div key={w} className={`sup-mes-sem ${w === semana ? "current" : ""}`}>
+                                    <div className="sup-mes-sem-title">Sem {w}{w === semana ? " ★" : ""}</div>
+                                    <div className="sup-mes-sem-range">{WEEK_RANGES[w]}</div>
+                                    {pctW !== null ? (
+                                        <>
+                                            <div className={`sup-mes-sem-pct ${pctW >= 80 ? "green" : pctW > 0 ? "orange" : "red"}`}>{pctW}%</div>
+                                            <div className="sup-mes-sem-count">{realW}/{reqGlobalSemana}</div>
+                                        </>
+                                    ) : (
+                                        <div className="sup-mes-sem-empty">—</div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Alertas plan ── */}
             {alertasPlan.length > 0 && (
                 <div className="sup-card sup-card-danger">
                     <div className="sup-card-title danger">🔴 Semanas con visitas insuficientes</div>
@@ -267,46 +394,10 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                 </div>
             )}
 
-            {/* Sin ningún plan */}
             {sinPlanGlobal && sinPlanIndivid && (
                 <div className="sup-no-plan">
                     ⚠️ El administrador aún no configuró ningún plan de supervisión.
                     Podés iniciar jornada y registrar actividades libremente.
-                </div>
-            )}
-
-            {/* ── Resumen mensual ── */}
-            {!sinPlanGlobal && (
-                <div className="sup-card">
-                    <div className="sup-card-title">📅 Resumen mensual</div>
-                    <div className="sup-mes-summary">
-                        <CircleProgress pct={pctGlobalMes} size={80} />
-                        <div className="sup-mes-detail">
-                            <div className="sup-mes-line"><span>Realizadas este mes</span><strong>{controlesMes.length}</strong></div>
-                            <div className="sup-mes-line"><span>Requeridas este mes</span><strong>{reqGlobalMes}</strong></div>
-                            <div className="sup-mes-line"><span>Objetivos activos</span><strong>{objGlobalSemana.length}</strong></div>
-                        </div>
-                    </div>
-                    <div className="sup-mes-semanas">
-                        {[1, 2, 3, 4].map(w => {
-                            const realW = controlesMes.filter(c => getSemanaDeCtrl(c) === w).length;
-                            const pctW  = reqGlobalSemana > 0 ? Math.min(Math.round(realW / reqGlobalSemana * 100), 100) : null;
-                            return (
-                                <div key={w} className={`sup-mes-sem ${w === semana ? "current" : ""}`}>
-                                    <div className="sup-mes-sem-title">Sem {w}{w === semana ? " ★" : ""}</div>
-                                    <div className="sup-mes-sem-range">{WEEK_RANGES[w]}</div>
-                                    {pctW !== null ? (
-                                        <>
-                                            <div className={`sup-mes-sem-pct ${pctW >= 80 ? "green" : pctW > 0 ? "orange" : "red"}`}>{pctW}%</div>
-                                            <div className="sup-mes-sem-count">{realW}/{reqGlobalSemana}</div>
-                                        </>
-                                    ) : (
-                                        <div className="sup-mes-sem-empty">—</div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
                 </div>
             )}
 

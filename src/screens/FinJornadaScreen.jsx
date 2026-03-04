@@ -93,7 +93,7 @@ export default function FinJornadaScreen({ onClosed, onBack }) {
             </div>
 
             <button className="btn btn-danger"
-                disabled={!kmFinal || kmRec === null || kmRec < 0}
+                disabled={false}
                 onClick={handleCerrar}>
                 🏁 Cerrar Jornada &amp; Enviar Informe
             </button>

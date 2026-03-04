@@ -17,6 +17,7 @@ export default function OtraActividadScreen({ geo, onBack }) {
 
     // ── Paso 2 ──
     const [actividad,     setActividad]     = useState("");
+    const [lugar,         setLugar]         = useState("");
     const [observaciones, setObservaciones] = useState("");
 
     useEffect(() => {
@@ -34,7 +35,7 @@ export default function OtraActividadScreen({ geo, onBack }) {
 
     const handleFinalizar = async () => {
         const lugarFin = await geo.get();
-        finalizarActividad({ actividad, observaciones, lugarFin, horaFin: nowTime() });
+        finalizarActividad({ actividad, lugar, observaciones, lugarFin, horaFin: nowTime() });
         onBack();
     };
 
@@ -53,6 +54,13 @@ export default function OtraActividadScreen({ geo, onBack }) {
 
                 <div className="card">
                     <div className="card-title">Detalle de la actividad</div>
+                    <div className="field">
+                        <label className="label">Lugar / Objetivo <span style={{fontSize:"0.75em",color:"var(--color-muted)",fontWeight:400}}>(opcional)</span></label>
+                        <select value={lugar} onChange={(e) => setLugar(e.target.value)}>
+                            <option value="">— Sin objetivo específico —</option>
+                            {data.objetivos.map((o) => <option key={o}>{o}</option>)}
+                        </select>
+                    </div>
                     <div className="field">
                         <label className="label">Tipo de Actividad</label>
                         <select value={actividad} onChange={(e) => setActividad(e.target.value)}>

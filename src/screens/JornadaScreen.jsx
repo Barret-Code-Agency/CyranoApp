@@ -23,7 +23,7 @@ export default function JornadaScreen({ user, onStarted }) {
     const [editApellido, setEditApellido] = useState(apellido);
 
     const set   = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-    const valid = form.vehiculo && form.kmInicial && editNombre;
+    const valid = !!editNombre;
 
     useEffect(() => {
         const t = setInterval(() => set("horaInicio", nowTime()), 15000);
@@ -86,14 +86,14 @@ export default function JornadaScreen({ user, onStarted }) {
             <div className="card">
                 <div className="card-title">Vehículo &amp; Kilometraje</div>
                 <div className="field">
-                    <label className="label">Vehículo asignado</label>
+                    <label className="label">Vehículo asignado <span style={{fontSize:"0.75em",color:"var(--color-muted)",fontWeight:400}}>(opcional)</span></label>
                     <select value={form.vehiculo} onChange={(e) => set("vehiculo", e.target.value)}>
                         <option value="">— Seleccionar vehículo —</option>
                         {data.vehiculos.map((v) => <option key={v}>{v}</option>)}
                     </select>
                 </div>
                 <div className="field">
-                    <label className="label">Km Inicial</label>
+                    <label className="label">Km Inicial <span style={{fontSize:"0.75em",color:"var(--color-muted)",fontWeight:400}}>(opcional)</span></label>
                     <input type="number" placeholder="Ej: 87450" value={form.kmInicial}
                         onChange={(e) => set("kmInicial", e.target.value)} />
                 </div>

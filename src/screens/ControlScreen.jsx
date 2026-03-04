@@ -48,7 +48,7 @@ export default function ControlScreen({ geo, onBack }) {
 
     // ── Validaciones ──
     const allRated = CRITERIOS.every((c) => ratings[c] > 0);
-    const photosOk = anomalia !== "Sí" || fotos.length >= 5;
+    const photosOk = true; // fotos opcionales
     const reportOk = anomalia !== "Sí" || informeAnomalia.trim().length > 10;
 
     const avgRating = allRated
@@ -274,7 +274,7 @@ export default function ControlScreen({ geo, onBack }) {
                         {anomalia === "Sí" && (
                             <>
                                 <div className="anomaly-warning">
-                                    ⚠️ Se requiere informe detallado y mínimo 5 fotos de evidencia.
+                                    ⚠️ Se requiere informe detallado. Podés adjuntar fotos de evidencia (opcional).
                                 </div>
                                 <div className="field">
                                     <label className="label">Informe de la anomalía</label>
