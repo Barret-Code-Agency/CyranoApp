@@ -4,17 +4,14 @@ import ShieldLogo from "../components/ShieldLogo";
 import { generarHojaSupervision } from "../utils/generarPDF";
 import "../styles/SendModal.css";
 
+// ── EmailJS config ─────────────────────────────────────────────────────────────
 const EJS_SERVICE  = "Service_bsotr9p";
-const EJS_TEMPLATE = "template_tj3tz1t";
+const EJS_TEMPLATE = "Template_tj3tz1t";
 const EJS_KEY      = "1wp7DDAJ8xoqGkihA";
 
-const EJS_OK = EJS_SERVICE !== "service_bsotr9p";
+const EJS_OK = EJS_SERVICE !== "YOUR_SERVICE_ID";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-const toMin = (t) => { if (!t) return 0; const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
-const diffMin = (a, b) => { let d = toMin(b) - toMin(a); return d < 0 ? d + 1440 : Math.max(d, 0); };
-const fmtHs = (min) => { if (!min || min <= 0) return "00:00"; return String(Math.floor(min / 60)).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0"); };
-
 const buildResumen = (session) => {
     const acts  = session.actividades || [];
     const ctrl  = acts.filter(a => a.tipo === "ctrl");
@@ -22,10 +19,10 @@ const buildResumen = (session) => {
     const otras = acts.filter(a => a.tipo === "otra");
     const km    = session.kmFinal ? Math.max(Number(session.kmFinal) - Number(session.kmInicial || 0), 0) : 0;
 
-    let t = `=== HOJA DE SUPERVISIÓN — ${session.fecha || ""} ===\n\n`;
-    t += `Supervisor : ${session.nombre}\n`;
-    t += `Jornada    : ${session.jornadaID}  |  Horario: ${session.horaInicio} → ${session.horaFin}\n`;
-    t += `Vehículo   : ${session.vehiculo || "—"}  |  Km recorridos: ${km > 0 ? km + " km" : "—"}\n\n`;
+    let t = `=== HOJA DE RECORRIDO DIARIO — ${session.fecha || ""} ===\n\n`;
+    t += `Colaborador : ${session.nombre}\n`;
+    t += `Jornada     : ${session.jornadaID}  |  Horario: ${session.horaInicio} → ${session.horaFin}\n`;
+    t += `Vehículo    : ${session.vehiculo || "—"}  |  Km recorridos: ${km > 0 ? km + " km" : "—"}\n\n`;
     t += `RESUMEN:\n  • Controles: ${ctrl.length}  • Capacitaciones: ${cap.length}  • Otras: ${otras.length}\n\n`;
     if (ctrl.length > 0) {
         t += `CONTROLES:\n`;
@@ -39,34 +36,63 @@ const buildResumen = (session) => {
     return t;
 };
 
-async function cargarEmailJS() {
-    if (window.emailjs) return;
-    await new Promise((res, rej) => {
-        const s = document.createElement("script");
-        s.src = "https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js";
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-    });
-    window.emailjs.init(EJS_KEY);
-}
+// Convierte Blob a base64 puro (sin el prefijo data:...)
+const blobToBase64 = (blob) => new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload  = () => res(reader.result.split(",")[1]);
+    reader.onerror = rej;
+    reader.readAsDataURL(blob);
+});
 
-async function enviarEmail(session) {
-    await cargarEmailJS();
-    const acts  = session.actividades || [];
-    const ctrl  = acts.filter(a => a.tipo === "ctrl");
-    const km    = session.kmFinal ? Math.max(Number(session.kmFinal) - Number(session.kmInicial || 0), 0) : 0;
+// ── Envío via REST API v1.0 de EmailJS (soporta adjuntos en base64) ───────────
+async function enviarEmailConPDF(session, pdfBlob, pdfFilename) {
+    const acts = session.actividades || [];
+    const ctrl = acts.filter(a => a.tipo === "ctrl");
+    const km   = session.kmFinal ? Math.max(Number(session.kmFinal) - Number(session.kmInicial || 0), 0) : 0;
 
-    return window.emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-        to_email:   session.email,
-        supervisor: session.nombre,
-        fecha:      session.fecha,
-        jornada_id: session.jornadaID,
-        controles:  ctrl.length,
-        vehiculo:   session.vehiculo || "—",
-        horario:    `${session.horaInicio} → ${session.horaFin}`,
-        km:         km > 0 ? km + " km" : "—",
-        resumen:    buildResumen(session),
-    });
+    const base64pdf = await blobToBase64(pdfBlob);
+
+    const payload = {
+        service_id:  EJS_SERVICE,
+        template_id: EJS_TEMPLATE,
+        user_id:     EJS_KEY,
+        template_params: {
+            to_email:   session.email,
+            supervisor: session.nombre,
+            fecha:      session.fecha       || "",
+            jornada_id: session.jornadaID   || "",
+            controles:  String(ctrl.length),
+            vehiculo:   session.vehiculo    || "—",
+            horario:    `${session.horaInicio} → ${session.horaFin}`,
+            km:         km > 0 ? km + " km" : "—",
+            resumen:    buildResumen(session),
+        },
+        // PDF adjunto en base64 — soportado desde EmailJS API v1.0
+        attachments: [
+            {
+                name:   pdfFilename,
+                data:   base64pdf,
+                type:   "application/pdf",
+                inline: false,
+            }
+        ],
+    };
+
+    let resp;
+    try {
+        resp = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify(payload),
+        });
+    } catch (netErr) {
+        throw new Error("Sin conexion o CORS bloqueado: " + netErr.message);
+    }
+
+    const respText = await resp.text().catch(() => "");
+    if (!resp.ok) {
+        throw new Error("EmailJS error " + resp.status + ": " + (respText || resp.statusText));
+    }
 }
 
 // ── Indicador de paso ──────────────────────────────────────────────────────────
@@ -92,12 +118,12 @@ function Paso({ icon, label, sub, estado }) {
             }}>
                 {iconShow}
             </div>
-            <div>
+            <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: pend ? "#8894ac" : "#0d1b3e" }}>{label}</div>
                 {sub && <div style={{ fontSize: 11, color: "#8894ac", marginTop: 1 }}>{sub}</div>}
             </div>
-            {esOk && <div style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#16a34a" }}>Listo</div>}
-            {esError && <div style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#dc2626" }}>Error</div>}
+            {esOk    && <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a" }}>Listo</div>}
+            {esError && <div style={{ fontSize: 11, fontWeight: 700, color: "#dc2626" }}>Error</div>}
         </div>
     );
 }
@@ -105,7 +131,7 @@ function Paso({ icon, label, sub, estado }) {
 // ── Modal ──────────────────────────────────────────────────────────────────────
 export default function SendModal({ session, onClose }) {
     const [pasos,   setPasos]   = useState({ pdf: "en_curso", email: "pendiente" });
-    const [pdfData, setPdfData] = useState(null);   // { dataUrl, filename }
+    const [pdfData, setPdfData] = useState(null);
     const [error,   setError]   = useState(null);
     const [listo,   setListo]   = useState(false);
 
@@ -119,7 +145,7 @@ export default function SendModal({ session, onClose }) {
 
     useEffect(() => {
         (async () => {
-            // PASO 1: Generar PDF
+            // PASO 1 — Generar PDF
             let pdfResult;
             try {
                 pdfResult = await generarHojaSupervision(session);
@@ -128,21 +154,21 @@ export default function SendModal({ session, onClose }) {
             } catch (e) {
                 console.error("PDF error:", e);
                 set("pdf", "error");
-                setError("No se pudo generar el PDF. " + e.message);
+                setError("No se pudo generar el PDF: " + e.message);
                 setListo(true);
                 return;
             }
 
-            // PASO 2: Enviar email
+            // PASO 2 — Enviar email con PDF adjunto
             set("email", "en_curso");
             if (EJS_OK) {
                 try {
-                    await enviarEmail(session);
+                    await enviarEmailConPDF(session, pdfResult.blob, pdfResult.filename);
                     set("email", "ok");
                 } catch (e) {
                     console.error("Email error:", e);
                     set("email", "error");
-                    setError("PDF generado OK, pero el envío de email falló. Podés descargarlo manualmente.");
+                    setError("Envío fallido: " + e.message);
                 }
             } else {
                 await new Promise(r => setTimeout(r, 800));
@@ -157,7 +183,6 @@ export default function SendModal({ session, onClose }) {
         <div className="overlay">
             <div className="modal" style={{ maxWidth: 420 }}>
 
-                {/* Logo + título */}
                 <div style={{ textAlign: "center", marginBottom: 18 }}>
                     <div style={{ marginBottom: 8 }}><ShieldLogo size={48} /></div>
                     <h2 style={{ fontSize: 19, fontWeight: 800, color: "#0d1b3e", margin: 0 }}>
@@ -168,32 +193,31 @@ export default function SendModal({ session, onClose }) {
                     </p>
                 </div>
 
-                {/* Tags resumen */}
-                <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 18 }}>
+                <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
                     <span className="tag green">{ctrl} controles</span>
                     <span className="tag blue">{cap} cap.</span>
                     <span className="tag orange">{otras} otras</span>
                     {km > 0 && <span className="tag">{km} km</span>}
                 </div>
 
-                {/* Pasos */}
                 <div style={{ background: "#f8f9fc", borderRadius: 12, padding: "8px 16px", border: "1px solid #e8eaf2", marginBottom: 14 }}>
-                    <Paso icon="📄" label="Generar PDF" sub="Hoja de Recorrido formato Brinks"
+                    <Paso icon="📄" label="Generar PDF"
+                        sub="Hoja de Recorrido Diario"
                         estado={pasos.pdf} />
                     <div style={{ width: 2, height: 6, background: "#e8eaf2", marginLeft: 15 }} />
-                    <Paso icon="📧" label="Enviar informe"
-                        sub={EJS_OK ? `Enviando a ${session?.email}` : "Modo demo — configurar EmailJS para envío real"}
+                    <Paso icon="📧" label="Enviar con PDF adjunto"
+                        sub={EJS_OK
+                            ? `Enviando a ${session?.email}`
+                            : "Modo demo — configurar EmailJS para envío real"}
                         estado={pasos.email} />
                 </div>
 
-                {/* Error */}
                 {error && (
-                    <div style={{ background: "#fef2f2", border: "1px solid rgba(220,38,38,.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#dc2626", marginBottom: 12 }}>
+                    <div style={{ background: "#fef2f2", border: "1px solid rgba(220,38,38,.25)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#dc2626", marginBottom: 12, lineHeight: 1.5 }}>
                         ⚠️ {error}
                     </div>
                 )}
 
-                {/* Aviso configuración EmailJS */}
                 {listo && !EJS_OK && (
                     <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", fontSize: 11.5, color: "#92400e", marginBottom: 12, lineHeight: 1.7 }}>
                         <strong>📌 Email en modo demo.</strong> Para activar el envío real:<br />
@@ -203,7 +227,6 @@ export default function SendModal({ session, onClose }) {
                     </div>
                 )}
 
-                {/* Acciones */}
                 {listo && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {pdfData && (
@@ -226,7 +249,6 @@ export default function SendModal({ session, onClose }) {
                     </div>
                 )}
 
-                {/* Spinner mientras procesa */}
                 {!listo && (
                     <div style={{ textAlign: "center", marginTop: 8 }}>
                         <div className="send-spinner-large" />

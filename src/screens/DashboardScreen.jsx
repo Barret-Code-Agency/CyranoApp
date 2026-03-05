@@ -1,6 +1,7 @@
 // src/screens/DashboardScreen.jsx — Dashboard unificado admin
 import { useState, useMemo } from "react";
 import { useAppData } from "../context/AppDataContext";
+import { exportarExcel } from "../utils/exportarExcel";
 import "../styles/DashboardScreen.css";
 
 // ══════════════════════════════════════════════════════════════
@@ -37,7 +38,7 @@ const calcTiempos = (jorns) => {
         acts.forEach(a => {
             const d = diffMin(a.horaInicio, a.horaFin);
             if (a.tipo === "ctrl") ctrl += d;
-            if (a.tipo === "cap")  cap  += d;
+            if (a.tipo === "cap") cap += d;
             if (a.tipo === "otra") otra += d;
         });
         for (let i = 1; i < acts.length; i++) {
@@ -156,7 +157,7 @@ function BarraTiempos({ ctrl, cap, otra, traslado, showLabels }) {
     const total = ctrl + cap + otra + traslado || 1;
     const segs = [
         { key: "ctrl", val: ctrl, color: TIPO_COLOR.ctrl },
-        { key: "cap",  val: cap,  color: TIPO_COLOR.cap  },
+        { key: "cap", val: cap, color: TIPO_COLOR.cap },
         { key: "otra", val: otra, color: TIPO_COLOR.otra },
         { key: "traslado", val: traslado, color: TIPO_COLOR.traslado },
     ].filter(s => s.val > 0);
@@ -305,17 +306,21 @@ function PlanVsRealChart({ jornadas, plan }) {
         </div>
     );
 }
-
+<button className="btn btn-secondary" onClick={() =>
+    exportarExcel({ jornadas, plan, planesSuper, getSupervisoresConEmail, getPlanSupervisor })
+}>
+    📊 Exportar Excel
+</button>
 // ══════════════════════════════════════════════════════════════
 // TABS
 // ══════════════════════════════════════════════════════════════
 const TABS = [
-    { key: "resumen",      label: "Resumen",        icon: "📊" },
-    { key: "supervisores", label: "Supervisores",   icon: "👤" },
-    { key: "tiempos",      label: "Tiempos",        icon: "⏱" },
-    { key: "puestos",      label: "Puestos",        icon: "🎯" },
-    { key: "km",           label: "Km & Vehículos", icon: "🚗" },
-    { key: "cumplimiento", label: "Cumplimiento",   icon: "📋" },
+    { key: "resumen", label: "Resumen", icon: "📊" },
+    { key: "supervisores", label: "Supervisores", icon: "👤" },
+    { key: "tiempos", label: "Tiempos", icon: "⏱" },
+    { key: "puestos", label: "Puestos", icon: "🎯" },
+    { key: "km", label: "Km & Vehículos", icon: "🚗" },
+    { key: "cumplimiento", label: "Cumplimiento", icon: "📋" },
 ];
 
 // ══════════════════════════════════════════════════════════════
@@ -323,8 +328,8 @@ const TABS = [
 // ══════════════════════════════════════════════════════════════
 export default function DashboardScreen() {
     const { jornadas, plan, data, limpiarSimulados, mantenimiento, getSupervisoresConEmail, getPlanSupervisor } = useAppData();
-    const [tab,        setTab]        = useState("resumen");
-    const [periodo,    setPeriodo]    = useState("mes");
+    const [tab, setTab] = useState("resumen");
+    const [periodo, setPeriodo] = useState("mes");
     const [showBorrar, setShowBorrar] = useState(false);
 
     // ── Filtrado por período ─────────────────────────────────
@@ -343,11 +348,11 @@ export default function DashboardScreen() {
         [jornadasFiltradas]);
 
     const controles = todasActs.filter(a => a.tipo === "ctrl");
-    const caps      = todasActs.filter(a => a.tipo === "cap");
-    const otras     = todasActs.filter(a => a.tipo === "otra");
-    const ctrlDia   = controles.filter(c => c.turno === "diurno"   && !c.esFinDeSemana);
-    const ctrlNoc   = controles.filter(c => c.turno === "nocturno" && !c.esFinDeSemana);
-    const ctrlFdS   = controles.filter(c => c.esFinDeSemana);
+    const caps = todasActs.filter(a => a.tipo === "cap");
+    const otras = todasActs.filter(a => a.tipo === "otra");
+    const ctrlDia = controles.filter(c => c.turno === "diurno" && !c.esFinDeSemana);
+    const ctrlNoc = controles.filter(c => c.turno === "nocturno" && !c.esFinDeSemana);
+    const ctrlFdS = controles.filter(c => c.esFinDeSemana);
 
     const totalKm = jornadasFiltradas.reduce((s, j) => s + parseKm(j), 0);
     const avgCtrl = useMemo(() => {
@@ -359,10 +364,10 @@ export default function DashboardScreen() {
     const cumplPlan = useMemo(() => {
         if (!plan.length) return [];
         return plan.map(p => {
-            const vv  = controles.filter(c => c.objetivo === p.objetivo);
+            const vv = controles.filter(c => c.objetivo === p.objetivo);
             const noc = vv.filter(c => c.turno === "nocturno").length;
             const fds = vv.filter(c => c.esFinDeSemana).length;
-            const p2  = Math.min(Math.round((vv.length / (p.visitasPorSemana || 1)) * 100), 100);
+            const p2 = Math.min(Math.round((vv.length / (p.visitasPorSemana || 1)) * 100), 100);
             return { ...p, visitas: vv.length, nocturnas: noc, fds, pct: p2 };
         });
     }, [plan, controles]);
@@ -378,7 +383,7 @@ export default function DashboardScreen() {
             map[s].jornadas.push(j);
             (j.actividades || []).forEach(a => {
                 if (a.tipo === "ctrl") { map[s].controles++; if (a.turno === "nocturno") map[s].nocturnos++; if (a.esFinDeSemana) map[s].fds++; }
-                if (a.tipo === "cap")  map[s].caps++;
+                if (a.tipo === "cap") map[s].caps++;
                 if (a.tipo === "otra") map[s].otras++;
             });
             map[s].km += parseKm(j);
@@ -447,10 +452,10 @@ export default function DashboardScreen() {
                 <>
                     <div className="dash-kpis">
                         {[
-                            { label: "Jornadas",   value: jornadasFiltradas.length,     icon: "📋" },
-                            { label: "Controles",  value: controles.length,              icon: "🎯" },
-                            { label: "Km totales", value: totalKm + " km",              icon: "🚗" },
-                            { label: "Prom. ctrl", value: fmtMin(avgCtrl),              icon: "⏱" },
+                            { label: "Jornadas", value: jornadasFiltradas.length, icon: "📋" },
+                            { label: "Controles", value: controles.length, icon: "🎯" },
+                            { label: "Km totales", value: totalKm + " km", icon: "🚗" },
+                            { label: "Prom. ctrl", value: fmtMin(avgCtrl), icon: "⏱" },
                         ].map((k, i) => (
                             <div key={i} className="dash-kpi">
                                 <div className="dash-kpi-icon">{k.icon}</div>
@@ -481,9 +486,9 @@ export default function DashboardScreen() {
                     <div className="dash-card">
                         <div className="dash-card-title">Distribución de actividades</div>
                         <DonutChart segments={[
-                            { label: "Controles",      value: controles.length, color: "var(--color-primary)" },
-                            { label: "Capacitaciones", value: caps.length,      color: "#0ea5e9" },
-                            { label: "Otras",          value: otras.length,     color: "var(--color-red)" },
+                            { label: "Controles", value: controles.length, color: "var(--color-primary)" },
+                            { label: "Capacitaciones", value: caps.length, color: "#0ea5e9" },
+                            { label: "Otras", value: otras.length, color: "var(--color-red)" },
                         ]} />
                     </div>
 
@@ -513,7 +518,7 @@ export default function DashboardScreen() {
 
                     {plan.length > 0 && (
                         <div className="dash-card">
-                            <div className="dash-card-title">📈 Plan vs Realizado — {new Date().toLocaleString("es-AR",{month:"long",year:"numeric"})}</div>
+                            <div className="dash-card-title">📈 Plan vs Realizado — {new Date().toLocaleString("es-AR", { month: "long", year: "numeric" })}</div>
                             <PlanVsRealChart jornadas={jornadas} plan={plan} />
                         </div>
                     )}
@@ -522,17 +527,17 @@ export default function DashboardScreen() {
 
             {/* ══ SUPERVISORES ══ */}
             {tab === "supervisores" && (() => {
-                const mesInicio = new Date(); mesInicio.setDate(1); mesInicio.setHours(0,0,0,0);
+                const mesInicio = new Date(); mesInicio.setDate(1); mesInicio.setHours(0, 0, 0, 0);
                 const supervisores = getSupervisoresConEmail();
 
                 const supData = supervisores.map(sup => {
-                    const planSup   = sup.email ? getPlanSupervisor(sup.email) : null;
+                    const planSup = sup.email ? getPlanSupervisor(sup.email) : null;
                     const semanasDePatron = (patron, custom) => {
-                        if (patron === "todas")   return [1,2,3,4];
-                        if (patron === "impares") return [1,3];
-                        if (patron === "pares")   return [2,4];
-                        if (patron === "custom")  return custom || [];
-                        return [1,2,3,4];
+                        if (patron === "todas") return [1, 2, 3, 4];
+                        if (patron === "impares") return [1, 3];
+                        if (patron === "pares") return [2, 4];
+                        if (patron === "custom") return custom || [];
+                        return [1, 2, 3, 4];
                     };
                     const reqMes = planSup
                         ? (planSup.objetivos || []).reduce((s, o) =>
@@ -547,20 +552,20 @@ export default function DashboardScreen() {
                         .filter(j => (j.email === sup.email) && new Date(j.creadaEn || 0) >= mesInicio)
                         .flatMap(j => (j.actividades || []).filter(a => a.tipo === "ctrl")).length;
 
-                    const pctMes  = reqMes > 0 ? Math.min(Math.round(realMes / reqMes * 100), 100) : null;
+                    const pctMes = reqMes > 0 ? Math.min(Math.round(realMes / reqMes * 100), 100) : null;
                     const pctColor = pctMes >= 80 ? "var(--color-success)" : pctMes >= 50 ? "#f59e0b" : "var(--color-danger)";
 
                     // Cumplimiento por objetivo
                     const objCumpl = planSup ? (planSup.objetivos || []).map(o => {
                         const real = ctrlSup.filter(c => c.objetivo === o.objetivo).length;
                         const sems = semanasDePatron(o.patron, o.semanasCustom);
-                        const req  = sems.length * (o.visitasPorSemana || 1);
-                        return { objetivo: o.objetivo, real, req, pct: req > 0 ? Math.min(Math.round(real/req*100),100) : 0 };
+                        const req = sems.length * (o.visitasPorSemana || 1);
+                        return { objetivo: o.objetivo, real, req, pct: req > 0 ? Math.min(Math.round(real / req * 100), 100) : 0 };
                     }) : [];
 
                     const noc = ctrlSup.filter(c => c.turno === "nocturno").length;
                     const fds = ctrlSup.filter(c => c.esFinDeSemana).length;
-                    const km  = jornadasSup.reduce((s,j) => { const k = Number(j.kmFinal||0)-Number(j.kmInicial||0); return s+(k>0?k:0);}, 0);
+                    const km = jornadasSup.reduce((s, j) => { const k = Number(j.kmFinal || 0) - Number(j.kmInicial || 0); return s + (k > 0 ? k : 0); }, 0);
 
                     return { ...sup, planSup, reqMes, realMes, pctMes, pctColor, objCumpl, ctrlTotal: ctrlSup.length, noc, fds, km, jornadas: jornadasSup.length };
                 });
@@ -574,7 +579,7 @@ export default function DashboardScreen() {
                                 <div className="dash-empty-small">Sin supervisores registrados.</div>
                             )}
                             {supData.map((s, i) => (
-                                <div key={i} style={{ marginBottom: 18, paddingBottom: 18, borderBottom: i < supData.length-1 ? "1px solid var(--color-border)" : "none" }}>
+                                <div key={i} style={{ marginBottom: 18, paddingBottom: 18, borderBottom: i < supData.length - 1 ? "1px solid var(--color-border)" : "none" }}>
                                     {/* Header supervisor */}
                                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                                         <div style={{
@@ -585,11 +590,11 @@ export default function DashboardScreen() {
                                         }}>{s.nombre[0]}</div>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontWeight: 700, fontSize: 14, color: "var(--color-text)" }}>
-                                                {s.nombre.split(" ").slice(0,3).join(" ")}
+                                                {s.nombre.split(" ").slice(0, 3).join(" ")}
                                             </div>
                                             <div style={{ fontSize: 11, color: "var(--color-muted)" }}>
                                                 {s.planSup
-                                                    ? `${{"diurno":"☀️ Diurno","nocturno":"🌙 Nocturno","mixto":"🔄 Mixto"}[s.planSup.turnoBase||"mixto"]} · ${s.planSup.objetivos?.length||0} objetivos · ${s.reqMes} visitas req./mes`
+                                                    ? `${{ "diurno": "☀️ Diurno", "nocturno": "🌙 Nocturno", "mixto": "🔄 Mixto" }[s.planSup.turnoBase || "mixto"]} · ${s.planSup.objetivos?.length || 0} objetivos · ${s.reqMes} visitas req./mes`
                                                     : "Sin plan individual"}
                                             </div>
                                         </div>
@@ -641,7 +646,7 @@ export default function DashboardScreen() {
                                                             {o.objetivo.split("—").pop().trim()}
                                                         </div>
                                                         <div style={{ flex: 1, height: 5, background: "var(--color-border)", borderRadius: 3, overflow: "hidden" }}>
-                                                            <div style={{ height: "100%", width: Math.min(o.pct,100)+"%", background: oc, borderRadius: 3, transition: "width .4s" }} />
+                                                            <div style={{ height: "100%", width: Math.min(o.pct, 100) + "%", background: oc, borderRadius: 3, transition: "width .4s" }} />
                                                         </div>
                                                         <div style={{ fontSize: 10, fontWeight: 700, color: oc, width: 42, textAlign: "right", flexShrink: 0 }}>
                                                             {o.real}/{o.req}
@@ -677,15 +682,15 @@ export default function DashboardScreen() {
                                             const pc = s.pctMes;
                                             return (
                                                 <tr key={i}>
-                                                    <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{s.nombre.split(" ").slice(0,2).join(" ")}</td>
+                                                    <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{s.nombre.split(" ").slice(0, 2).join(" ")}</td>
                                                     <td>
                                                         {pc !== null
                                                             ? <span className="tag" style={{
-                                                                background: pc>=80?"var(--color-success-ghost)":pc>=50?"#fef3c7":"var(--color-danger-ghost)",
-                                                                color: pc>=80?"var(--color-success)":pc>=50?"#92400e":"var(--color-danger)",
-                                                                fontWeight:800
+                                                                background: pc >= 80 ? "var(--color-success-ghost)" : pc >= 50 ? "#fef3c7" : "var(--color-danger-ghost)",
+                                                                color: pc >= 80 ? "var(--color-success)" : pc >= 50 ? "#92400e" : "var(--color-danger)",
+                                                                fontWeight: 800
                                                             }}>{pc}%</span>
-                                                            : <span style={{color:"var(--color-muted)",fontSize:11}}>Sin plan</span>
+                                                            : <span style={{ color: "var(--color-muted)", fontSize: 11 }}>Sin plan</span>
                                                         }
                                                     </td>
                                                     <td style={{ fontSize: "var(--text-xs)", color: "var(--color-muted)" }}>
@@ -716,10 +721,10 @@ export default function DashboardScreen() {
                         <BarraTiempos {...tiemposGlobal} showLabels />
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginTop: 16 }}>
                             {[
-                                { key: "ctrl",     label: "Control",       icon: "🎯" },
-                                { key: "cap",      label: "Capacitación",  icon: "📚" },
-                                { key: "otra",     label: "Otras act.",    icon: "🔧" },
-                                { key: "traslado", label: "Traslados",     icon: "🚗" },
+                                { key: "ctrl", label: "Control", icon: "🎯" },
+                                { key: "cap", label: "Capacitación", icon: "📚" },
+                                { key: "otra", label: "Otras act.", icon: "🔧" },
+                                { key: "traslado", label: "Traslados", icon: "🚗" },
                             ].map(t => (
                                 <div key={t.key} style={{
                                     background: "#f8f9fc", borderRadius: 10, padding: "12px 8px",
@@ -774,7 +779,7 @@ export default function DashboardScreen() {
                                 <thead><tr>
                                     <th>Supervisor</th>
                                     <th style={{ color: TIPO_COLOR.ctrl }}>🎯 Control</th>
-                                    <th style={{ color: TIPO_COLOR.cap  }}>📚 Capac.</th>
+                                    <th style={{ color: TIPO_COLOR.cap }}>📚 Capac.</th>
                                     <th style={{ color: TIPO_COLOR.otra }}>🔧 Otras</th>
                                     <th style={{ color: TIPO_COLOR.traslado }}>🚗 Traslado</th>
                                     <th>Total</th>
@@ -786,7 +791,7 @@ export default function DashboardScreen() {
                                             <tr key={i}>
                                                 <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{s.nombre.split(" ").slice(0, 2).join(" ")}</td>
                                                 <td><span style={{ color: TIPO_COLOR.ctrl, fontWeight: 700 }}>{fmtMin(t.ctrl)}</span> <small style={{ color: "#8894ac" }}>({pct(t.ctrl, t.total)}%)</small></td>
-                                                <td><span style={{ color: TIPO_COLOR.cap,  fontWeight: 700 }}>{fmtMin(t.cap)}</span>  <small style={{ color: "#8894ac" }}>({pct(t.cap,  t.total)}%)</small></td>
+                                                <td><span style={{ color: TIPO_COLOR.cap, fontWeight: 700 }}>{fmtMin(t.cap)}</span>  <small style={{ color: "#8894ac" }}>({pct(t.cap, t.total)}%)</small></td>
                                                 <td><span style={{ color: TIPO_COLOR.otra, fontWeight: 700 }}>{fmtMin(t.otra)}</span> <small style={{ color: "#8894ac" }}>({pct(t.otra, t.total)}%)</small></td>
                                                 <td><span style={{ color: TIPO_COLOR.traslado, fontWeight: 700 }}>{fmtMin(t.traslado)}</span> <small style={{ color: "#8894ac" }}>({pct(t.traslado, t.total)}%)</small></td>
                                                 <td><strong>{fmtMin(t.total)}</strong></td>
@@ -797,7 +802,7 @@ export default function DashboardScreen() {
                                     <tr style={{ background: "#f0f2f7", fontWeight: 700 }}>
                                         <td>TOTAL</td>
                                         <td style={{ color: TIPO_COLOR.ctrl }}>{fmtMin(tiemposGlobal.ctrl)}</td>
-                                        <td style={{ color: TIPO_COLOR.cap  }}>{fmtMin(tiemposGlobal.cap)}</td>
+                                        <td style={{ color: TIPO_COLOR.cap }}>{fmtMin(tiemposGlobal.cap)}</td>
                                         <td style={{ color: TIPO_COLOR.otra }}>{fmtMin(tiemposGlobal.otra)}</td>
                                         <td style={{ color: TIPO_COLOR.traslado }}>{fmtMin(tiemposGlobal.traslado)}</td>
                                         <td>{fmtMin(tiemposGlobal.total)}</td>
@@ -827,12 +832,12 @@ export default function DashboardScreen() {
                                 <thead><tr><th>Puesto</th><th>Total</th><th>☀️Día</th><th>🌙Noc</th><th>📅FdS</th><th>Plan</th><th>Cumpl.</th></tr></thead>
                                 <tbody>
                                     {data.objetivos.map((obj, i) => {
-                                        const vv  = controles.filter(c => c.objetivo === obj);
+                                        const vv = controles.filter(c => c.objetivo === obj);
                                         const noc = vv.filter(c => c.turno === "nocturno").length;
                                         const fds = vv.filter(c => c.esFinDeSemana).length;
                                         const dia = vv.length - noc;
-                                        const pe  = plan.find(p => p.objetivo === obj);
-                                        const p2  = pe ? Math.min(Math.round((vv.length / pe.visitasPorSemana) * 100), 100) : null;
+                                        const pe = plan.find(p => p.objetivo === obj);
+                                        const p2 = pe ? Math.min(Math.round((vv.length / pe.visitasPorSemana) * 100), 100) : null;
                                         return (
                                             <tr key={i}>
                                                 <td style={{ maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "var(--text-xs)" }}>{obj}</td>
