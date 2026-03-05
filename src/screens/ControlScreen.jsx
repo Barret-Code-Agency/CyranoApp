@@ -228,16 +228,18 @@ export default function ControlScreen({ geo, onBack }) {
                             return (
                                 <div key={c} className="rating-row">
                                     <span className="rating-label">{c}</span>
-                                    <div className="rating-stars">
-                                        {[1,2,3,4,5,6,7,8,9,10].map((n) => (
-                                            <div key={n}
-                                                className={`star ${v >= n ? getStarClass(n, v) : ""}`}
-                                                onClick={() => setR(c, n)}>
-                                                {n}
-                                            </div>
-                                        ))}
+                                    <div className="rating-bottom-row">
+                                        <div className="rating-stars">
+                                            {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+                                                <div key={n}
+                                                    className={`star ${v >= n ? getStarClass(n, v) : ""}`}
+                                                    onClick={() => setR(c, n)}>
+                                                    {n}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <span className="rating-val">{v > 0 ? v : "—"}</span>
                                     </div>
-                                    <span className="rating-val">{v > 0 ? v : "—"}</span>
                                 </div>
                             );
                         })}

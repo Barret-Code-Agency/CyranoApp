@@ -128,14 +128,20 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
 
     const alertasVehiculos = getAlertasMantenimiento();
 
+    // Controles del mes — cada control lleva la semana de su jornada
     const controlesMes = useMemo(() =>
         jornadas
-            .filter(j => j.email === user.email && new Date(j.creadaEn || 0) >= mesInicio)
-            .flatMap(j => (j.actividades || []).filter(a => a.tipo === "ctrl")),
+            .filter(j => j.email === user.email && new Date(j.creadaEn || j.fecha || 0) >= mesInicio)
+            .flatMap(j => {
+                const semanaJ = getSemana(new Date(j.creadaEn || j.fecha || 0));
+                return (j.actividades || [])
+                    .filter(a => a.tipo === "ctrl")
+                    .map(a => ({ ...a, _semana: semanaJ }));
+            }),
         [jornadas, user.email, mesInicio]
     );
 
-    const getSemanaDeCtrl = (c) => getSemana(new Date(c.iniciadaEn || 0));
+    const getSemanaDeCtrl = (c) => c._semana ?? getSemana(new Date(c.iniciadaEn || 0));
 
     const controlesSemana = useMemo(() =>
         controlesMes.filter(c => getSemanaDeCtrl(c) === semana),
@@ -154,9 +160,19 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
 
     const visitasPorObj = useMemo(() => {
         const map = {};
-        controlesMes.forEach(c => { map[c.objetivo] = (map[c.objetivo] || 0) + 1; });
+        // Normalizar: trim + lowercase para evitar mismatches
+        controlesMes.forEach(c => {
+            const key = (c.objetivo || "").trim();
+            if (key) map[key] = (map[key] || 0) + 1;
+        });
         return map;
     }, [controlesMes]);
+
+    // Helper para buscar visitas normalizando el nombre del objetivo
+    const getVisitas = (objName) => {
+        const key = (objName || "").trim();
+        return map[key] ?? visitasPorObj[key] ?? 0;
+    };
 
     // ── Plan global ───────────────────────────────────────────────────────────
     const objGlobalSemana = useMemo(() =>
@@ -208,7 +224,7 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
         const lista = [];
         for (let w = 1; w < semana; w++) {
             objGlobalSemana.forEach(o => {
-                const real = controlesMes.filter(c => c.objetivo === o.objetivo && getSemanaDeCtrl(c) === w).length;
+                const real = controlesMes.filter(c => (c.objetivo||"").trim() === (o.objetivo||"").trim() && getSemanaDeCtrl(c) === w).length;
                 if (real < (o.visitasPorSemana || 1))
                     lista.push({ semana: w, objetivo: o.objetivo, realizadas: real, requeridas: o.visitasPorSemana });
             });
@@ -216,7 +232,14 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
         return lista;
     }, [sinPlanGlobal, semana, objGlobalSemana, controlesMes]);
 
+
+    console.log("=== DEBUG VISITAS ===");
+    console.log("controlesMes objetivos:", controlesMes.map(c => c.objetivo));
+    console.log("objIndivSemana:", objIndivSemana.map(o => o.objetivo));
+    console.log("visitasPorObj:", JSON.stringify(visitasPorObj));
+
     return (
+
         <div className="sup-dash">
             <div className="sup-dash-title">Mi Panel</div>
             <div className="sup-dash-sub">{user.name} · {mesNombre()}</div>
@@ -228,7 +251,7 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                         <div className="sup-week-label">SEMANA ACTUAL</div>
                         <div className="sup-week-num">{semana}</div>
                         <div className="sup-week-range">Días {WEEK_RANGES[semana]}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                        <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 12, marginTop: 10 }}>
                             <div className="sup-week-circles">
                                 {!sinPlanGlobal && (
                                     <div className="sup-week-circle-item">
@@ -374,7 +397,7 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                         <div className="sup-empty">Sin objetivos esta semana según el patrón asignado.</div>
                     ) : (
                         objIndivSemana.map((o, i) => {
-                            const realizadas = visitasPorObj[o.objetivo] || 0;
+                            const realizadas = visitasPorObj[(o.objetivo||"").trim()] || 0;
                             const requeridas = o.visitasPorSemana || 1;
                             const turnoEf    = o.turnoEfectivo || ps.turnoBase || "mixto";
                             return (
