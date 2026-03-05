@@ -190,16 +190,13 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
             <div className="sup-dash-title">Mi Panel</div>
             <div className="sup-dash-sub">{user.name} · {mesNombre()}</div>
 
-            {/* ══════════════════════════════════════════
-                BANNER SEMANA
-            ══════════════════════════════════════════ */}
+            {/* ══ BANNER SEMANA ══ */}
             {semana ? (
                 <div className="sup-week-banner">
                     <div className="sup-week-left">
                         <div className="sup-week-label">SEMANA ACTUAL</div>
                         <div className="sup-week-num">{semana}</div>
                         <div className="sup-week-range">Días {WEEK_RANGES[semana]}</div>
-                        {/* Círculos de % */}
                         <div className="sup-week-circles" style={{ marginTop: 10 }}>
                             {!sinPlanGlobal && (
                                 <div className="sup-week-circle-item">
@@ -218,7 +215,6 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                         </div>
                     </div>
 
-                    {/* Desglose turnos semana */}
                     <div className="sup-week-turnos">
                         <div className="sup-turnos-title">DESGLOSE SEMANA</div>
                         <TurnoRow icon="☀️" label="Diurnas"
@@ -263,11 +259,9 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                 </div>
             </div>
 
-            {/* ══════════════════════════════════════════
-                AVANCE DEL MES — desglose turnos
-            ══════════════════════════════════════════ */}
+            {/* ══ AVANCE DEL MES ══ */}
             {!sinPlanGlobal && (
-                <div className="sup-card">
+                <div className="sup-card sup-card-week">
                     <div className="sup-card-title">📅 Avance del mes</div>
 
                     <div className="sup-mes-banner">
@@ -330,31 +324,6 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                             </div>
                         </div>
                     ))}
-                </div>
-            )}
-
-            {/* ── Plan global esta semana ── */}
-            {!sinPlanGlobal && semana && (
-                <div className="sup-card">
-                    <div className="sup-card-title">📋 Plan general — Semana {semana}</div>
-                    {objGlobalSemana.map((o, i) => {
-                        const realizadas = visitasPorObj[o.objetivo] || 0;
-                        const requeridas = o.visitasPorSemana || 1;
-                        return (
-                            <div key={i} className="sup-obj-row">
-                                <div className={`sup-obj-status ${realizadas >= requeridas ? "done" : "pending"}`}>
-                                    {realizadas >= requeridas ? "✓" : realizadas > 0 ? "~" : "!"}
-                                </div>
-                                <div className="sup-obj-body">
-                                    <div className="sup-obj-name">{o.objetivo}</div>
-                                    <div className="sup-obj-meta">
-                                        <span className="sup-obj-count">{realizadas}/{requeridas} visitas esta semana</span>
-                                    </div>
-                                    <ProgressBar value={realizadas} max={requeridas} />
-                                </div>
-                            </div>
-                        );
-                    })}
                 </div>
             )}
 
