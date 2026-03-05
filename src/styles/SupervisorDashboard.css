@@ -192,26 +192,27 @@
     border: 1px solid rgba(var(--color-primary-rgb,0,169,224),.2) !important;
 }
 
-/* ── Barra avance semanal por día ── */
+/* ── Barra avance semanal por día (horizontal) ── */
 .sup-day-bar-wrap {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    display: flex; flex-direction: column; gap: 4px; width: 100%;
 }
 .sup-day-bar-fecha {
-    font-size: 8.5px; font-weight: 700; color: var(--color-muted);
-    text-transform: capitalize; letter-spacing: .5px; text-align: center;
-    white-space: nowrap;
+    font-size: 9px; font-weight: 700; color: var(--color-muted);
+    text-transform: capitalize; letter-spacing: .5px;
+}
+.sup-day-bar-row {
+    display: flex; align-items: center; gap: 8px;
 }
 .sup-day-bar-track {
-    width: 10px; flex: 1; min-height: 54px;
-    background: var(--color-border); border-radius: 5px;
-    overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
+    flex: 1; height: 8px; background: var(--color-border);
+    border-radius: 4px; overflow: hidden;
 }
 .sup-day-bar-fill {
-    width: 100%; border-radius: 5px; transition: height .6s ease;
+    height: 100%; border-radius: 4px; transition: width .6s ease;
 }
 .sup-day-bar-pct {
     font-family: var(--font-display,"Bebas Neue",sans-serif);
-    font-size: 0.85rem; line-height: 1;
+    font-size: 0.9rem; line-height: 1; flex-shrink: 0;
 }
 .sup-day-bar-label {
     font-size: 8px; color: var(--color-muted); letter-spacing: .5px;
