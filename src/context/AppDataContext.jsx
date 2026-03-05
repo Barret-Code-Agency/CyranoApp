@@ -16,6 +16,21 @@ const REF_MANT         = collection(db, "mantenimiento");
 const REF_JORNADAS     = collection(db, "jornadas");
 
 // ── Clasificación turno ───────────────────────────────────────────────────────
+
+// Feriados nacionales Argentina — fijos "MM-DD" y móviles "YYYY-MM-DD"
+const FERIADOS_FIJOS = new Set([
+    "01-01","03-24","04-02","05-01","05-25",
+    "06-20","07-09","12-08","12-25",
+]);
+const FERIADOS_MOVILES = new Set([
+    "2025-03-03","2025-03-04","2025-04-18","2025-08-18","2025-10-13","2025-11-24",
+    "2026-02-16","2026-02-17","2026-04-03","2026-08-17","2026-10-12","2026-11-23",
+]);
+const esFeriado = (d) => {
+    const mmdd = String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+    return FERIADOS_FIJOS.has(mmdd) || FERIADOS_MOVILES.has(d.toISOString().slice(0,10));
+};
+
 export const clasificarControl = (horaInicio, fechaISO) => {
     if (!horaInicio) return { turno: "diurno", esFinDeSemana: false };
     const [h, m]   = horaInicio.split(":").map(Number);
@@ -24,7 +39,7 @@ export const clasificarControl = (horaInicio, fechaISO) => {
     let esFinDeSemana = false;
     if (fechaISO) {
         const d = new Date(fechaISO);
-        esFinDeSemana = d.getDay() === 0 || d.getDay() === 6;
+        esFinDeSemana = d.getDay() === 0 || d.getDay() === 6 || esFeriado(d);
     }
     return { turno: nocturno ? "nocturno" : "diurno", esFinDeSemana };
 };

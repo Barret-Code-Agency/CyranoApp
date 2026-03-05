@@ -80,6 +80,42 @@ function TurnoRow({ icon, label, realizado, requerido, color }) {
     );
 }
 
+
+// Barra vertical: fecha de hoy + % avance de la semana por día
+function DayProgressBar({ semana }) {
+    const hoy     = new Date();
+    const dayOfW  = hoy.getDay(); // 0=dom,1=lun,...,6=sab
+    const fechaFmt = hoy.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
+
+    // Días de la semana laboral (lun–vie) dentro del rango de la semana del mes
+    // Calculamos cuántos días hábiles pasaron en esta semana del mes
+    const dayInMonth = hoy.getDate();
+    const WEEK_RANGES_NUM = { 1:[1,7], 2:[8,14], 3:[15,21], 4:[22,28] };
+    const [dIni, dFin] = WEEK_RANGES_NUM[semana] || [1,7];
+
+    // Días hábiles totales en la semana (lun a vie = 5, pero puede haber menos si el rango es corto)
+    const diasHabiles = 5;
+    // Cuántos días hábiles pasaron: contar días del 1 al dayInMonth dentro del rango, lun-vie
+    let pasados = 0;
+    for (let d = dIni; d <= Math.min(dayInMonth, dFin); d++) {
+        const dow = new Date(hoy.getFullYear(), hoy.getMonth(), d).getDay();
+        if (dow >= 1 && dow <= 5) pasados++;
+    }
+    const pct = Math.round(pasados / diasHabiles * 100);
+    const color = pct >= 80 ? "var(--color-success)" : pct >= 50 ? "var(--color-primary)" : "#f59e0b";
+
+    return (
+        <div className="sup-day-bar-wrap">
+            <div className="sup-day-bar-fecha">{fechaFmt}</div>
+            <div className="sup-day-bar-track">
+                <div className="sup-day-bar-fill" style={{ height: pct + "%", background: color }} />
+            </div>
+            <div className="sup-day-bar-pct" style={{ color }}>{pct}%</div>
+            <div className="sup-day-bar-label">sem.</div>
+        </div>
+    );
+}
+
 export default function SupervisorDashboard({ user, onIniciarJornada }) {
     const {
         plan: planGlobal,
@@ -197,21 +233,24 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                         <div className="sup-week-label">SEMANA ACTUAL</div>
                         <div className="sup-week-num">{semana}</div>
                         <div className="sup-week-range">Días {WEEK_RANGES[semana]}</div>
-                        <div className="sup-week-circles" style={{ marginTop: 10 }}>
-                            {!sinPlanGlobal && (
-                                <div className="sup-week-circle-item">
-                                    <div className="sup-circle-label">Plan gral.</div>
-                                    <CircleProgress pct={pctGlobalSemana} size={54} />
-                                    <div className="sup-circle-sub">{realGlobalSemana}/{reqGlobalSemana}</div>
-                                </div>
-                            )}
-                            {!sinPlanIndivid && (
-                                <div className="sup-week-circle-item">
-                                    <div className="sup-circle-label">Mi plan</div>
-                                    <CircleProgress pct={pctIndivSemana} size={54} />
-                                    <div className="sup-circle-sub">{realGlobalSemana}/{reqIndivSemana}</div>
-                                </div>
-                            )}
+                        <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 10 }}>
+                            <div className="sup-week-circles">
+                                {!sinPlanGlobal && (
+                                    <div className="sup-week-circle-item">
+                                        <div className="sup-circle-label">Plan gral.</div>
+                                        <CircleProgress pct={pctGlobalSemana} size={54} />
+                                        <div className="sup-circle-sub">{realGlobalSemana}/{reqGlobalSemana}</div>
+                                    </div>
+                                )}
+                                {!sinPlanIndivid && (
+                                    <div className="sup-week-circle-item">
+                                        <div className="sup-circle-label">Mi plan</div>
+                                        <CircleProgress pct={pctIndivSemana} size={54} />
+                                        <div className="sup-circle-sub">{realGlobalSemana}/{reqIndivSemana}</div>
+                                    </div>
+                                )}
+                            </div>
+                            <DayProgressBar semana={semana} />
                         </div>
                     </div>
 
