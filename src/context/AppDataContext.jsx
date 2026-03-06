@@ -118,7 +118,7 @@ const EMPRESA_ID = "brinks_ar";
 
 const AppDataContext = createContext(null);
 
-export function AppDataProvider({ children }) {
+export function AppDataProvider({ children, uid }) {
 
     // ── Estado LOCAL (config + sesión activa — no necesita sync) ────────────
     const [config,          setConfig]          = useState(() => load("cyrano_config", DEFAULT_CONFIG));
@@ -138,8 +138,16 @@ export function AppDataProvider({ children }) {
     useEffect(() => { save("cyrano_jornada_activa",   jornadaActiva);   }, [jornadaActiva]);
     useEffect(() => { save("cyrano_actividad_activa", actividadActiva); }, [actividadActiva]);
 
-    // ── Suscripciones Firestore ───────────────────────────────────────────────
+    // ── Suscripciones Firestore — solo cuando hay usuario autenticado ─────────
     useEffect(() => {
+        if (!uid) {
+            // Sin usuario: usar fallback local y marcar ready
+            setJornadas(load("cyrano_jornadas", []));
+            setPlanesSuper(load("cyrano_planes_super", {}));
+            setPlanState(load("cyrano_plan", DEFAULT_PLAN));
+            setDbReady(true);
+            return;
+        }
         const unsubs = [];
         let ready = 0;
         const markReady = () => { ready++; if (ready >= 3) setDbReady(true); };

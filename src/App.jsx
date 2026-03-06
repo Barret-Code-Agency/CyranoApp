@@ -8,7 +8,7 @@
 import { useState } from "react";
 import { useGeo } from "./utils/helpers";
 import { AppDataProvider, useAppData } from "./context/AppDataContext";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import "./styles/variables.css";
 import "./styles/global.css";
@@ -36,8 +36,6 @@ function AppContent() {
     const [pendingDest, setPendingDest] = useState(null);
 
     const { jornadaActiva, dbReady } = useAppData();
-    // Bloqueo: si la jornada tiene vehículo pero no hizo control vehicular
-    const requiereControlVeh = jornadaActiva?.vehiculo && !jornadaActiva?.controlVehicular;
     const geo = useGeo();
 
     const goTo = (p) => setPhase(p);
@@ -70,12 +68,16 @@ function AppContent() {
     };
 
     const isAdmin    = phase === "admin";
-    const showHeader = !["splash", "loading_post", "login"].includes(phase);
+    const showHeader = !["splash", "loading", "loading_post", "login", "roleSelect"].includes(phase);
 
     return (
         <>
             {phase === "splash" && (
-                <SplashScreen onSelect={handleRoleSelect} />
+                <SplashScreen onAdvance={() => goTo("loading")} />
+            )}
+
+            {phase === "loading" && (
+                <LoadingScreen onFinished={() => goTo("roleSelect")} />
             )}
 
             {phase === "loading_post" && user && (
@@ -87,10 +89,14 @@ function AppContent() {
                 />
             )}
 
-            {!["splash", "loading_post"].includes(phase) && (
+            {phase === "roleSelect" && (
+                <RoleSelectScreen onSelect={handleRoleSelect} />
+            )}
+
+            {!["splash", "loading", "loading_post", "roleSelect"].includes(phase) && (
                 <div className="app">
                     {showHeader && (
-                        <header className="header" style={{}}>
+                        <header className="header" style={isAdmin ? { background: "var(--color-primary-dark)" } : {}}>
                             <div className="header-logo-area">
                                 <ShieldLogo size={44} />
                                 <div className="header-logo-text">
@@ -100,12 +106,12 @@ function AppContent() {
                                 </div>
                             </div>
                             {user && (
-                                <button className="user-chip user-chip--logout" onClick={() => { setUser(null); goTo("splash"); }}>
-                                    <div className="user-avatar" style={{}}>
+                                <div className="user-chip">
+                                    <div className="user-avatar" style={isAdmin ? { background: "var(--color-red)" } : {}}>
                                         {user.name ? user.name[0].toUpperCase() : "?"}
                                     </div>
-                                    <span className="user-name">Cerrar sesión</span>
-                                </button>
+                                    <span className="user-name">{user.name}</span>
+                                </div>
                             )}
                         </header>
                     )}
@@ -128,11 +134,11 @@ function AppContent() {
                         )}
 
                         {phase === "jornada" && user && (
-                            <JornadaScreen user={user} onStarted={handleJornadaStarted} onBack={() => goTo("supervisor_dash")} />
+                            <JornadaScreen user={user} onStarted={handleJornadaStarted} />
                         )}
 
                         {phase === "menu" && (
-                            <MenuScreen onSelect={goTo} bloqueado={requiereControlVeh} />
+                            <MenuScreen onSelect={goTo} />
                         )}
 
                         {phase === "capacitacion" && (
@@ -162,12 +168,18 @@ function AppContent() {
     );
 }
 
+// Wrapper para pasar uid al AppDataProvider
+function AppDataProviderWithAuth({ children }) {
+    const { user } = useAuth();
+    return <AppDataProvider uid={user?.uid}>{children}</AppDataProvider>;
+}
+
 export default function App() {
     return (
         <AuthProvider>
-            <AppDataProvider>
+            <AppDataProviderWithAuth>
                 <AppContent />
-            </AppDataProvider>
+            </AppDataProviderWithAuth>
         </AuthProvider>
     );
 }
