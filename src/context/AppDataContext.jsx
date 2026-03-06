@@ -1,79 +1,55 @@
 // src/context/AppDataContext.jsx
+// ── Migrado a Firestore ───────────────────────────────────────────────────────
+// Jornadas, planesSuper, plan → Firestore (tiempo real, multi-device)
+// Config, jornadaActiva, actividadActiva → localStorage (local, rápido)
 import { createContext, useContext, useState, useEffect } from "react";
+import {
+    collection, doc, setDoc, addDoc,
+    onSnapshot, query, where, orderBy, writeBatch,
+} from "firebase/firestore";
+import { db } from "../firebase";
 
+// ── localStorage helpers (solo para config y sesión activa) ──────────────────
 const load = (key, fallback) => {
     try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
     catch { return fallback; }
 };
 const save = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
 
-// ── Clasificación automática de control según fecha/hora ─────────────────────
+// ── Clasificación automática de control ──────────────────────────────────────
 export const clasificarControl = (horaInicio, fechaISO) => {
     if (!horaInicio) return { turno: "diurno", esFinDeSemana: false };
     const [h, m]   = horaInicio.split(":").map(Number);
     const minutos  = h * 60 + (m || 0);
-    const nocturno = minutos >= 18 * 60 || minutos < 6 * 60; // 18:00–05:59
+    const nocturno = minutos >= 18 * 60 || minutos < 6 * 60;
     let esFinDeSemana = false;
-    if (fechaISO) {
-        const d = new Date(fechaISO);
-        esFinDeSemana = d.getDay() === 0 || d.getDay() === 6;
-    }
+    if (fechaISO) { const d = new Date(fechaISO); esFinDeSemana = d.getDay() === 0 || d.getDay() === 6; }
     return { turno: nocturno ? "nocturno" : "diurno", esFinDeSemana };
 };
 
-// ── Defaults reales ───────────────────────────────────────────────────────────
+// ── Defaults ──────────────────────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
     supervisorEmail: "supervisor@empresa.com",
     vehiculos: [
-        "Prisma AC 349 CR",
-        "Prisma AC 349 CZ",
-        "Prisma AC 360 WC",
-        "Corolla OPR 557",
-        "Corolla AC 349 CQ",
-        "Corolla AC 349 CS",
-        "Hilux AF 373 JP",
-        "Hilux AF 967 YA",
-        "Hilux AF 295 SB",
-        "Hilux AG 220 JI",
+        "Prisma AC 349 CR","Prisma AC 349 CZ","Prisma AC 360 WC",
+        "Corolla OPR 557","Corolla AC 349 CQ","Corolla AC 349 CS",
+        "Hilux AF 373 JP","Hilux AF 967 YA","Hilux AF 295 SB","Hilux AG 220 JI",
     ],
     objetivos: [
-        "Reginald Lee Ranelagh",
-        "Reginald Lee Lobos",
-        "Reginald Lee La Plata",
-        "Reginald Lee Mar del Plata",
-        "Reginald Lee Ranelagh Puesto 1",
-        "Reginald Lee Ranelagh Puesto 2",
-        "Reginald Lee Ranelagh Puesto 4",
-        "Reginald Lee Ranelagh Puesto 7",
-        "Reginald Lee Ranelagh Puesto 8",
-        "Reginald Lee Ranelagh Encargado",
-        "Brinks Pergamino",
-        "Brinks Movil",
-        "Brinks Beron Astrada",
-        "Ovnisa Berazategui",
-        "Cerro Moro",
-        "PAS Puesto 1",
-        "PAS Puesto 2",
-        "PAS Puesto 3",
-        "PAS Puesto 4",
-        "PAS Naty",
-        "PAS CCTV Gral.",
-        "PAS CCTV Fundicion",
-        "PAS Encargados",
-        "PAS Administrativa",
-        "PAS Supervisor",
+        "Reginald Lee Ranelagh","Reginald Lee Lobos","Reginald Lee La Plata",
+        "Reginald Lee Mar del Plata","Reginald Lee Ranelagh Puesto 1",
+        "Reginald Lee Ranelagh Puesto 2","Reginald Lee Ranelagh Puesto 4",
+        "Reginald Lee Ranelagh Puesto 7","Reginald Lee Ranelagh Puesto 8",
+        "Reginald Lee Ranelagh Encargado","Brinks Pergamino","Brinks Movil",
+        "Brinks Beron Astrada","Ovnisa Berazategui","Cerro Moro",
+        "PAS Puesto 1","PAS Puesto 2","PAS Puesto 3","PAS Puesto 4",
+        "PAS Naty","PAS CCTV Gral.","PAS CCTV Fundicion",
+        "PAS Encargados","PAS Administrativa","PAS Supervisor",
     ],
     tiposActividad: [
-        "Reparaciones (taller)",
-        "Traslado de personal",
-        "Traslado de elementos",
-        "Tareas administrativas",
-        "Análisis de vulnerabilidades",
-        "Análisis de riesgos",
-        "Atención de reclamos",
-        "Visita Gremial",
-        "Almuerzo/Cena",
-        "Otras actividades",
+        "Reparaciones (taller)","Traslado de personal","Traslado de elementos",
+        "Tareas administrativas","Análisis de vulnerabilidades","Análisis de riesgos",
+        "Atención de reclamos","Visita Gremial","Almuerzo/Cena","Otras actividades",
     ],
     vigiladores: [
         "Acevedo Fernando Matias","Acuña Nahuel Gonzalo","Aedo Cinthia Anahi","Aguirre Enrique Andres",
@@ -114,19 +90,11 @@ const DEFAULT_CONFIG = {
         "Zuñiga Nery Agustin",
     ],
     supervisores: [
-        "Fernando Delgado",
-        "Juan Hrchan",
-        "Horacio Quintas",
-        "Rodolfo Girelli",
-        "Ignacio Alvarez",
-        "Rolando Zuñiga",
-        "Andres Aguirre",
+        "Fernando Delgado","Juan Hrchan","Horacio Quintas",
+        "Rodolfo Girelli","Ignacio Alvarez","Rolando Zuñiga","Andres Aguirre",
     ],
 };
 
-// ── Plan de supervisión por defecto ──────────────────────────────────────────
-// Todos 1 visita/semana (≈4/mes). La Plata también 1/semana pero solo nocturnas.
-// Las restricciones de turno se anotan en "restriccion"
 const DEFAULT_PLAN = [
     { objetivo: "Brinks Pergamino",      visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
     { objetivo: "Brinks Movil",          visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
@@ -144,46 +112,157 @@ const DEFAULT_PLAN = [
     { objetivo: "PAS Administrativa",    visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
     { objetivo: "PAS Supervisor",        visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
 ];
+
+// ── ID de empresa (hardcoded — multi-tenant en versión SaaS) ─────────────────
+const EMPRESA_ID = "brinks_ar";
+
 const AppDataContext = createContext(null);
 
 export function AppDataProvider({ children }) {
-    const [config,           setConfig]           = useState(() => load("cyrano_config",           DEFAULT_CONFIG));
-    const [plan,             setPlan]             = useState(() => load("cyrano_plan",             DEFAULT_PLAN));
-    const [planesSuper,      setPlanesSuper]      = useState(() => load("cyrano_planes_super",     {}));
-    const [mantenimiento,    setMantenimiento]    = useState(() => load("cyrano_mantenimiento",    []));
-    const [jornadas,         setJornadas]         = useState(() => load("cyrano_jornadas",         []));
-    const [jornadaActiva,    setJornadaActiva]    = useState(() => load("cyrano_jornada_activa",   null));
-    const [actividadActiva,  setActividadActiva]  = useState(() => load("cyrano_actividad_activa", null));
-    const [dbReady,          setDbReady]          = useState(false);
 
+    // ── Estado LOCAL (config + sesión activa — no necesita sync) ────────────
+    const [config,          setConfig]          = useState(() => load("cyrano_config", DEFAULT_CONFIG));
+    const [jornadaActiva,   setJornadaActiva]   = useState(() => load("cyrano_jornada_activa", null));
+    const [actividadActiva, setActividadActiva] = useState(() => load("cyrano_actividad_activa", null));
+
+    // ── Estado FIRESTORE (tiempo real, persiste en la nube) ──────────────────
+    const [jornadas,      setJornadas]      = useState([]);
+    const [planesSuper,   setPlanesSuper]   = useState({});
+    const [plan,          setPlanState]     = useState(DEFAULT_PLAN);
+    const [mantenimiento, setMantenimiento] = useState([]);
+    const [dbReady,       setDbReady]       = useState(false);
+    const [dbError,       setDbError]       = useState(null);
+
+    // ── Persist local ────────────────────────────────────────────────────────
     useEffect(() => { save("cyrano_config",           config);          }, [config]);
-    useEffect(() => { save("cyrano_plan",             plan);            }, [plan]);
-    useEffect(() => { save("cyrano_planes_super",     planesSuper);     }, [planesSuper]);
-    useEffect(() => { save("cyrano_mantenimiento",    mantenimiento);   }, [mantenimiento]);
-    useEffect(() => { save("cyrano_jornadas",         jornadas);        }, [jornadas]);
     useEffect(() => { save("cyrano_jornada_activa",   jornadaActiva);   }, [jornadaActiva]);
     useEffect(() => { save("cyrano_actividad_activa", actividadActiva); }, [actividadActiva]);
 
-    const updateConfig    = (key, value) => setConfig((p) => ({ ...p, [key]: value }));
-    const resetConfig     = ()           => { setConfig(DEFAULT_CONFIG); localStorage.removeItem("cyrano_config"); };
-    const savePlan        = (p)          => setPlan(p);
+    // ── Suscripciones Firestore ───────────────────────────────────────────────
+    useEffect(() => {
+        const unsubs = [];
+        let ready = 0;
+        const markReady = () => { ready++; if (ready >= 3) setDbReady(true); };
 
-    // ── Planes por supervisor ────────────────────────────────────────────────
-    // planesSuper[email] = {
-    //   nombre, turnoBase: "diurno"|"nocturno"|"mixto",
-    //   objetivos: [{ objetivo, visitasPorSemana, turno, patron, semanasCustom }]
-    // }
+        // 1. Jornadas — colección principal
+        try {
+            const q = query(
+                collection(db, "jornadas"),
+                where("empresaId", "==", EMPRESA_ID),
+                orderBy("creadaEn", "desc")
+            );
+            unsubs.push(onSnapshot(q,
+                (snap) => {
+                    setJornadas(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
+                    markReady();
+                },
+                (err) => {
+                    console.error("[Firestore] jornadas:", err.code, err.message);
+                    setDbError(err.code);
+                    setJornadas(load("cyrano_jornadas", []));
+                    markReady();
+                }
+            ));
+        } catch (e) { setJornadas(load("cyrano_jornadas", [])); markReady(); }
 
-    // Clave: email si existe, sino nombre normalizado
-    const planKey = (emailOrNombre) => emailOrNombre || "";
-    const savePlanSupervisor = (emailOrNombre, datos) => {
-        if (!emailOrNombre) return;
-        setPlanesSuper((prev) => ({ ...prev, [emailOrNombre]: datos }));
+        // 2. Planes de supervisores — doc único por empresa
+        try {
+            unsubs.push(onSnapshot(
+                doc(db, "empresas", EMPRESA_ID, "datos", "planes_super"),
+                (snap) => {
+                    if (snap.exists()) {
+                        setPlanesSuper(snap.data().planes || {});
+                    } else {
+                        // Primera vez: migrar desde localStorage
+                        const local = load("cyrano_planes_super", {});
+                        setPlanesSuper(local);
+                        if (Object.keys(local).length > 0) {
+                            setDoc(
+                                doc(db, "empresas", EMPRESA_ID, "datos", "planes_super"),
+                                { planes: local, updatedAt: new Date().toISOString() }
+                            ).catch(console.error);
+                        }
+                    }
+                    markReady();
+                },
+                (err) => {
+                    console.error("[Firestore] planes_super:", err.code);
+                    setPlanesSuper(load("cyrano_planes_super", {}));
+                    markReady();
+                }
+            ));
+        } catch (e) { setPlanesSuper(load("cyrano_planes_super", {})); markReady(); }
+
+        // 3. Plan global
+        try {
+            unsubs.push(onSnapshot(
+                doc(db, "empresas", EMPRESA_ID, "datos", "plan_global"),
+                (snap) => {
+                    if (snap.exists()) {
+                        setPlanState(snap.data().objetivos || DEFAULT_PLAN);
+                    } else {
+                        const local = load("cyrano_plan", DEFAULT_PLAN);
+                        setPlanState(local);
+                        setDoc(
+                            doc(db, "empresas", EMPRESA_ID, "datos", "plan_global"),
+                            { objetivos: local, updatedAt: new Date().toISOString() }
+                        ).catch(console.error);
+                    }
+                    markReady();
+                },
+                (err) => {
+                    console.error("[Firestore] plan_global:", err.code);
+                    setPlanState(load("cyrano_plan", DEFAULT_PLAN));
+                    markReady();
+                }
+            ));
+        } catch (e) { setPlanState(load("cyrano_plan", DEFAULT_PLAN)); markReady(); }
+
+        return () => unsubs.forEach(u => u && u());
+    }, []);
+
+    // ── Config ────────────────────────────────────────────────────────────────
+    const updateConfig = (key, value) => setConfig((p) => ({ ...p, [key]: value }));
+    const resetConfig  = () => setConfig(DEFAULT_CONFIG);
+
+    // ── Plan global ───────────────────────────────────────────────────────────
+    const savePlan = async (nuevoPlan) => {
+        setPlanState(nuevoPlan);
+        try {
+            await setDoc(
+                doc(db, "empresas", EMPRESA_ID, "datos", "plan_global"),
+                { objetivos: nuevoPlan, updatedAt: new Date().toISOString() }
+            );
+        } catch (err) {
+            console.error("savePlan:", err);
+            save("cyrano_plan", nuevoPlan);
+        }
     };
+
+    // ── Planes supervisores ───────────────────────────────────────────────────
+    const normNombre = (n) => {
+        const p = (n || "").trim().split(/\s+/);
+        return p.length >= 2 ? `${p[0]} ${p[p.length - 1]}` : n;
+    };
+
+    const savePlanSupervisor = async (emailOrNombre, datos) => {
+        if (!emailOrNombre) return;
+        const nuevos = { ...planesSuper, [emailOrNombre]: datos };
+        setPlanesSuper(nuevos);
+        try {
+            await setDoc(
+                doc(db, "empresas", EMPRESA_ID, "datos", "planes_super"),
+                { planes: nuevos, updatedAt: new Date().toISOString() }
+            );
+        } catch (err) {
+            console.error("savePlanSupervisor:", err);
+            save("cyrano_planes_super", nuevos);
+        }
+    };
+
     const getPlanSupervisor = (emailOrNombre) => {
         if (!emailOrNombre) return null;
         if (planesSuper[emailOrNombre]) return planesSuper[emailOrNombre];
-        // Buscar por nombre normalizado como fallback
         const norm = normNombre(emailOrNombre);
         const found = Object.entries(planesSuper).find(([k, v]) =>
             normNombre(k) === norm || normNombre(v.nombre || "") === norm
@@ -191,7 +270,6 @@ export function AppDataProvider({ children }) {
         return found ? found[1] : null;
     };
 
-    // Objetivos activos para una semana dada, con turno efectivo resuelto
     const getObjetivosSemana = (email, semana) => {
         const ps = getPlanSupervisor(email);
         if (!ps) return [];
@@ -203,64 +281,39 @@ export function AppDataProvider({ children }) {
             return true;
         }).map(o => ({
             ...o,
-            turnoEfectivo: (!o.turno || o.turno === "base")
-                ? (ps.turnoBase || "mixto")
-                : o.turno,
+            turnoEfectivo: (!o.turno || o.turno === "base") ? (ps.turnoBase || "mixto") : o.turno,
         }));
     };
 
-    // Lista supervisores: los con plan registrado + los de config sin email
-    // normNombre: "Fernando Hector Delgado" → "Fernando Delgado"
-    const normNombre = (n) => { const p = (n || "").trim().split(/\s+/); return p.length >= 2 ? `${p[0]} ${p[p.length-1]}` : n; };
     const getSupervisoresConEmail = () => {
-        // Supervisores con email y plan guardado — usar nombre de config si matchea
         const conEmail = Object.entries(planesSuper).map(([email, v]) => {
-            const nombrePlan = v.nombre || email;
-            // Buscar nombre en config que normalice igual
+            const nombrePlan   = v.nombre || email;
             const nombreConfig = (config.supervisores || []).find(n => normNombre(n) === normNombre(nombrePlan));
             return { email, nombre: nombreConfig || normNombre(nombrePlan), turnoBase: v.turnoBase || "mixto" };
         });
-        // Supervisores sin email (solo en config, sin plan registrado)
         const emailsConPlan = new Set(conEmail.map(s => normNombre(s.nombre)));
         const sinEmail = (config.supervisores || [])
             .filter(n => !emailsConPlan.has(normNombre(n)))
             .map(n => ({ email: null, nombre: n, turnoBase: null }));
         return [...conEmail, ...sinEmail];
     };
-    // ────────────────────────────────────────────────────────────────────────
 
-
-    // ── Mantenimiento de vehículos ───────────────────────────────────────────
-    const addMantenimiento = (evento) => {
-        const nuevo = { ...evento, id: "M-" + Date.now().toString().slice(-8), creadoEn: new Date().toISOString() };
-        setMantenimiento(prev => [nuevo, ...prev]);
-        return nuevo;
-    };
-
-    const updateMantenimiento = (id, datos) =>
-        setMantenimiento(prev => prev.map(m => m.id === id ? { ...m, ...datos } : m));
-
-    const deleteMantenimiento = (id) =>
-        setMantenimiento(prev => prev.filter(m => m.id !== id));
-
-    // Alertas: próximos services en los próximos 30 días o vencidos
+    // ── Mantenimiento ─────────────────────────────────────────────────────────
+    const addMantenimiento    = (e) => { const n = { ...e, id: "M-" + Date.now().toString().slice(-8), creadoEn: new Date().toISOString() }; setMantenimiento(p => [n, ...p]); return n; };
+    const updateMantenimiento = (id, d) => setMantenimiento(p => p.map(m => m.id === id ? { ...m, ...d } : m));
+    const deleteMantenimiento = (id)    => setMantenimiento(p => p.filter(m => m.id !== id));
     const getAlertasMantenimiento = () => {
         const hoy = new Date(); hoy.setHours(0,0,0,0);
-        const en30 = new Date(hoy); en30.setDate(en30.getDate() + 30);
         return mantenimiento
             .filter(m => m.proximoService?.fecha)
-            .map(m => {
-                const fecha = new Date(m.proximoService.fecha);
-                const diasRestantes = Math.round((fecha - hoy) / 86400000);
-                return { ...m, diasRestantes };
-            })
+            .map(m => ({ ...m, diasRestantes: Math.round((new Date(m.proximoService.fecha) - hoy) / 86400000) }))
             .filter(m => m.diasRestantes <= 30)
             .sort((a, b) => a.diasRestantes - b.diasRestantes);
     };
-    // ────────────────────────────────────────────────────────────────────────
 
-    const iniciarJornada  = (datos) => {
-        const j = { ...datos, estado: "activa", actividades: [], creadaEn: new Date().toISOString() };
+    // ── Jornadas ──────────────────────────────────────────────────────────────
+    const iniciarJornada = (datos) => {
+        const j = { ...datos, estado: "activa", actividades: [], creadaEn: new Date().toISOString(), empresaId: EMPRESA_ID };
         setJornadaActiva(j);
         return j;
     };
@@ -270,11 +323,9 @@ export function AppDataProvider({ children }) {
 
     const iniciarActividad = (tipo, datosInicio) => {
         const a = { id: Date.now().toString(), tipo, estado: "en_curso", ...datosInicio, iniciadaEn: new Date().toISOString() };
-        // Clasificar automáticamente si es control
         if (tipo === "ctrl") {
             const { turno, esFinDeSemana } = clasificarControl(datosInicio.horaInicio, new Date().toISOString());
-            a.turno         = turno;
-            a.esFinDeSemana = esFinDeSemana;
+            a.turno = turno; a.esFinDeSemana = esFinDeSemana;
         }
         setActividadActiva(a);
         return a;
@@ -289,86 +340,52 @@ export function AppDataProvider({ children }) {
 
     const cancelarActividad = () => setActividadActiva(null);
 
-    const cerrarJornada = (datosCierre) => {
+    const cerrarJornada = async (datosCierre) => {
         if (!jornadaActiva) return;
-        const cerrada = { ...jornadaActiva, ...datosCierre, estado: "cerrada", cerradaEn: new Date().toISOString() };
-        setJornadas((p) => [cerrada, ...p]);
+        const cerrada = {
+            ...jornadaActiva, ...datosCierre,
+            estado: "cerrada", cerradaEn: new Date().toISOString(), empresaId: EMPRESA_ID,
+        };
+        try {
+            const ref = await addDoc(collection(db, "jornadas"), cerrada);
+            cerrada._id = ref.id;
+        } catch (err) {
+            console.error("[Firestore] cerrarJornada:", err);
+            // Fallback: guardar local y encolar para subir después
+            const locales = load("cyrano_jornadas_pendientes", []);
+            save("cyrano_jornadas_pendientes", [cerrada, ...locales]);
+            setJornadas(p => [cerrada, ...p]);
+        }
         setJornadaActiva(null);
         setActividadActiva(null);
         return cerrada;
     };
 
-    // Borrar datos simulados — se ejecuta una vez al montar si hay datos viejos
-    const limpiarSimulados = () => {
-        const reales = jornadas.filter((j) =>
-            !j.jornadaID?.startsWith("J0") &&
-            !j.id?.startsWith("J0") &&
-            !j.simulado
-        );
-        setJornadas(reales);
-    };
-
-    // Auto-limpiar simulados al primer montaje
+    // Subir jornadas pendientes cuando vuelve la conexión
     useEffect(() => {
-        const cleaned = jornadas.filter((j) =>
-            !j.jornadaID?.startsWith("J0") &&
-            !j.id?.startsWith("J0") &&
-            !j.simulado
-        );
-        if (cleaned.length !== jornadas.length) {
-            setJornadas(cleaned);
-        }
-    }, []);
+        if (!dbReady) return;
+        const pendientes = load("cyrano_jornadas_pendientes", []);
+        if (!pendientes.length) return;
+        (async () => {
+            try {
+                for (const j of pendientes) {
+                    await addDoc(collection(db, "jornadas"), { ...j, empresaId: EMPRESA_ID });
+                }
+                save("cyrano_jornadas_pendientes", []);
+                console.log("[Sync] Jornadas pendientes subidas:", pendientes.length);
+            } catch (err) {
+                console.warn("[Sync] No se pudieron subir pendientes:", err);
+            }
+        })();
+    }, [dbReady]);
 
-    // Migración v4: forzar listas correctas + restaurar objetivos de planes vacios
-    useEffect(() => {
-        const migrated = localStorage.getItem("cyrano_migrated_v4");
-        if (!migrated) {
-            localStorage.removeItem("cyrano_migrated_v2");
-            localStorage.removeItem("cyrano_migrated_v3");
-            // Actualizar config con listas correctas
-            setConfig(prev => ({
-                ...prev,
-                vehiculos:      DEFAULT_CONFIG.vehiculos,
-                objetivos:      DEFAULT_CONFIG.objetivos,
-                vigiladores:    DEFAULT_CONFIG.vigiladores,
-                supervisores:   DEFAULT_CONFIG.supervisores,
-                tiposActividad: DEFAULT_CONFIG.tiposActividad,
-            }));
-            // Restaurar objetivos del DEFAULT_PLAN en planes que tienen objetivos vacíos
-            setPlanesSuper(prev => {
-                const updated = { ...prev };
-                Object.keys(updated).forEach(email => {
-                    if (!updated[email].objetivos || updated[email].objetivos.length === 0) {
-                        updated[email] = {
-                            ...updated[email],
-                            objetivos: DEFAULT_PLAN.map(p => ({
-                                objetivo:       p.objetivo,
-                                visitasPorSemana: p.visitasPorSemana || 1,
-                                turno:          "base",
-                                patron:         "todas",
-                                semanasCustom:  [],
-                            })),
-                        };
-                    }
-                });
-                return updated;
-            });
-            localStorage.setItem("cyrano_migrated_v4", "1");
-        }
-    }, []);
+    const limpiarSimulados = () =>
+        setJornadas(p => p.filter(j => !j.jornadaID?.startsWith("J0") && !j.simulado));
 
-    // Limpia sesión activa al hacer logout (no borra historial)
     const resetSesion = () => {
         setJornadaActiva(null);
         setActividadActiva(null);
     };
-
-    // Simula tiempo de carga de Firebase (en producción esto lo dispara onSnapshot)
-    useEffect(() => {
-        const t = setTimeout(() => setDbReady(true), 800);
-        return () => clearTimeout(t);
-    }, []);
 
     return (
         <AppDataContext.Provider value={{
@@ -379,9 +396,9 @@ export function AppDataProvider({ children }) {
             jornadas, jornadaActiva, actividadActiva,
             iniciarJornada, actualizarJornadaActiva,
             iniciarActividad, finalizarActividad, cancelarActividad, cerrarJornada,
-            resetSesion,
-            limpiarSimulados,
-            dbReady,
+            resetSesion, limpiarSimulados,
+            dbReady, dbError,
+            empresaId: EMPRESA_ID,
         }}>
             {children}
         </AppDataContext.Provider>

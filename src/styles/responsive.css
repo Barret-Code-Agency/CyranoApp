@@ -13,7 +13,8 @@
 
     /* App shell */
     .app {
-        min-height: 100dvh;   /* dynamic viewport height para móvil */
+        min-height: 100dvh;
+        /* dynamic viewport height para móvil */
     }
 
     /* Main content — más padding lateral reducido */
@@ -79,7 +80,10 @@
         gap: 4px;
         padding-bottom: 2px;
     }
-    .admin-tab-bar::-webkit-scrollbar { display: none; }
+
+    .admin-tab-bar::-webkit-scrollbar {
+        display: none;
+    }
 
     .admin-tab-btn {
         flex-shrink: 0;
@@ -92,6 +96,7 @@
     .sup-tabs {
         gap: 4px;
     }
+
     .veh-tab,
     .sup-tab {
         font-size: 11px;
@@ -136,6 +141,7 @@
     .ps-turno-base-opts {
         flex-direction: column;
     }
+
     .ps-turno-base-btn {
         flex: unset;
         width: 100%;
@@ -150,7 +156,8 @@
     .veh-form-row-costo {
         flex-direction: column;
     }
-    .veh-form-row-costo > .field {
+
+    .veh-form-row-costo>.field {
         width: 100% !important;
     }
 
@@ -200,7 +207,8 @@
     /* ── OVERLAY ── */
     .overlay {
         padding: var(--space-3);
-        align-items: flex-end;   /* sheet desde abajo en móvil */
+        align-items: flex-end;
+        /* sheet desde abajo en móvil */
     }
 
     /* ── BUTTONS ── */
@@ -219,12 +227,15 @@
     .lw-card {
         border-radius: 16px;
     }
+
     .lw-header {
         padding: 28px 24px 24px;
     }
+
     .lw-body {
         padding: 24px;
     }
+
     .lw-brand-name {
         font-size: clamp(28px, 8vw, 48px);
     }
@@ -269,8 +280,11 @@
     }
 
     /* ── INPUT TOUCH TARGETS ── */
-    input, select, textarea {
-        font-size: 16px !important; /* evita zoom automático en iOS */
+    input,
+    select,
+    textarea {
+        font-size: 16px !important;
+        /* evita zoom automático en iOS */
         min-height: 44px;
     }
 
@@ -316,9 +330,11 @@
         flex-wrap: nowrap;
         gap: 8px;
     }
+
     .veh-card-right {
         min-width: 70px;
     }
+
     .veh-alert-badge {
         font-size: 8px;
         padding: 2px 5px;
@@ -334,6 +350,7 @@
         flex-wrap: wrap;
         gap: 4px;
     }
+
     .usr-filtro-btn {
         padding: 5px 10px;
         font-size: 11px;
@@ -349,7 +366,8 @@
     }
 
     .user-name {
-        display: none;  /* solo el avatar en pantallas muy chicas */
+        display: none;
+        /* solo el avatar en pantallas muy chicas */
     }
 
     .sup-stats-grid,
