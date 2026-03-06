@@ -33,8 +33,11 @@ function AppContent() {
     const [loginRole, setLoginRole] = useState(null);
     const [user, setUser]           = useState(null);
     const [modal, setModal]         = useState(null);
+    const [pendingDest, setPendingDest] = useState(null);
 
-    const { jornadaActiva } = useAppData();
+    const { jornadaActiva, dbReady } = useAppData();
+    // Bloqueo: si la jornada tiene vehículo pero no hizo control vehicular
+    const requiereControlVeh = jornadaActiva?.vehiculo && !jornadaActiva?.controlVehicular;
     const geo = useGeo();
 
     const goTo = (p) => setPhase(p);
@@ -46,13 +49,12 @@ function AppContent() {
 
     const handleLogin = (u) => {
         setUser(u);
-        if (u.role === "admin") {
-            goTo("admin");
-        } else {
-            // Si tiene jornada activa ir directo al menú, sino al dashboard
-            jornadaActiva ? goTo("menu") : goTo("supervisor_dash");
-        }
+        const dest = u.role === "admin" ? "admin" : (jornadaActiva ? "menu" : "supervisor_dash");
+        setPendingDest(dest);
+        goTo("loading_post");
     };
+
+    const handleLoadingDone = () => goTo(pendingDest);
 
     // ← NUEVO: desde el dashboard el supervisor decide iniciar jornada
     const handleIniciarJornada = () => {
@@ -68,26 +70,27 @@ function AppContent() {
     };
 
     const isAdmin    = phase === "admin";
-    const showHeader = !["splash", "loading", "login", "roleSelect"].includes(phase);
+    const showHeader = !["splash", "loading_post", "login"].includes(phase);
 
     return (
         <>
             {phase === "splash" && (
-                <SplashScreen onAdvance={() => goTo("loading")} />
+                <SplashScreen onSelect={handleRoleSelect} />
             )}
 
-            {phase === "loading" && (
-                <LoadingScreen onFinished={() => goTo("roleSelect")} />
+            {phase === "loading_post" && user && (
+                <LoadingScreen
+                    postLogin={true}
+                    userName={user.name}
+                    dbReady={dbReady}
+                    onFinished={handleLoadingDone}
+                />
             )}
 
-            {phase === "roleSelect" && (
-                <RoleSelectScreen onSelect={handleRoleSelect} />
-            )}
-
-            {!["splash", "loading", "roleSelect"].includes(phase) && (
+            {!["splash", "loading_post"].includes(phase) && (
                 <div className="app">
                     {showHeader && (
-                        <header className="header" style={isAdmin ? { background: "var(--color-primary-dark)" } : {}}>
+                        <header className="header" style={{}}>
                             <div className="header-logo-area">
                                 <ShieldLogo size={44} />
                                 <div className="header-logo-text">
@@ -97,12 +100,12 @@ function AppContent() {
                                 </div>
                             </div>
                             {user && (
-                                <div className="user-chip">
-                                    <div className="user-avatar" style={isAdmin ? { background: "var(--color-red)" } : {}}>
+                                <button className="user-chip user-chip--logout" onClick={() => { setUser(null); goTo("splash"); }}>
+                                    <div className="user-avatar" style={{}}>
                                         {user.name ? user.name[0].toUpperCase() : "?"}
                                     </div>
-                                    <span className="user-name">{user.name}</span>
-                                </div>
+                                    <span className="user-name">Cerrar sesión</span>
+                                </button>
                             )}
                         </header>
                     )}
@@ -125,11 +128,11 @@ function AppContent() {
                         )}
 
                         {phase === "jornada" && user && (
-                            <JornadaScreen user={user} onStarted={handleJornadaStarted} />
+                            <JornadaScreen user={user} onStarted={handleJornadaStarted} onBack={() => goTo("supervisor_dash")} />
                         )}
 
                         {phase === "menu" && (
-                            <MenuScreen onSelect={goTo} />
+                            <MenuScreen onSelect={goTo} bloqueado={requiereControlVeh} />
                         )}
 
                         {phase === "capacitacion" && (

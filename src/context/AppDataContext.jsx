@@ -1,68 +1,72 @@
 // src/context/AppDataContext.jsx
-// TODOS los datos persisten en Firestore — sin localStorage
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import {
-    doc, getDoc, setDoc, updateDoc, onSnapshot,
-    collection, addDoc, getDocs, deleteDoc, query, where, orderBy,
-    serverTimestamp,
-} from "firebase/firestore";
-import { db } from "../firebase";
+import { createContext, useContext, useState, useEffect } from "react";
 
-// ── Refs de documentos ────────────────────────────────────────────────────────
-const REF_CONFIG       = doc(db, "empresa", "config");
-const REF_PLAN         = doc(db, "empresa", "planGeneral");
-const REF_PLANES_SUPER = doc(db, "empresa", "planesSuper");
-const REF_MANT         = collection(db, "mantenimiento");
-const REF_JORNADAS     = collection(db, "jornadas");
-
-// ── Clasificación turno ───────────────────────────────────────────────────────
-
-// Feriados nacionales Argentina — fijos "MM-DD" y móviles "YYYY-MM-DD"
-const FERIADOS_FIJOS = new Set([
-    "01-01","03-24","04-02","05-01","05-25",
-    "06-20","07-09","12-08","12-25",
-]);
-const FERIADOS_MOVILES = new Set([
-    "2025-03-03","2025-03-04","2025-04-18","2025-08-18","2025-10-13","2025-11-24",
-    "2026-02-16","2026-02-17","2026-04-03","2026-08-17","2026-10-12","2026-11-23",
-]);
-const esFeriado = (d) => {
-    const mmdd = String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
-    return FERIADOS_FIJOS.has(mmdd) || FERIADOS_MOVILES.has(d.toISOString().slice(0,10));
+const load = (key, fallback) => {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch { return fallback; }
 };
+const save = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
 
+// ── Clasificación automática de control según fecha/hora ─────────────────────
 export const clasificarControl = (horaInicio, fechaISO) => {
     if (!horaInicio) return { turno: "diurno", esFinDeSemana: false };
     const [h, m]   = horaInicio.split(":").map(Number);
     const minutos  = h * 60 + (m || 0);
-    const nocturno = minutos >= 18 * 60 || minutos < 6 * 60;
+    const nocturno = minutos >= 18 * 60 || minutos < 6 * 60; // 18:00–05:59
     let esFinDeSemana = false;
     if (fechaISO) {
         const d = new Date(fechaISO);
-        esFinDeSemana = d.getDay() === 0 || d.getDay() === 6 || esFeriado(d);
+        esFinDeSemana = d.getDay() === 0 || d.getDay() === 6;
     }
     return { turno: nocturno ? "nocturno" : "diurno", esFinDeSemana };
 };
 
-// ── Defaults ──────────────────────────────────────────────────────────────────
+// ── Defaults reales ───────────────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
     supervisorEmail: "supervisor@empresa.com",
     vehiculos: [
-        "Prisma — AC 349 CR","Prisma — AC 349 CZ","Prisma — AC 360 WC",
-        "Corolla — OPR 557","Corolla — AC 349 CQ","Corolla — AC 349 CS",
-        "Hilux — AF 373 JP","Hilux — AF 967 YA","Hilux — AF 295 SB","Hilux — AG 220 JI",
+        "Prisma AC 349 CR",
+        "Prisma AC 349 CZ",
+        "Prisma AC 360 WC",
+        "Corolla OPR 557",
+        "Corolla AC 349 CQ",
+        "Corolla AC 349 CS",
+        "Hilux AF 373 JP",
+        "Hilux AF 967 YA",
+        "Hilux AF 295 SB",
+        "Hilux AG 220 JI",
     ],
     objetivos: [
-        "Reginald Lee — Ranelagh","Reginald Lee — Lobos","Reginald Lee — La Plata",
-        "Reginald Lee — Mar del Plata","Ovnisa Berazategui","Brinks Pergamino",
-        "Brinks Berón de Astrada","Brinks Móvil","Cerro Moro — General",
-        "Cerro Moro — Puesto 1","Cerro Moro — Puesto 2","Cerro Moro — Puesto 3",
-        "Cerro Moro — Puesto 4","Cerro Moro — CCTV General","Cerro Moro — CCTV Fundición",
-        "Cerro Moro — Naty","Cerro Moro — Administrativas","Cerro Moro — Encargados",
-        "Cerro Moro — Supervisor",
+        "Reginald Lee Ranelagh",
+        "Reginald Lee Lobos",
+        "Reginald Lee La Plata",
+        "Reginald Lee Mar del Plata",
+        "Reginald Lee Ranelagh Puesto 1",
+        "Reginald Lee Ranelagh Puesto 2",
+        "Reginald Lee Ranelagh Puesto 4",
+        "Reginald Lee Ranelagh Puesto 7",
+        "Reginald Lee Ranelagh Puesto 8",
+        "Reginald Lee Ranelagh Encargado",
+        "Brinks Pergamino",
+        "Brinks Movil",
+        "Brinks Beron Astrada",
+        "Ovnisa Berazategui",
+        "Cerro Moro",
+        "PAS Puesto 1",
+        "PAS Puesto 2",
+        "PAS Puesto 3",
+        "PAS Puesto 4",
+        "PAS Naty",
+        "PAS CCTV Gral.",
+        "PAS CCTV Fundicion",
+        "PAS Encargados",
+        "PAS Administrativa",
+        "PAS Supervisor",
     ],
     tiposActividad: [
-        "Reparaciones (taller)","Traslado de personal","Traslado de elementos",
+        "Reparaciones (taller)",
+        "Traslado de personal",
+        "Traslado de elementos",
         "Tareas administrativas",
         "Análisis de vulnerabilidades",
         "Análisis de riesgos",
@@ -72,202 +76,124 @@ const DEFAULT_CONFIG = {
         "Otras actividades",
     ],
     vigiladores: [
-        "PEDRAZA JUAN MANUEL","BECERRA HECTOR RAFAEL","CACERES JUAN JOSE",
-        "CACERES ROCIO BELEN","CARPIO GLORIA VICTORIA","CASTELLANO SERGIO ARMANDO",
-        "CEJAS MARIA PAULA","DIAS DANA LUCIA","FUNES GABRIELA EDITH",
-        "GUTIERREZ MARCOS JOSE","HERRERA CARLOS ALEJANDRO","JULIO PAOLA GIMENA",
-        "LEDESMA MATIAS EZEQUIEL","MARCIAL ERICA MARCELA","MARTINEZ SERGIO IVAN",
-        "MERCADO ERICK LEONARDO","MONTIVERO EMANUEL ANTONIO","MORINIGO JOSE",
-        "NIETO CLAUDIO MARTIN","PINTOS ALEXIS EMMANUEL","SEGURA DIEGO GABRIEL",
-        "TORRES GUSTAVO ADOLFO","TRONCOSO EVELYN BEATRIZ","VARELA FRANCISCO ANTONIO",
-        "VILLAGRA EMANUEL FRANCISCO","ZUÑIGA NERY AGUSTIN","MARTINEZ DAVID",
-        "RODRIGUEZ PATRICIA ELIZABET","ARIAS MARCELO FABIAN","AGUIRRE ENRIQUE ANDRES",
-        "COPA ANA PAULA","DIAZ JONATHAN JAVIER","OYARZO SANCHEZ MIGUEL ALEJANDRO",
-        "ROMERO CICCIOLI DANIEL MATIAS EZEQUIEL","REYNOSO GUSTAVO ALEJANDRO",
-        "NAVARRO MANUEL FRANCISCO","LUNA MORALES MAYRA LISET","BORDON SOLEDAD DEL VALLE",
-        "CASAS CARLOS DAVID","ROMERO SEBASTIAN EDUARDO","QUIROGA DANA MICAELA YASMIN",
-        "VEGA FRANCO EDUARDO","VILLAFAÑE CARLOS MAXIMILIANO","DUARTE TIAGO MARCELO EZEQUIEL",
-        "AEDO CINTHIA ANAHI","AMAYA CRISTIAN ARMANDO","CHACOMA SERGIO RAUL",
-        "CAMPUZANO WALTER DAVID","AGULLO RODRIGUEZ LUCIANO ADRIAN","NUÑEZ FRANCISCO DIEGO",
-        "CENTENO PATRICIA BRENDA","UBILLOS AGUSTIN SEBASTIAN","AVILA ALEJANDRO MAURICIO",
-        "RIVERO GIULIANA DANIELA","RIOS ADRIEL GUILLERMO OSCAR","CONSTANCIO DAMIAN NAHUEL",
-        "PEREIRA CARMEN GABRIELA","HERRERA GONZALO EZEQUIEL","AGÜERO FARIAS MARIA ELIZABETH",
-        "JARA ELIO MATIAS","MESSINA JESSICA ADRIANA","KUC PAULO EMANUEL",
-        "GODOY FERNANDO MIGUEL","RIVAROLA LUCAS FERNANDO","DERAMO NICOLAS MARIO",
-        "RACEDO JULIO DANTE","ROLON SANTIAGO RAMON","FERNANDEZ CECILIA",
-        "VILLA ALBERTO MATIAS","CAMPOS MAXIMILIANO HERNAN","ROMERO JORGE RAFAEL",
-        "CAMPERO JOSE DAMIAN","ALMIRON WALTER DARIO","QUINTAS HORACIO GABRIEL",
-        "DOS SANTOS CLAUDIO HERNAN ANIBAL","GONZALEZ ROBERTO ANTONIO","LOPEZ HUGO GERARDO",
-        "MORO CRISTIAN EDUARDO","RODRIGUEZ LUCIANO MATIAS","ROJAS OSCAR OSVALDO",
-        "ACUÑA NAHUEL GONZALO","CUGLIARI HERNAN GABRIEL","GUIÑEZ DUARTE CESAR DANIEL",
-        "BUSTO LUCAS ABRAHAM","CANELAS DAMIAN","COSCUETA GUSTAVO WALTER",
-        "LOBOSCO CRISTIAN IVAN","ARNAUDO JUAN","LOPEZ MARIO VICENTE",
-        "QUINTEROS WALTER OMAR","VELAZQUEZ CLAUDIO ERNESTO","ALMADA CRISTIAN DANIEL",
-        "BELLO GUSTAVO NORBERTO","BENITEZ GUSTAVO","BOZZO ANTONIO",
-        "CASTRO ANTONIO HORACIO","COMAN JULIO ISMAEL","DUARTE DIEGO MARTIN",
-        "JUAREZ LUIS MANUEL","KLOSTER RAFAEL ALBERTO","LENCINA MARIO ANTONIO",
-        "LIMENZA GELMA RODOLFO FEDERICO","LOPEZ SERGIO ALBERTO","MARIN MARIO JAVIER",
-        "MATA RAUL ALBERTO","MEDINA JAVIER","ORTIZ DANIEL","QUINTANA VICTOR HUGO",
-        "REVILLA RODRIGUEZ HUGO ALEXANDER","RIOS FRANCISCO DANIEL","ROMERO LEANDRO FABIAN",
-        "SUANO JAVIER NESTOR","TUDESCO JOSE LUIS ALBERTO","VELAZQUEZ CARLOS ALBERTO",
-        "ZAKOVICZ JORGE RUBEN","LOPEZ MARCELO DANIEL","CABALLERO ADRIAN MARCELO",
-        "KARBOVNICZEK JOSE PEDRO","CALVENTE BLAS LEONARDO","CORREA DANIEL SEBASTIAN",
-        "SANTANA EZEQUIEL MATIAS","NUÑEZ ALEJO ISMAEL","VIZGARRA MARCELO ENRIQUE",
-        "GORDILLO GERARDO AGUSTIN","LAGORIO BRIAN","ACEVEDO FERNANDO MATIAS",
-        "RODRIGUEZ LUIS ALBERTO","ESPINDOLA SERGIO WALTER","LOPEZ MANUEL ALEJANDRO",
-        "FERNANDEZ ALEJANDRO DANIEL","FERNANDEZ LUIS MARTIN","PETRUCCI JOSE RUBEN",
-        "RUIZ EBER JUAN","MOREL FABIAN CELESTINO","RUIZ BELEN DE LOS ANGELES",
-        "ALBARENGA BRAIAN MARTIN","GONZALEZ CARLA JACQUELINE","BLANCO CLAUDIO LUJAN",
-        "BLANCO CRISTIAN ABRAHAM","UGARTEMENDIA NAHUEL CRUZ","GARCIA MIGUEL ANGEL",
+        "Acevedo Fernando Matias","Acuña Nahuel Gonzalo","Aedo Cinthia Anahi","Aguirre Enrique Andres",
+        "Agullo Rodriguez Luciano Adrian","Agüero Farias Maria Elizabeth","Albarenga Braian Martin","Almada Cristian Daniel",
+        "Almiron Walter Dario","Amaya Cristian Armando","Arias Marcelo Fabian","Arnaudo Juan",
+        "Avila Alejandro Mauricio","Becerra Hector Rafael","Bello Gustavo Norberto","Benitez Gustavo",
+        "Blanco Claudio Lujan","Blanco Cristian Abraham","Bordon Soledad Del Valle","Bozzo Antonio",
+        "Busto Lucas Abraham","Caballero Adrian Marcelo","Caceres Juan Jose","Caceres Rocio Belen",
+        "Calvente Blas Leonardo","Campero Jose Damian","Campos Maximiliano Hernan","Campuzano Walter David",
+        "Canelas Damian","Carpio Gloria Victoria","Casas Carlos David","Castellano Sergio Armando",
+        "Castro Antonio Horacio","Cejas Maria Paula","Centeno Patricia Brenda","Chacoma Sergio Raul",
+        "Coman Julio Ismael","Constancio Damian Nahuel","Copa Ana Paula","Correa Daniel Sebastian",
+        "Coscueta Gustavo Walter","Cugliari Hernan Gabriel","Deramo Nicolas Mario","Dias Dana Lucia",
+        "Diaz Jonathan Javier","Dos Santos Claudio Hernan Anibal","Duarte Diego Martin","Duarte Tiago Marcelo Ezequiel",
+        "Espindola Sergio Walter","Fernandez Alejandro Daniel","Fernandez Cecilia","Fernandez Luis Martin",
+        "Funes Gabriela Edith","Garcia Miguel Angel","Godoy Fernando Miguel","Gonzalez Carla Jacqueline",
+        "Gonzalez Roberto Antonio","Gordillo Gerardo Agustin","Guiñez Duarte Cesar Daniel","Gutierrez Marcos Jose",
+        "Herrera Carlos Alejandro","Herrera Gonzalo Ezequiel","Jara Elio Matias","Juarez Luis Manuel",
+        "Julio Paola Gimena","Karbovniczek Jose Pedro","Kloster Rafael Alberto","Kuc Paulo Emanuel",
+        "Lagorio Brian","Ledesma Matias Ezequiel","Lencina Mario Antonio","Limenza Gelma Rodolfo Federico",
+        "Lobosco Cristian Ivan","Lopez Hugo Gerardo","Lopez Manuel Alejandro","Lopez Marcelo Daniel",
+        "Lopez Mario Vicente","Lopez Sergio Alberto","Luna Morales Mayra Liset","Marcial Erica Marcela",
+        "Marin Mario Javier","Martinez David","Martinez Sergio Ivan","Mata Raul Alberto",
+        "Medina Javier","Mercado Erick Leonardo","Messina Jessica Adriana","Montivero Emanuel Antonio",
+        "Morel Fabian Celestino","Morinigo Jose","Moro Cristian Eduardo","Navarro Manuel Francisco",
+        "Nieto Claudio Martin","Nuñez Alejo Ismael","Nuñez Francisco Diego","Ortiz Daniel",
+        "Oyarzo Sanchez Miguel Alejandro","Pedraza Juan Manuel","Pereira Carmen Gabriela","Petrucci Jose Ruben",
+        "Pintos Alexis Emmanuel","Quintana Victor Hugo","Quintas Horacio Gabriel","Quinteros Walter Omar",
+        "Quiroga Dana Micaela Yasmin","Racedo Julio Dante","Revilla Rodriguez Hugo Alexander","Reynoso Gustavo Alejandro",
+        "Rios Adriel Guillermo Oscar","Rios Francisco Daniel","Rivarola Lucas Fernando","Rivero Giuliana Daniela",
+        "Rodriguez Luciano Matias","Rodriguez Luis Alberto","Rodriguez Patricia Elizabet","Rojas Oscar Osvaldo",
+        "Rolon Santiago Ramon","Romero Ciccioli Daniel Matias Ezequiel","Romero Jorge Rafael","Romero Leandro Fabian",
+        "Romero Sebastian Eduardo","Ruiz Belen De Los Angeles","Ruiz Eber Juan","Santana Ezequiel Matias",
+        "Segura Diego Gabriel","Suano Javier Nestor","Torres Gustavo Adolfo","Troncoso Evelyn Beatriz",
+        "Tudesco Jose Luis Alberto","Ubillos Agustin Sebastian","Ugartemendia Nahuel Cruz","Varela Francisco Antonio",
+        "Vega Franco Eduardo","Velazquez Carlos Alberto","Velazquez Claudio Ernesto","Villa Alberto Matias",
+        "Villafañe Carlos Maximiliano","Villagra Emanuel Francisco","Vizgarra Marcelo Enrique","Zakovicz Jorge Ruben",
+        "Zuñiga Nery Agustin",
     ],
     supervisores: [
-        "Fernando Hector Delgado","Juan Nazareno Hrchan","Horacio Gabriel Quintas",
-        "Rodolfo Sebastian Girelli","Ignacio Alvarez","Rolando Alfonso Zuñiga",
-        "Andres Enrique Aguirre",
+        "Fernando Delgado",
+        "Juan Hrchan",
+        "Horacio Quintas",
+        "Rodolfo Girelli",
+        "Ignacio Alvarez",
+        "Rolando Zuñiga",
+        "Andres Aguirre",
     ],
 };
 
+// ── Plan de supervisión por defecto ──────────────────────────────────────────
+// Todos 1 visita/semana (≈4/mes). La Plata también 1/semana pero solo nocturnas.
+// Las restricciones de turno se anotan en "restriccion"
 const DEFAULT_PLAN = [
-    { objetivo: "Reginald Lee — Ranelagh",       visitasPorSemana: 1 },
-    { objetivo: "Reginald Lee — Lobos",           visitasPorSemana: 1 },
-    { objetivo: "Reginald Lee — La Plata",        visitasPorSemana: 1 },
-    { objetivo: "Reginald Lee — Mar del Plata",   visitasPorSemana: 1 },
-    { objetivo: "Ovnisa Berazategui",             visitasPorSemana: 1 },
-    { objetivo: "Brinks Pergamino",               visitasPorSemana: 1 },
-    { objetivo: "Brinks Berón de Astrada",        visitasPorSemana: 1 },
-    { objetivo: "Brinks Móvil",                   visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — General",           visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — Puesto 1",          visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — Puesto 2",          visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — Puesto 3",          visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — CCTV General",      visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — CCTV Fundición",    visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — Naty",              visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — Administrativas",   visitasPorSemana: 1 },
-    { objetivo: "Cerro Moro — Encargados",        visitasPorSemana: 1 },
+    { objetivo: "Brinks Pergamino",      visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "Brinks Movil",          visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "Brinks Beron Astrada",  visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "Ovnisa Berazategui",    visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "Cerro Moro",            visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS Puesto 1",          visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS Puesto 2",          visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS Puesto 3",          visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS Puesto 4",          visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS Naty",              visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS CCTV Gral.",        visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS CCTV Fundicion",    visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS Encargados",        visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS Administrativa",    visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
+    { objetivo: "PAS Supervisor",        visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
 ];
-
-// ── Context ───────────────────────────────────────────────────────────────────
 const AppDataContext = createContext(null);
 
 export function AppDataProvider({ children }) {
-    const [config,          setConfig]          = useState(DEFAULT_CONFIG);
-    const [plan,            setPlan]            = useState(DEFAULT_PLAN);
-    const [planesSuper,     setPlanesSuper]     = useState({});
-    const [mantenimiento,   setMantenimiento]   = useState([]);
-    const [jornadas,        setJornadas]        = useState([]);
-    const [jornadaActiva,   setJornadaActiva]   = useState(null);
-    const [actividadActiva, setActividadActiva] = useState(null);
-    const [dbReady,         setDbReady]         = useState(false);
+    const [config,           setConfig]           = useState(() => load("cyrano_config",           DEFAULT_CONFIG));
+    const [plan,             setPlan]             = useState(() => load("cyrano_plan",             DEFAULT_PLAN));
+    const [planesSuper,      setPlanesSuper]      = useState(() => load("cyrano_planes_super",     {}));
+    const [mantenimiento,    setMantenimiento]    = useState(() => load("cyrano_mantenimiento",    []));
+    const [jornadas,         setJornadas]         = useState(() => load("cyrano_jornadas",         []));
+    const [jornadaActiva,    setJornadaActiva]    = useState(() => load("cyrano_jornada_activa",   null));
+    const [actividadActiva,  setActividadActiva]  = useState(() => load("cyrano_actividad_activa", null));
+    const [dbReady,          setDbReady]          = useState(false);
 
-    // ── Carga inicial desde Firestore ─────────────────────────────────────────
-    useEffect(() => {
-        let unsubs = [];
+    useEffect(() => { save("cyrano_config",           config);          }, [config]);
+    useEffect(() => { save("cyrano_plan",             plan);            }, [plan]);
+    useEffect(() => { save("cyrano_planes_super",     planesSuper);     }, [planesSuper]);
+    useEffect(() => { save("cyrano_mantenimiento",    mantenimiento);   }, [mantenimiento]);
+    useEffect(() => { save("cyrano_jornadas",         jornadas);        }, [jornadas]);
+    useEffect(() => { save("cyrano_jornada_activa",   jornadaActiva);   }, [jornadaActiva]);
+    useEffect(() => { save("cyrano_actividad_activa", actividadActiva); }, [actividadActiva]);
 
-        const init = async () => {
-            try {
-                // Config
-                const cfgSnap = await getDoc(REF_CONFIG);
-                if (cfgSnap.exists()) setConfig(cfgSnap.data());
-                else await setDoc(REF_CONFIG, DEFAULT_CONFIG);
+    const updateConfig    = (key, value) => setConfig((p) => ({ ...p, [key]: value }));
+    const resetConfig     = ()           => { setConfig(DEFAULT_CONFIG); localStorage.removeItem("cyrano_config"); };
+    const savePlan        = (p)          => setPlan(p);
 
-                // Plan general
-                const planSnap = await getDoc(REF_PLAN);
-                if (planSnap.exists()) setPlan(planSnap.data().items || DEFAULT_PLAN);
-                else await setDoc(REF_PLAN, { items: DEFAULT_PLAN });
+    // ── Planes por supervisor ────────────────────────────────────────────────
+    // planesSuper[email] = {
+    //   nombre, turnoBase: "diurno"|"nocturno"|"mixto",
+    //   objetivos: [{ objetivo, visitasPorSemana, turno, patron, semanasCustom }]
+    // }
 
-                // Planes supervisores — listener en tiempo real
-                const unsubPS = onSnapshot(REF_PLANES_SUPER, (snap) => {
-                    if (snap.exists()) setPlanesSuper(snap.data());
-                }, (err) => console.error("Error escuchando planesSuper:", err));
-                unsubs.push(unsubPS);
-
-                // Jornada activa desde localStorage (sesión local)
-                try {
-                    const ja = localStorage.getItem("cyrano_jornada_activa");
-                    const aa = localStorage.getItem("cyrano_actividad_activa");
-                    if (ja) setJornadaActiva(JSON.parse(ja));
-                    if (aa) setActividadActiva(JSON.parse(aa));
-                } catch {}
-
-                setDbReady(true);
-            } catch (err) {
-                console.error("Error cargando datos de Firestore:", err);
-                setDbReady(true);
-            }
-        };
-
-        init();
-
-        // Listener en tiempo real para jornadas (últimos 60 días)
-        const hace60 = new Date();
-        hace60.setDate(hace60.getDate() - 60);
-        const q = query(REF_JORNADAS, orderBy("creadaEn", "desc"));
-        const unsub = onSnapshot(q, (snap) => {
-            setJornadas(snap.docs.map(d => ({ firestoreId: d.id, ...d.data() })));
-        }, (err) => console.error("Error escuchando jornadas:", err));
-        unsubs.push(unsub);
-
-        // Listener en tiempo real para mantenimiento
-        const unsubMant = onSnapshot(REF_MANT, (snap) => {
-            setMantenimiento(snap.docs
-                .map(d => ({ firestoreId: d.id, ...d.data() }))
-                .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))
-            );
-        }, (err) => console.error("Error escuchando mantenimiento:", err));
-        unsubs.push(unsubMant);
-
-        return () => unsubs.forEach(u => u());
-    }, []);
-
-    // Persistir jornada activa localmente (sesión)
-    useEffect(() => {
-        try {
-            if (jornadaActiva) localStorage.setItem("cyrano_jornada_activa", JSON.stringify(jornadaActiva));
-            else localStorage.removeItem("cyrano_jornada_activa");
-        } catch {}
-    }, [jornadaActiva]);
-
-    useEffect(() => {
-        try {
-            if (actividadActiva) localStorage.setItem("cyrano_actividad_activa", JSON.stringify(actividadActiva));
-            else localStorage.removeItem("cyrano_actividad_activa");
-        } catch {}
-    }, [actividadActiva]);
-
-    // ── Config ────────────────────────────────────────────────────────────────
-    const updateConfig = async (key, value) => {
-        const updated = { ...config, [key]: value };
-        setConfig(updated);
-        try { await setDoc(REF_CONFIG, updated); } catch (e) { console.error(e); }
+    // Clave: email si existe, sino nombre normalizado
+    const planKey = (emailOrNombre) => emailOrNombre || "";
+    const savePlanSupervisor = (emailOrNombre, datos) => {
+        if (!emailOrNombre) return;
+        setPlanesSuper((prev) => ({ ...prev, [emailOrNombre]: datos }));
+    };
+    const getPlanSupervisor = (emailOrNombre) => {
+        if (!emailOrNombre) return null;
+        if (planesSuper[emailOrNombre]) return planesSuper[emailOrNombre];
+        // Buscar por nombre normalizado como fallback
+        const norm = normNombre(emailOrNombre);
+        const found = Object.entries(planesSuper).find(([k, v]) =>
+            normNombre(k) === norm || normNombre(v.nombre || "") === norm
+        );
+        return found ? found[1] : null;
     };
 
-    const resetConfig = async () => {
-        setConfig(DEFAULT_CONFIG);
-        try { await setDoc(REF_CONFIG, DEFAULT_CONFIG); } catch (e) { console.error(e); }
-    };
-
-    // ── Plan general ──────────────────────────────────────────────────────────
-    const savePlan = async (p) => {
-        setPlan(p);
-        try { await setDoc(REF_PLAN, { items: p, updatedAt: new Date().toISOString() }); }
-        catch (e) { console.error(e); }
-    };
-
-    // ── Planes por supervisor ─────────────────────────────────────────────────
-    const savePlanSupervisor = async (email, datos) => {
-        const updated = { ...planesSuper, [email]: datos };
-        setPlanesSuper(updated);
-        try { await setDoc(REF_PLANES_SUPER, updated); }
-        catch (e) { console.error(e); }
-    };
-
-    const getPlanSupervisor = useCallback((email) =>
-        planesSuper[email] || null,
-    [planesSuper]);
-
-    const getObjetivosSemana = useCallback((email, semana) => {
-        const ps = planesSuper[email];
+    // Objetivos activos para una semana dada, con turno efectivo resuelto
+    const getObjetivosSemana = (email, semana) => {
+        const ps = getPlanSupervisor(email);
         if (!ps) return [];
         return (ps.objetivos || []).filter(o => {
             if (o.patron === "todas")   return true;
@@ -281,44 +207,46 @@ export function AppDataProvider({ children }) {
                 ? (ps.turnoBase || "mixto")
                 : o.turno,
         }));
-    }, [planesSuper]);
+    };
 
-    const getSupervisoresConEmail = useCallback(() => {
-        const conEmail = Object.entries(planesSuper).map(([email, v]) => ({
-            email, nombre: v.nombre || email, turnoBase: v.turnoBase || "mixto",
-        }));
-        const nombresConEmail = new Set(conEmail.map(s => s.nombre));
+    // Lista supervisores: los con plan registrado + los de config sin email
+    // normNombre: "Fernando Hector Delgado" → "Fernando Delgado"
+    const normNombre = (n) => { const p = (n || "").trim().split(/\s+/); return p.length >= 2 ? `${p[0]} ${p[p.length-1]}` : n; };
+    const getSupervisoresConEmail = () => {
+        // Supervisores con email y plan guardado — usar nombre de config si matchea
+        const conEmail = Object.entries(planesSuper).map(([email, v]) => {
+            const nombrePlan = v.nombre || email;
+            // Buscar nombre en config que normalice igual
+            const nombreConfig = (config.supervisores || []).find(n => normNombre(n) === normNombre(nombrePlan));
+            return { email, nombre: nombreConfig || normNombre(nombrePlan), turnoBase: v.turnoBase || "mixto" };
+        });
+        // Supervisores sin email (solo en config, sin plan registrado)
+        const emailsConPlan = new Set(conEmail.map(s => normNombre(s.nombre)));
         const sinEmail = (config.supervisores || [])
-            .filter(n => !nombresConEmail.has(n))
+            .filter(n => !emailsConPlan.has(normNombre(n)))
             .map(n => ({ email: null, nombre: n, turnoBase: null }));
         return [...conEmail, ...sinEmail];
-    }, [planesSuper, config.supervisores]);
+    };
+    // ────────────────────────────────────────────────────────────────────────
 
-    // ── Mantenimiento ─────────────────────────────────────────────────────────
-    const addMantenimiento = async (evento) => {
-        try {
-            const ref = await addDoc(REF_MANT, {
-                ...evento,
-                creadoEn: new Date().toISOString(),
-            });
-            return ref.id;
-        } catch (e) { console.error(e); }
+
+    // ── Mantenimiento de vehículos ───────────────────────────────────────────
+    const addMantenimiento = (evento) => {
+        const nuevo = { ...evento, id: "M-" + Date.now().toString().slice(-8), creadoEn: new Date().toISOString() };
+        setMantenimiento(prev => [nuevo, ...prev]);
+        return nuevo;
     };
 
-    const updateMantenimiento = async (firestoreId, datos) => {
-        try {
-            await updateDoc(doc(db, "mantenimiento", firestoreId), datos);
-        } catch (e) { console.error(e); }
-    };
+    const updateMantenimiento = (id, datos) =>
+        setMantenimiento(prev => prev.map(m => m.id === id ? { ...m, ...datos } : m));
 
-    const deleteMantenimiento = async (firestoreId) => {
-        try {
-            await deleteDoc(doc(db, "mantenimiento", firestoreId));
-        } catch (e) { console.error(e); }
-    };
+    const deleteMantenimiento = (id) =>
+        setMantenimiento(prev => prev.filter(m => m.id !== id));
 
-    const getAlertasMantenimiento = useCallback(() => {
+    // Alertas: próximos services en los próximos 30 días o vencidos
+    const getAlertasMantenimiento = () => {
         const hoy = new Date(); hoy.setHours(0,0,0,0);
+        const en30 = new Date(hoy); en30.setDate(en30.getDate() + 30);
         return mantenimiento
             .filter(m => m.proximoService?.fecha)
             .map(m => {
@@ -328,26 +256,25 @@ export function AppDataProvider({ children }) {
             })
             .filter(m => m.diasRestantes <= 30)
             .sort((a, b) => a.diasRestantes - b.diasRestantes);
-    }, [mantenimiento]);
+    };
+    // ────────────────────────────────────────────────────────────────────────
 
-    // ── Jornadas ──────────────────────────────────────────────────────────────
-    const iniciarJornada = (datos) => {
+    const iniciarJornada  = (datos) => {
         const j = { ...datos, estado: "activa", actividades: [], creadaEn: new Date().toISOString() };
         setJornadaActiva(j);
         return j;
     };
 
     const actualizarJornadaActiva = (datos) =>
-        setJornadaActiva(p => p ? { ...p, ...datos } : p);
+        setJornadaActiva((p) => p ? { ...p, ...datos } : p);
 
     const iniciarActividad = (tipo, datosInicio) => {
-        const a = {
-            id: Date.now().toString(), tipo, estado: "en_curso",
-            ...datosInicio, iniciadaEn: new Date().toISOString(),
-        };
+        const a = { id: Date.now().toString(), tipo, estado: "en_curso", ...datosInicio, iniciadaEn: new Date().toISOString() };
+        // Clasificar automáticamente si es control
         if (tipo === "ctrl") {
             const { turno, esFinDeSemana } = clasificarControl(datosInicio.horaInicio, new Date().toISOString());
-            a.turno = turno; a.esFinDeSemana = esFinDeSemana;
+            a.turno         = turno;
+            a.esFinDeSemana = esFinDeSemana;
         }
         setActividadActiva(a);
         return a;
@@ -355,37 +282,93 @@ export function AppDataProvider({ children }) {
 
     const finalizarActividad = (datosFin) => {
         if (!actividadActiva || !jornadaActiva) return;
-        const completa = {
-            ...actividadActiva, ...datosFin,
-            estado: "completada", finalizadaEn: new Date().toISOString(),
-        };
-        setJornadaActiva(p => ({ ...p, actividades: [...(p.actividades || []), completa] }));
+        const completa = { ...actividadActiva, ...datosFin, estado: "completada", finalizadaEn: new Date().toISOString() };
+        setJornadaActiva((p) => ({ ...p, actividades: [...(p.actividades || []), completa] }));
         setActividadActiva(null);
     };
 
     const cancelarActividad = () => setActividadActiva(null);
 
-    const cerrarJornada = async (datosCierre) => {
+    const cerrarJornada = (datosCierre) => {
         if (!jornadaActiva) return;
-        const cerrada = {
-            ...jornadaActiva, ...datosCierre,
-            estado: "cerrada", cerradaEn: new Date().toISOString(),
-        };
-        // Guardar en Firestore
-        try {
-            await addDoc(REF_JORNADAS, cerrada);
-        } catch (e) { console.error("Error guardando jornada:", e); }
+        const cerrada = { ...jornadaActiva, ...datosCierre, estado: "cerrada", cerradaEn: new Date().toISOString() };
+        setJornadas((p) => [cerrada, ...p]);
         setJornadaActiva(null);
         setActividadActiva(null);
         return cerrada;
     };
 
+    // Borrar datos simulados — se ejecuta una vez al montar si hay datos viejos
+    const limpiarSimulados = () => {
+        const reales = jornadas.filter((j) =>
+            !j.jornadaID?.startsWith("J0") &&
+            !j.id?.startsWith("J0") &&
+            !j.simulado
+        );
+        setJornadas(reales);
+    };
+
+    // Auto-limpiar simulados al primer montaje
+    useEffect(() => {
+        const cleaned = jornadas.filter((j) =>
+            !j.jornadaID?.startsWith("J0") &&
+            !j.id?.startsWith("J0") &&
+            !j.simulado
+        );
+        if (cleaned.length !== jornadas.length) {
+            setJornadas(cleaned);
+        }
+    }, []);
+
+    // Migración v4: forzar listas correctas + restaurar objetivos de planes vacios
+    useEffect(() => {
+        const migrated = localStorage.getItem("cyrano_migrated_v4");
+        if (!migrated) {
+            localStorage.removeItem("cyrano_migrated_v2");
+            localStorage.removeItem("cyrano_migrated_v3");
+            // Actualizar config con listas correctas
+            setConfig(prev => ({
+                ...prev,
+                vehiculos:      DEFAULT_CONFIG.vehiculos,
+                objetivos:      DEFAULT_CONFIG.objetivos,
+                vigiladores:    DEFAULT_CONFIG.vigiladores,
+                supervisores:   DEFAULT_CONFIG.supervisores,
+                tiposActividad: DEFAULT_CONFIG.tiposActividad,
+            }));
+            // Restaurar objetivos del DEFAULT_PLAN en planes que tienen objetivos vacíos
+            setPlanesSuper(prev => {
+                const updated = { ...prev };
+                Object.keys(updated).forEach(email => {
+                    if (!updated[email].objetivos || updated[email].objetivos.length === 0) {
+                        updated[email] = {
+                            ...updated[email],
+                            objetivos: DEFAULT_PLAN.map(p => ({
+                                objetivo:       p.objetivo,
+                                visitasPorSemana: p.visitasPorSemana || 1,
+                                turno:          "base",
+                                patron:         "todas",
+                                semanasCustom:  [],
+                            })),
+                        };
+                    }
+                });
+                return updated;
+            });
+            localStorage.setItem("cyrano_migrated_v4", "1");
+        }
+    }, []);
+
+    // Limpia sesión activa al hacer logout (no borra historial)
     const resetSesion = () => {
         setJornadaActiva(null);
         setActividadActiva(null);
     };
 
-    const limpiarSimulados = () => {}; // ya no hay simulados
+    // Simula tiempo de carga de Firebase (en producción esto lo dispara onSnapshot)
+    useEffect(() => {
+        const t = setTimeout(() => setDbReady(true), 800);
+        return () => clearTimeout(t);
+    }, []);
 
     return (
         <AppDataContext.Provider value={{
@@ -396,7 +379,8 @@ export function AppDataProvider({ children }) {
             jornadas, jornadaActiva, actividadActiva,
             iniciarJornada, actualizarJornadaActiva,
             iniciarActividad, finalizarActividad, cancelarActividad, cerrarJornada,
-            resetSesion, limpiarSimulados,
+            resetSesion,
+            limpiarSimulados,
             dbReady,
         }}>
             {children}

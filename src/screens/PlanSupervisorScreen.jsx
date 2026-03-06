@@ -158,7 +158,7 @@ function ObjetivoRow({ obj, turnoBase, onChange, onRemove }) {
 function EditorSupervisor({ sup, onBack, onSaved }) {
     const { data, getPlanSupervisor, savePlanSupervisor, jornadas } = useAppData();
 
-    const planActual = getPlanSupervisor(sup.email) || { nombre: sup.nombre, turnoBase: "mixto", objetivos: [] };
+    const planActual = getPlanSupervisor(sup.email || sup.nombre) || { nombre: sup.nombre, turnoBase: "mixto", objetivos: [] };
 
     const [turnoBase, setTurnoBase] = useState(planActual.turnoBase || "mixto");
     const [objetivos, setObjetivos] = useState(planActual.objetivos || []);
@@ -190,7 +190,7 @@ function EditorSupervisor({ sup, onBack, onSaved }) {
     };
 
     const handleSave = () => {
-        savePlanSupervisor(sup.email, { nombre: sup.nombre, turnoBase, objetivos });
+        savePlanSupervisor(sup.email || sup.nombre, { nombre: sup.nombre, turnoBase, objetivos });
         setSaved(true);
         setTimeout(onSaved, 700);
     };
@@ -346,12 +346,12 @@ function ListaSupervisores({ onEdit }) {
                 const turnoIcon = plan ? TURNO_ICON[plan.turnoBase || "mixto"] : "";
 
                 return (
-                    <div key={i} className={`ps-sup-row ${!sup.email ? "no-email" : ""}`} onClick={() => sup.email && onEdit(sup)}>
+                    <div key={i} className={`ps-sup-row`} onClick={() => onEdit(sup)}>
                         <div className="ps-sup-avatar">{sup.nombre[0]}</div>
                         <div className="ps-sup-info">
                             <div className="ps-sup-name">{sup.nombre}</div>
                             <div className="ps-sup-email">
-                                {sup.email ? <>{turnoIcon} {sup.email}</> : "⚠️ Sin email asignado"}
+                                {sup.email ? <>{turnoIcon} {sup.email}</> : <span style={{color:"#f59e0b", fontSize:11}}>⚠️ Sin email — plan por nombre</span>}
                             </div>
                             <div className="ps-sup-detail">
                                 {plan
@@ -366,9 +366,9 @@ function ListaSupervisores({ onEdit }) {
                                     <div className="ps-sup-pct-label">mes actual</div>
                                 </>
                             ) : (
-                                <div className="ps-sup-pct-label">{sup.email ? "Sin plan" : "—"}</div>
+                                <div className="ps-sup-pct-label">Sin plan</div>
                             )}
-                            {sup.email && <div className="ps-sup-arrow">›</div>}
+                            <div className="ps-sup-arrow">›</div>
                         </div>
                     </div>
                 );

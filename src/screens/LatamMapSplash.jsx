@@ -25,10 +25,10 @@ const flags = [
     { name: 'Venezuela',       src: 'https://flagcdn.com/ve.svg' },
 ];
 
-export default function LatamMapSplash({ onAdvance }) {
-    const [visible,      setVisible]      = useState(false);
+export default function LatamMapSplash({ onSelect }) {
+    const [visible, setVisible] = useState(false);
     const [flagsVisible, setFlagsVisible] = useState([]);
-    const [ctaVisible,   setCtaVisible]   = useState(false);
+    const [ctaVisible, setCtaVisible] = useState(false);
 
     useEffect(() => {
         const t1 = setTimeout(() => setVisible(true), 100);
@@ -40,15 +40,14 @@ export default function LatamMapSplash({ onAdvance }) {
     }, []);
 
     return (
-        <div className="splash-root" onClick={onAdvance}>
+        <div className="splash-root">
             <div className="splash-accent-bar" />
 
             <header className={`splash-header ${visible ? 'visible' : ''}`}>
                 <div className="splash-logo-box">
-                    <img src="./images/Leon.png" alt="Cyrano Logo" />
+                    <img src="./images/Leon.png" width="110" height="110" alt="Cyrano Logo" />
                 </div>
-                {/* textos en su propio div para que no se desborden */}
-                <div className="splash-texts">
+                <div>
                     <h1 className="splash-title">Cyrano</h1>
                     <p className="splash-subtitle">Latinoamérica</p>
                     <p className="splash-tagline">El software más completo para gestión de seguridad</p>
@@ -61,7 +60,7 @@ export default function LatamMapSplash({ onAdvance }) {
                 {flags.map((flag, i) => (
                     <div key={flag.name} className={`flag-item ${flagsVisible.includes(i) ? 'shown' : ''}`}>
                         <div className="flag-card-inner">
-                            <img src={flag.src} alt={flag.name} loading="lazy" />
+                            <img src={flag.src} alt={flag.name} />
                             <div className="flag-name">{flag.name}</div>
                         </div>
                     </div>
@@ -69,9 +68,17 @@ export default function LatamMapSplash({ onAdvance }) {
             </div>
 
             <div className={`splash-cta ${ctaVisible ? 'visible' : ''}`}>
-                <button className="cta-btn" onClick={e => { e.stopPropagation(); onAdvance(); }}>
-                    <span className="cta-dot">▶</span>Ingresar
-                </button>
+                <p className="splash-access-label">Acceder como</p>
+                <div className="splash-role-btns">
+                    <button className="role-btn role-btn--admin" onClick={() => onSelect("admin")}>
+                        <span className="role-btn-icon">🔐</span>
+                        <span className="role-btn-label">Administrador</span>
+                    </button>
+                    <button className="role-btn role-btn--sup" onClick={() => onSelect("supervisor")}>
+                        <span className="role-btn-icon">👤</span>
+                        <span className="role-btn-label">Usuario</span>
+                    </button>
+                </div>
             </div>
         </div>
     );

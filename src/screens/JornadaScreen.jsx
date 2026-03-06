@@ -3,8 +3,9 @@ import { useState, useEffect } from "react";
 import { nowTime, todayDate, genID } from "../utils/helpers";
 import { useAppData } from "../context/AppDataContext";
 import "../styles/JornadaScreen.css";
+import ControlVehicularScreen from "./ControlVehicularScreen";
 
-export default function JornadaScreen({ user, onStarted }) {
+export default function JornadaScreen({ user, onStarted, onBack }) {
     const { data, iniciarJornada } = useAppData();
 
     const [form, setForm] = useState({
@@ -24,21 +25,48 @@ export default function JornadaScreen({ user, onStarted }) {
 
     const set   = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     const valid = !!editNombre;
+    const [step, setStep] = useState("datos"); // "datos" | "control_vehicular"
+    const [controlVeh, setControlVeh] = useState(null);
 
     useEffect(() => {
         const t = setInterval(() => set("horaInicio", nowTime()), 15000);
         return () => clearInterval(t);
     }, []);
 
-    const handleStart = () => {
+    const doStart = (controlVehicular = null) => {
         const jornada = iniciarJornada({
             ...form,
-            nombre:    `${editNombre} ${editApellido}`.trim(),
-            email:     user.email,
+            nombre:     `${editNombre} ${editApellido}`.trim(),
+            email:      user.email,
             supervisor: user.name,
+            controlVehicular,
         });
         onStarted(jornada);
     };
+
+    const handleStart = () => {
+        if (form.vehiculo) {
+            setStep("control_vehicular");
+        } else {
+            doStart(null);
+        }
+    };
+
+    const handleControlConfirmado = (datos) => {
+        setControlVeh(datos);
+        doStart(datos);
+    };
+
+    if (step === "control_vehicular") {
+        return (
+            <ControlVehicularScreen
+                vehiculo={form.vehiculo}
+                supervisor={`${editNombre} ${editApellido}`.trim()}
+                onConfirmar={handleControlConfirmado}
+                onOmitir={() => doStart(null)}
+            />
+        );
+    }
 
     return (
         <>
@@ -100,8 +128,13 @@ export default function JornadaScreen({ user, onStarted }) {
             </div>
 
             <button className="btn btn-primary" disabled={!valid} onClick={handleStart}>
-                💾 Guardar e Iniciar Jornada
+                {form.vehiculo ? "🚗 Continuar → Control Vehicular" : "💾 Guardar e Iniciar Jornada"}
             </button>
+            {onBack && (
+                <button className="btn btn-secondary" onClick={onBack}>
+                    ← Volver
+                </button>
+            )}
         </>
     );
 }

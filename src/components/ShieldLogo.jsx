@@ -1,6 +1,3 @@
-// src/components/ShieldLogo.jsx
-// Coloca el archivo en public/images/png-transparent-logo.png
-
 const ShieldLogo = ({ size = 120, grayscale = false }) => (
     <img
         src="/images/png-transparent-logo.png"

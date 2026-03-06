@@ -27,6 +27,7 @@ export default function ControlScreen({ geo, onBack }) {
     // ── Estado paso 2 — identificación ──
     const [objetivo,    setObjetivo]    = useState("");
     const [vigilador,   setVigilador]   = useState("");
+    const [vigFiltro,   setVigFiltro]   = useState("");
     const [paginaLibro, setPaginaLibro] = useState("");
 
     // ── Estado paso 2 — evaluación ──
@@ -189,9 +190,30 @@ export default function ControlScreen({ geo, onBack }) {
                         <div className="row">
                             <div className="field">
                                 <label className="label">Vigilador</label>
-                                <select value={vigilador} onChange={(e) => setVigilador(e.target.value)}>
+                                <input
+                                    type="text"
+                                    placeholder="Filtrar por nombre..."
+                                    value={vigFiltro}
+                                    onChange={(e) => {
+                                        setVigFiltro(e.target.value);
+                                        setVigilador("");
+                                    }}
+                                    style={{ marginBottom: 4 }}
+                                />
+                                <select
+                                    value={vigilador}
+                                    onChange={(e) => setVigilador(e.target.value)}
+                                    size={vigFiltro.length >= 3 ? Math.min(
+                                        (data.vigiladores.filter(v =>
+                                            v.toLowerCase().includes(vigFiltro.toLowerCase())
+                                        ).length || 1), 5) : 1}
+                                >
                                     <option value="">— Seleccionar —</option>
-                                    {data.vigiladores.map((v) => <option key={v}>{v}</option>)}
+                                    {(vigFiltro.length >= 3
+                                        ? data.vigiladores.filter(v =>
+                                            v.toLowerCase().includes(vigFiltro.toLowerCase()))
+                                        : data.vigiladores
+                                    ).map((v) => <option key={v}>{v}</option>)}
                                 </select>
                             </div>
                             <div className="field">
@@ -228,18 +250,16 @@ export default function ControlScreen({ geo, onBack }) {
                             return (
                                 <div key={c} className="rating-row">
                                     <span className="rating-label">{c}</span>
-                                    <div className="rating-bottom-row">
-                                        <div className="rating-stars">
-                                            {[1,2,3,4,5,6,7,8,9,10].map((n) => (
-                                                <div key={n}
-                                                    className={`star ${v >= n ? getStarClass(n, v) : ""}`}
-                                                    onClick={() => setR(c, n)}>
-                                                    {n}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <span className="rating-val">{v > 0 ? v : "—"}</span>
+                                    <div className="rating-stars">
+                                        {[1,2,3,4,5,6,7,8,9,10].map((n) => (
+                                            <div key={n}
+                                                className={`star ${v >= n ? getStarClass(n, v) : ""}`}
+                                                onClick={() => setR(c, n)}>
+                                                {n}
+                                            </div>
+                                        ))}
                                     </div>
+                                    <span className="rating-val">{v > 0 ? v : "—"}</span>
                                 </div>
                             );
                         })}

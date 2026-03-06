@@ -36,6 +36,11 @@ const TIPO_COLOR = { ctrl: "#003087", cap: "#e20113", otra: "#f59e0b", traslado:
 // Calcula tiempos de una jornada: actividades + traslados (gaps entre ellas)
 const calcularTiempos = (jornada) => {
     const acts = [...(jornada.actividades || [])]
+        .map(a => ({
+            ...a,
+            horaInicio: a.horaInicio || (a.iniciadaEn   ? a.iniciadaEn.slice(11,16)   : null),
+            horaFin:    a.horaFin    || (a.finalizadaEn ? a.finalizadaEn.slice(11,16) : null),
+        }))
         .filter(a => a.horaInicio && a.horaFin)
         .sort((a, b) => toMinutes(a.horaInicio) - toMinutes(b.horaInicio));
 
@@ -140,6 +145,11 @@ function TarjetaSupervisor({ nombre, jornadas, expandido, onToggle }) {
                     {jornadas.map(j => {
                         const t = calcularTiempos(j);
                         const acts = [...(j.actividades || [])]
+                            .map(a => ({
+                                ...a,
+                                horaInicio: a.horaInicio || (a.iniciadaEn   ? a.iniciadaEn.slice(11,16)   : null),
+                                horaFin:    a.horaFin    || (a.finalizadaEn ? a.finalizadaEn.slice(11,16) : null),
+                            }))
                             .filter(a => a.horaInicio && a.horaFin)
                             .sort((a, b) => toMinutes(a.horaInicio) - toMinutes(b.horaInicio));
 

@@ -9,6 +9,9 @@ import "../styles/DashboardScreen.css";
 // ══════════════════════════════════════════════════════════════
 const toMin = (t) => { if (!t) return 0; const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
 const diffMin = (a, b) => { if (!a || !b) return 0; let d = toMin(b) - toMin(a); if (d < 0) d += 1440; return Math.max(d, 0); };
+// Normaliza nombre de objetivo: quita guiones em/en para comparación
+const normObj = (s) => (s || "").replace(/\s*[\u2014\u2013-]\s*/g, " ").trim().toLowerCase();
+
 const fmtMin = (m) => { if (!m || m <= 0) return "0m"; const h = Math.floor(m / 60), r = m % 60; return h > 0 ? (r > 0 ? `${h}h ${r}m` : `${h}h`) : `${r}m`; };
 const parseKm = (j) => { const k = Number(j.kmFinal || 0) - Number(j.kmInicial || 0); return k > 0 ? k : 0; };
 
@@ -364,7 +367,7 @@ export default function DashboardScreen() {
     const cumplPlan = useMemo(() => {
         if (!plan.length) return [];
         return plan.map(p => {
-            const vv = controles.filter(c => c.objetivo === p.objetivo);
+            const vv = controles.filter(c => normObj(c.objetivo) === normObj(p.objetivo));
             const noc = vv.filter(c => c.turno === "nocturno").length;
             const fds = vv.filter(c => c.esFinDeSemana).length;
             const p2 = Math.min(Math.round((vv.length / (p.visitasPorSemana || 1)) * 100), 100);
@@ -557,7 +560,7 @@ export default function DashboardScreen() {
 
                     // Cumplimiento por objetivo
                     const objCumpl = planSup ? (planSup.objetivos || []).map(o => {
-                        const real = ctrlSup.filter(c => c.objetivo === o.objetivo).length;
+                        const real = ctrlSup.filter(c => normObj(c.objetivo) === normObj(o.objetivo)).length;
                         const sems = semanasDePatron(o.patron, o.semanasCustom);
                         const req = sems.length * (o.visitasPorSemana || 1);
                         return { objetivo: o.objetivo, real, req, pct: req > 0 ? Math.min(Math.round(real / req * 100), 100) : 0 };

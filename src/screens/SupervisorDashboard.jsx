@@ -286,7 +286,7 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                 <div className="sup-week-banner">
                     <div className="sup-week-banner-top">
                     <div className="sup-week-left">
-                        <div className="sup-card-title">📆 SEMANA ACTUAL</div>
+                        <div className="sup-week-label">SEMANA ACTUAL</div>
                         <div className="sup-week-num">{semana}</div>
                         <div className="sup-week-range">Días {WEEK_RANGES[semana]}</div>
                         <div className="sup-week-circles" style={{ marginTop: 10 }}>
@@ -297,11 +297,11 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                                     <div className="sup-circle-sub">{realGlobalSemana}/{reqGlobalSemana}</div>
                                 </div>
                             )}
-                            {!sinPlanIndivid && (
+                            {!sinPlanGlobal && (
                                 <div className="sup-week-circle-item">
                                     <div className="sup-circle-label">Mi plan</div>
-                                    <CircleProgress pct={pctIndivSemana} size={54} />
-                                    <div className="sup-circle-sub">{realGlobalSemana}/{reqIndivSemana}</div>
+                                    <CircleProgress pct={!sinPlanIndivid ? pctIndivSemana : pctGlobalSemana} size={54} />
+                                    <div className="sup-circle-sub">{realGlobalSemana}/{!sinPlanIndivid ? reqIndivSemana : reqGlobalSemana}</div>
                                 </div>
                             )}
                         </div>
