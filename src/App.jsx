@@ -64,11 +64,11 @@ function AppContent() {
     const handleModalClose = () => {
         setModal(null);
         setUser(null);
-        goTo("roleSelect");
+        goTo("splash");
     };
 
     const isAdmin    = phase === "admin";
-    const showHeader = !["splash", "loading", "loading_post", "login", "roleSelect"].includes(phase);
+    const showHeader = !["splash", "loading_post", "login"].includes(phase);
 
     return (
         <>
@@ -89,11 +89,7 @@ function AppContent() {
                 />
             )}
 
-            {phase === "roleSelect" && (
-                <RoleSelectScreen onSelect={handleRoleSelect} />
-            )}
-
-            {!["splash", "loading", "loading_post", "roleSelect"].includes(phase) && (
+            {!["splash", "loading_post"].includes(phase) && (
                 <div className="app">
                     {showHeader && (
                         <header className="header" style={isAdmin ? { background: "var(--color-primary-dark)" } : {}}>
