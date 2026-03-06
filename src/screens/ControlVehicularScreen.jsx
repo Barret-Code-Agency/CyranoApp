@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { todayDate, nowTime } from "../utils/helpers";
 import "../styles/ControlVehicularScreen.css";
+import { generarPDFControlVehicular } from "../utils/generarPDF_ControlVehicular";
 
 // ── Secciones del checklist (basado en el formulario original) ─────────────
 const SECCIONES = [
@@ -76,6 +77,7 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
     const [fotos,      setFotos]      = useState([]);
     const [sinNovedad, setSinNovedad] = useState(null); // true/false
     const [seccionAbierta, setSeccion] = useState("exterior");
+    const [pdfLoading,   setPdfLoading] = useState(false);
 
     const setCheck = (key, val) => setChecks(p => ({ ...p, [key]: val }));
 
@@ -92,8 +94,8 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
         });
     };
 
-    const handleConfirmar = () => {
-        onConfirmar({
+    const handleConfirmar = async () => {
+        const datos = {
             fecha:       todayDate(),
             hora:        nowTime(),
             vehiculo,
@@ -104,7 +106,19 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
             fotos:       fotos.map(f => f.url),
             respondidos,
             conNovedad,
-        });
+        };
+        // Auto-descarga PDF
+        setPdfLoading(true);
+        try {
+            const result = await generarPDFControlVehicular(datos);
+            const a = document.createElement("a");
+            a.href = result.dataUrl; a.download = result.filename; a.click();
+        } catch (e) {
+            console.warn("PDF control vehicular:", e);
+        } finally {
+            setPdfLoading(false);
+        }
+        onConfirmar(datos);
     };
 
     const puedeConfirmar = respondidos >= Math.floor(TOTAL_ITEMS * 0.7) && sinNovedad !== null;
@@ -228,7 +242,7 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
                 disabled={!puedeConfirmar}
                 onClick={handleConfirmar}
             >
-                ✅ Confirmar control y continuar
+                {pdfLoading ? "⏳ Generando PDF..." : "✅ Confirmar control y continuar"}
             </button>
             {!puedeConfirmar && respondidos < Math.floor(TOTAL_ITEMS * 0.7) && (
                 <div className="cv-hint">Completá al menos el 70% del checklist para continuar</div>

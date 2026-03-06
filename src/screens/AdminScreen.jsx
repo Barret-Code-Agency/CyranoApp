@@ -6,7 +6,8 @@ import PlanSupervisorScreen from "./PlanSupervisorScreen";
 import UsersScreen          from "./UsersScreen";
 import VehiculosScreen      from "./VehiculosScreen";
 import "../styles/AdminScreen.css";
-import { exportarExcel } from "../utils/exportarExcel";
+import { exportarExcel }    from "../utils/exportarExcel";
+import HistorialScreen       from "./HistorialScreen";
 
 const ADMIN_TABS = [
     { key: "dashboard", icon: "📊", label: "Dashboard" },
@@ -15,6 +16,7 @@ const ADMIN_TABS = [
     { key: "vehiculos", icon: "🚗", label: "Vehículos" },
     { key: "config",    icon: "⚙️", label: "Configuración" },
     { key: "reportes",  icon: "📥", label: "Exportar" },
+    { key: "historial", icon: "📁", label: "Historial" },
 ];
 
 function EditableList({ icon, title, dataKey, items, onUpdate }) {
@@ -162,6 +164,10 @@ export default function AdminScreen({ onExit }) {
                         </div>
                     </div>
                 </>
+            )}
+
+            {activeTab === "historial" && (
+                <HistorialScreen />
             )}
 
             {activeTab === "config" && (
