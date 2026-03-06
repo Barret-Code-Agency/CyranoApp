@@ -7,6 +7,8 @@ import {
     collection, doc, setDoc, addDoc,
     onSnapshot, query, where, orderBy, writeBatch,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../firebase";
 import { db } from "../firebase";
 
 // ── localStorage helpers (solo para config y sesión activa) ──────────────────
@@ -138,16 +140,21 @@ export function AppDataProvider({ children, uid }) {
     useEffect(() => { save("cyrano_jornada_activa",   jornadaActiva);   }, [jornadaActiva]);
     useEffect(() => { save("cyrano_actividad_activa", actividadActiva); }, [actividadActiva]);
 
-    // ── Suscripciones Firestore — solo cuando hay usuario autenticado ─────────
+    // ── Suscripciones Firestore — arrancan cuando Firebase confirma sesión ────
     useEffect(() => {
-        if (!uid) {
-            // Sin usuario: usar fallback local y marcar ready
-            setJornadas(load("cyrano_jornadas", []));
-            setPlanesSuper(load("cyrano_planes_super", {}));
-            setPlanState(load("cyrano_plan", DEFAULT_PLAN));
-            setDbReady(true);
-            return;
-        }
+        let unsubFirestore = [];
+        const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+            // Limpiar suscripciones anteriores
+            unsubFirestore.forEach(u => u && u());
+            unsubFirestore = [];
+
+            if (!firebaseUser) {
+                // No sobreescribir — mantener datos en memoria hasta nuevo login
+                setDbReady(true);
+                return;
+            }
+            // Usuario autenticado — abrir suscripciones
+            (() => {
         const unsubs = [];
         let ready = 0;
         const markReady = () => { ready++; if (ready >= 3) setDbReady(true); };
@@ -226,7 +233,14 @@ export function AppDataProvider({ children, uid }) {
             ));
         } catch (e) { setPlanState(load("cyrano_plan", DEFAULT_PLAN)); markReady(); }
 
-        return () => unsubs.forEach(u => u && u());
+            unsubs.forEach(u => u && unsubFirestore.push(u));
+            })();
+        });
+
+        return () => {
+            unsubAuth();
+            unsubFirestore.forEach(u => u && u());
+        };
     }, []);
 
     // ── Config ────────────────────────────────────────────────────────────────
