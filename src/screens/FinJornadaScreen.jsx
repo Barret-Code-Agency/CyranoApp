@@ -19,8 +19,8 @@ export default function FinJornadaScreen({ onClosed, onBack }) {
     const cap   = (session.actividades || []).filter((a) => a.tipo === "cap");
     const otras = (session.actividades || []).filter((a) => a.tipo === "otra");
 
-    const handleCerrar = () => {
-        const jornadaCerrada = cerrarJornada({ kmFinal, horaFin });
+    const handleCerrar = async () => {
+        const jornadaCerrada = await cerrarJornada({ kmFinal, horaFin });
         onClosed(jornadaCerrada);
     };
 

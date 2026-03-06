@@ -34,7 +34,7 @@ const calcTiempos = (session) => {
         .filter(a => a.horaInicio && a.horaFin)
         .sort((a, b) => toMin(a.horaInicio) - toMin(b.horaInicio));
     let supervision = 0, apoyo = 0, admin = 0, traslado = 0;
-    let taller = 0, vulnerab = 0, riesgos = 0, reclamos = 0, gremial = 0, almuerzo = 0;
+    let taller = 0, vulnerab = 0, reclamos = 0, gremial = 0, almuerzo = 0, otras = 0;
     acts.forEach(a => {
         const d    = diffMin(a.horaInicio, a.horaFin);
         const act2 = (a.actividad || "").toLowerCase();
@@ -44,19 +44,18 @@ const calcTiempos = (session) => {
             if      (act2.includes("admin"))               admin     += d;
             else if (act2.includes("traslado"))            traslado  += d;
             else if (act2.includes("reparac") || act2.includes("taller")) taller  += d;
-            else if (act2.includes("vulnerab"))            vulnerab  += d;
-            else if (act2.includes("riesgo"))              riesgos   += d;
+            else if (act2.includes("vulnerab") || act2.includes("riesgo")) vulnerab += d;
             else if (act2.includes("reclamo"))             reclamos  += d;
             else if (act2.includes("gremial"))             gremial   += d;
             else if (act2.includes("almuerzo") || act2.includes("cena")) almuerzo += d;
-            else                                           apoyo     += d;
+            else                                           otras     += d;
         }
     });
     for (let i = 1; i < acts.length; i++) {
         const g = diffMin(acts[i - 1].horaFin, acts[i].horaInicio);
         if (g > 5 && g < 180) traslado += g;
     }
-    return { supervision, apoyo, admin, traslado, taller, vulnerab, riesgos, reclamos, gremial, almuerzo };
+    return { supervision, apoyo, admin, traslado, taller, vulnerab, reclamos, gremial, almuerzo, otras };
 };
 
 const promedioCtrl = (ctrl) => {
@@ -380,11 +379,11 @@ export async function generarHojaSupervision(session) {
         ...(tiempos.apoyo    > 0 ? [{ l: "Hs Apoyo",    v: fmtHs(tiempos.apoyo),    c: [14, 165, 233] }] : []),
         ...(tiempos.admin    > 0 ? [{ l: "Hs Admin.",   v: fmtHs(tiempos.admin),    c: [245, 158, 11] }] : []),
         ...(tiempos.taller   > 0 ? [{ l: "Hs Taller",   v: fmtHs(tiempos.taller),  c: [160, 80, 0]   }] : []),
-        ...(tiempos.vulnerab > 0 ? [{ l: "Hs Vulnerab.",v: fmtHs(tiempos.vulnerab), c: [120, 0, 180]  }] : []),
-        ...(tiempos.riesgos  > 0 ? [{ l: "Hs Riesgos",  v: fmtHs(tiempos.riesgos), c: [180, 0, 0]    }] : []),
+        ...(tiempos.vulnerab > 0 ? [{ l: "Hs Vuln/Riesg",v: fmtHs(tiempos.vulnerab), c: [120, 0, 180]  }] : []),
         ...(tiempos.reclamos > 0 ? [{ l: "Hs Reclamos", v: fmtHs(tiempos.reclamos),c: [160, 100, 0]  }] : []),
         ...(tiempos.gremial  > 0 ? [{ l: "Hs Gremial",  v: fmtHs(tiempos.gremial), c: [0, 130, 160]  }] : []),
         ...(tiempos.almuerzo > 0 ? [{ l: "Hs Almuerzo", v: fmtHs(tiempos.almuerzo),c: [120, 120, 0]  }] : []),
+        ...(tiempos.otras    > 0 ? [{ l: "Hs Otras",    v: fmtHs(tiempos.otras),   c: [180, 100, 0]  }] : []),
         { l: "Km recorr.",  v: kmRec > 0 ? kmRec + " km" : "—",                     c: [80, 80, 80]   },
         { l: "Nocturnos",   v: String(ctrlList.filter(c => c.turno === "nocturno").length), c: [99, 90, 200] },
         { l: "Fin de sem.", v: String(ctrlList.filter(c => c.esFinDeSemana).length), c: [220, 70, 150] },
