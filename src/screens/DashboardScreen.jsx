@@ -30,27 +30,39 @@ const semanasRecientes = (n) => {
 
 // Calcula tiempos de actividades + traslados (gaps) de un array de jornadas
 const calcTiempos = (jorns) => {
-    let ctrl = 0, cap = 0, otra = 0, traslado = 0;
+    let ctrl = 0, cap = 0, traslado = 0;
+    let admin = 0, taller = 0, vulnerab = 0, reclamos = 0, gremial = 0, almuerzo = 0, otras = 0;
     jorns.forEach(j => {
         const acts = [...(j.actividades || [])]
             .filter(a => a.horaInicio && a.horaFin)
             .sort((a, b) => toMin(a.horaInicio) - toMin(b.horaInicio));
         acts.forEach(a => {
             const d = diffMin(a.horaInicio, a.horaFin);
+            const act2 = (a.actividad || "").toLowerCase();
             if (a.tipo === "ctrl") ctrl += d;
-            if (a.tipo === "cap") cap += d;
-            if (a.tipo === "otra") otra += d;
+            else if (a.tipo === "cap") cap += d;
+            else if (a.tipo === "otra") {
+                if      (act2.includes("admin"))                              admin    += d;
+                else if (act2.includes("traslado"))                           traslado += d;
+                else if (act2.includes("reparac") || act2.includes("taller")) taller   += d;
+                else if (act2.includes("vulnerab") || act2.includes("riesgo")) vulnerab += d;
+                else if (act2.includes("reclamo"))                            reclamos += d;
+                else if (act2.includes("gremial"))                            gremial  += d;
+                else if (act2.includes("almuerzo") || act2.includes("cena")) almuerzo += d;
+                else                                                          otras    += d;
+            }
         });
         for (let i = 1; i < acts.length; i++) {
             const g = diffMin(acts[i - 1].horaFin, acts[i].horaInicio);
             if (g > 0 && g < 180) traslado += g;
         }
     });
-    return { ctrl, cap, otra, traslado, total: ctrl + cap + otra + traslado };
+    const total = ctrl + cap + traslado + admin + taller + vulnerab + reclamos + gremial + almuerzo + otras;
+    return { ctrl, cap, traslado, admin, taller, vulnerab, reclamos, gremial, almuerzo, otras, total };
 };
 
-const TIPO_COLOR = { ctrl: "#003087", cap: "#e20113", otra: "#f59e0b", traslado: "#10b981" };
-const TIPO_LABEL = { ctrl: "Control", cap: "Capacitación", otra: "Otras", traslado: "Traslados" };
+const TIPO_COLOR = { ctrl: "#003087", cap: "#e20113", traslado: "#10b981", admin: "#22c55e", taller: "#a05000", vulnerab: "#7800b4", reclamos: "#a06400", gremial: "#0082a0", almuerzo: "#787800", otras: "#b46400" };
+const TIPO_LABEL = { ctrl: "Control", cap: "Capacitación", traslado: "Traslados", admin: "Administrativo", taller: "Taller/Rep.", vulnerab: "Vuln./Riesgos", reclamos: "Reclamos", gremial: "Gremial", almuerzo: "Almuerzo/Cena", otras: "Otras" };
 const pct = (v, t) => t > 0 ? Math.round(v / t * 100) : 0;
 
 // ══════════════════════════════════════════════════════════════
@@ -153,13 +165,19 @@ function LineChart({ data, color, height }) {
 }
 
 // Barra de distribución de tiempos
-function BarraTiempos({ ctrl, cap, otra, traslado, showLabels }) {
-    const total = ctrl + cap + otra + traslado || 1;
+function BarraTiempos({ ctrl, cap, traslado, admin, taller, vulnerab, reclamos, gremial, almuerzo, otras, showLabels }) {
+    const total = (ctrl||0) + (cap||0) + (traslado||0) + (admin||0) + (taller||0) + (vulnerab||0) + (reclamos||0) + (gremial||0) + (almuerzo||0) + (otras||0) || 1;
     const segs = [
-        { key: "ctrl", val: ctrl, color: TIPO_COLOR.ctrl },
-        { key: "cap", val: cap, color: TIPO_COLOR.cap },
-        { key: "otra", val: otra, color: TIPO_COLOR.otra },
-        { key: "traslado", val: traslado, color: TIPO_COLOR.traslado },
+        { key: "ctrl",     val: ctrl     || 0, color: TIPO_COLOR.ctrl     },
+        { key: "cap",      val: cap      || 0, color: TIPO_COLOR.cap      },
+        { key: "traslado", val: traslado || 0, color: TIPO_COLOR.traslado },
+        { key: "admin",    val: admin    || 0, color: TIPO_COLOR.admin    },
+        { key: "taller",   val: taller   || 0, color: TIPO_COLOR.taller   },
+        { key: "vulnerab", val: vulnerab || 0, color: TIPO_COLOR.vulnerab },
+        { key: "reclamos", val: reclamos || 0, color: TIPO_COLOR.reclamos },
+        { key: "gremial",  val: gremial  || 0, color: TIPO_COLOR.gremial  },
+        { key: "almuerzo", val: almuerzo || 0, color: TIPO_COLOR.almuerzo },
+        { key: "otras",    val: otras    || 0, color: TIPO_COLOR.otras    },
     ].filter(s => s.val > 0);
     return (
         <div>
@@ -719,13 +737,19 @@ export default function DashboardScreen() {
                     <div className="dash-card">
                         <div className="dash-card-title">Distribución total de tiempos</div>
                         <BarraTiempos {...tiemposGlobal} showLabels />
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginTop: 16 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, marginTop: 16 }}>
                             {[
-                                { key: "ctrl", label: "Control", icon: "🎯" },
-                                { key: "cap", label: "Capacitación", icon: "📚" },
-                                { key: "otra", label: "Otras act.", icon: "🔧" },
-                                { key: "traslado", label: "Traslados", icon: "🚗" },
-                            ].map(t => (
+                                { key: "ctrl",     label: "Control",       icon: "🎯" },
+                                { key: "cap",      label: "Capacitación",  icon: "📚" },
+                                { key: "traslado", label: "Traslados",     icon: "🚗" },
+                                { key: "admin",    label: "Administrativo",icon: "📋" },
+                                { key: "taller",   label: "Taller/Rep.",   icon: "🔧" },
+                                { key: "vulnerab", label: "Vuln./Riesgos", icon: "⚠️" },
+                                { key: "reclamos", label: "Reclamos",      icon: "📢" },
+                                { key: "gremial",  label: "Gremial",       icon: "🤝" },
+                                { key: "almuerzo", label: "Almuerzo/Cena", icon: "🍽️" },
+                                { key: "otras",    label: "Otras",         icon: "📌" },
+                            ].filter(t => (tiemposGlobal[t.key]||0) >= 0).map(t => (
                                 <div key={t.key} style={{
                                     background: "#f8f9fc", borderRadius: 10, padding: "12px 8px",
                                     textAlign: "center", borderTop: `3px solid ${TIPO_COLOR[t.key]}`
@@ -759,10 +783,12 @@ export default function DashboardScreen() {
                                         </span>
                                     </div>
                                     <BarraTiempos {...t} />
-                                    <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 11, flexWrap: "wrap" }}>
-                                        {[["ctrl", "🎯"], ["cap", "📚"], ["otra", "🔧"], ["traslado", "🚗"]].map(([k, ic]) => (
+                                    <div style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 11, flexWrap: "wrap" }}>
+                                        {[["ctrl","🎯"],["cap","📚"],["traslado","🚗"],["admin","📋"],["taller","🔧"],["vulnerab","⚠️"],["reclamos","📢"],["gremial","🤝"],["almuerzo","🍽️"],["otras","📌"]]
+                                          .filter(([k]) => (t[k]||0) > 0)
+                                          .map(([k, ic]) => (
                                             <span key={k} style={{ color: TIPO_COLOR[k], fontWeight: 700 }}>
-                                                {ic} {pct(t[k], t.total)}% <span style={{ color: "#8894ac", fontWeight: 400 }}>({fmtMin(t[k])})</span>
+                                                {ic} {pct(t[k]||0, t.total)}% <span style={{ color: "#8894ac", fontWeight: 400 }}>({fmtMin(t[k]||0)})</span>
                                             </span>
                                         ))}
                                     </div>
@@ -778,10 +804,16 @@ export default function DashboardScreen() {
                             <table className="dash-table">
                                 <thead><tr>
                                     <th>Supervisor</th>
-                                    <th style={{ color: TIPO_COLOR.ctrl }}>🎯 Control</th>
-                                    <th style={{ color: TIPO_COLOR.cap }}>📚 Capac.</th>
-                                    <th style={{ color: TIPO_COLOR.otra }}>🔧 Otras</th>
-                                    <th style={{ color: TIPO_COLOR.traslado }}>🚗 Traslado</th>
+                                    <th style={{ color: TIPO_COLOR.ctrl }}>🎯 Ctrl</th>
+                                    <th style={{ color: TIPO_COLOR.cap }}>📚 Cap.</th>
+                                    <th style={{ color: TIPO_COLOR.traslado }}>🚗 Trasl.</th>
+                                    <th style={{ color: TIPO_COLOR.admin }}>📋 Admin</th>
+                                    <th style={{ color: TIPO_COLOR.taller }}>🔧 Tall.</th>
+                                    <th style={{ color: TIPO_COLOR.vulnerab }}>⚠️ Vuln.</th>
+                                    <th style={{ color: TIPO_COLOR.reclamos }}>📢 Recl.</th>
+                                    <th style={{ color: TIPO_COLOR.gremial }}>🤝 Grem.</th>
+                                    <th style={{ color: TIPO_COLOR.almuerzo }}>🍽️ Alm.</th>
+                                    <th style={{ color: TIPO_COLOR.otras }}>📌 Otras</th>
                                     <th>Total</th>
                                 </tr></thead>
                                 <tbody>
@@ -790,10 +822,9 @@ export default function DashboardScreen() {
                                         return (
                                             <tr key={i}>
                                                 <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{s.nombre.split(" ").slice(0, 2).join(" ")}</td>
-                                                <td><span style={{ color: TIPO_COLOR.ctrl, fontWeight: 700 }}>{fmtMin(t.ctrl)}</span> <small style={{ color: "#8894ac" }}>({pct(t.ctrl, t.total)}%)</small></td>
-                                                <td><span style={{ color: TIPO_COLOR.cap, fontWeight: 700 }}>{fmtMin(t.cap)}</span>  <small style={{ color: "#8894ac" }}>({pct(t.cap, t.total)}%)</small></td>
-                                                <td><span style={{ color: TIPO_COLOR.otra, fontWeight: 700 }}>{fmtMin(t.otra)}</span> <small style={{ color: "#8894ac" }}>({pct(t.otra, t.total)}%)</small></td>
-                                                <td><span style={{ color: TIPO_COLOR.traslado, fontWeight: 700 }}>{fmtMin(t.traslado)}</span> <small style={{ color: "#8894ac" }}>({pct(t.traslado, t.total)}%)</small></td>
+                                                {["ctrl","cap","traslado","admin","taller","vulnerab","reclamos","gremial","almuerzo","otras"].map(k => (
+                                                    <td key={k}><span style={{ color: TIPO_COLOR[k], fontWeight: 700 }}>{fmtMin(t[k]||0)}</span></td>
+                                                ))}
                                                 <td><strong>{fmtMin(t.total)}</strong></td>
                                             </tr>
                                         );
@@ -801,10 +832,9 @@ export default function DashboardScreen() {
                                     {/* Fila totales */}
                                     <tr style={{ background: "#f0f2f7", fontWeight: 700 }}>
                                         <td>TOTAL</td>
-                                        <td style={{ color: TIPO_COLOR.ctrl }}>{fmtMin(tiemposGlobal.ctrl)}</td>
-                                        <td style={{ color: TIPO_COLOR.cap }}>{fmtMin(tiemposGlobal.cap)}</td>
-                                        <td style={{ color: TIPO_COLOR.otra }}>{fmtMin(tiemposGlobal.otra)}</td>
-                                        <td style={{ color: TIPO_COLOR.traslado }}>{fmtMin(tiemposGlobal.traslado)}</td>
+                                        {["ctrl","cap","traslado","admin","taller","vulnerab","reclamos","gremial","almuerzo","otras"].map(k => (
+                                            <td key={k} style={{ color: TIPO_COLOR[k] }}>{fmtMin(tiemposGlobal[k]||0)}</td>
+                                        ))}
                                         <td>{fmtMin(tiemposGlobal.total)}</td>
                                     </tr>
                                 </tbody>

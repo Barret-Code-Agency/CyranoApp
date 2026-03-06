@@ -29,7 +29,7 @@ function AppContent() {
     const [pendingDest, setPendingDest] = useState(null);
 
     const { jornadaActiva, dbReady } = useAppData();
-    const { user: authUser } = useAuth();
+    const { logout } = useAuth();
     const geo = useGeo();
 
     const goTo = (p) => setPhase(p);
@@ -69,9 +69,9 @@ function AppContent() {
     return (
         <div className="app">
             {showHeader && (
-                <header className="header" style={isAdmin ? { background: "var(--color-primary-dark)" } : {}}>
+                <header className="header" style={isAdmin ? { background: "#ffffff", borderBottom: "2px solid var(--color-primary)" } : {}}>
                     <div className="header-logo-area">
-                        <ShieldLogo size={44} />
+                        <ShieldLogo size={54} />
                         <div className="header-logo-text">
                             <div className="header-logo-dot" />
                             CYRANO<span>APP</span>
@@ -79,12 +79,16 @@ function AppContent() {
                         </div>
                     </div>
                     {user && (
-                        <div className="user-chip">
-                            <div className="user-avatar" style={isAdmin ? { background: "var(--color-red)" } : {}}>
+                        <button
+                            className="user-chip"
+                            title="Cerrar sesión"
+                            style={{ cursor: "pointer", background: "none", border: "none", padding: 0 }}
+                            onClick={async () => { await logout(); setUser(null); goTo("splash"); }}
+                        >
+                            <div className="user-avatar" style={isAdmin ? { background: "var(--color-primary)", color: "#fff" } : {}}>
                                 {user.name ? user.name[0].toUpperCase() : "?"}
                             </div>
-                            <span className="user-name">{user.name}</span>
-                        </div>
+                        </button>
                     )}
                 </header>
             )}

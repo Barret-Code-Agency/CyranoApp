@@ -108,8 +108,8 @@
 /* ── Flags grid ── */
 .splash-flags {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
     width: 100%;
     max-width: 960px;
     perspective: 1200px;
@@ -138,23 +138,13 @@
 }
 .flag-card-inner img {
     width: 100%;
-    height: 68px;
+    height: 80px;
     object-fit: cover;
     display: block;
     border-radius: 3px 3px 0 0;
 }
 .flag-name {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-weight: 600;
-    font-size: 10px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    color: #495057;
-    text-align: center;
-    padding: 5px 4px 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: none;
 }
 
 /* ── CTA ── */
@@ -204,70 +194,31 @@
     margin-right: 10px;
     font-size: 0.65rem;
 }
-/* ── Role buttons ── */
-.splash-access-label {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-weight: 400;
-    font-size: 0.78rem;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    color: #8a94a6;
-    text-align: center;
-    margin: 0 0 14px;
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .splash-header {
+        gap: 16px;
+        margin-bottom: 28px;
+    }
+    .splash-logo-box img {
+        width: 90px;
+        height: 90px;
+    }
+    .splash-title {
+        font-size: clamp(2rem, 10vw, 3rem);
+    }
+    .splash-subtitle {
+        font-size: clamp(0.7rem, 3vw, 0.95rem);
+        letter-spacing: 5px;
+    }
+    .splash-tagline {
+        font-size: clamp(0.65rem, 2.5vw, 0.85rem);
+    }
+    .splash-flags {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .flag-card-inner img {
+        height: 52px;
+    }
 }
-
-.splash-role-btns {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.role-btn {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-weight: 700;
-    font-size: 0.88rem;
-    letter-spacing: 2.5px;
-    text-transform: uppercase;
-    border-radius: 8px;
-    padding: 13px 28px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 170px;
-    justify-content: center;
-    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-}
-
-.role-btn-icon { font-size: 1.15rem; letter-spacing: 0; flex-shrink: 0; }
-.role-btn-label { letter-spacing: 2.5px; }
-
-.role-btn--admin {
-    color: #002d72;
-    background: #002d72;
-    border: 2px solid #002d72;
-    box-shadow: 0 4px 14px rgba(0,45,114,0.22);
-}
-.role-btn--admin:hover {
-    background: #001a4d;
-    border-color: #001a4d;
-    color: #ffff;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 22px rgba(0,45,114,0.3);
-}
-
-.role-btn--sup {
-    color: #002d72;
-    background: #fff;
-    border: 2px solid #002d72;
-    box-shadow: 0 4px 14px rgba(0,45,114,0.1);
-}
-.role-btn--sup:hover {
-    background: #001a4d;
-    border-color: #001a4d;
-    color: #ffff;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 22px rgba(0,45,114,0.3);
-}
-
