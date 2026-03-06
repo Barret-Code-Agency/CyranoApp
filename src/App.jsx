@@ -89,7 +89,11 @@ function AppContent() {
                 />
             )}
 
-            {!["splash", "loading_post"].includes(phase) && (
+                        {phase === "roleSelect" && (
+                <RoleSelectScreen onSelect={handleRoleSelect} />
+            )}
+
+            {!["splash", "loading", "loading_post", "roleSelect"].includes(phase) && (
                 <div className="app">
                     {showHeader && (
                         <header className="header" style={isAdmin ? { background: "var(--color-primary-dark)" } : {}}>
