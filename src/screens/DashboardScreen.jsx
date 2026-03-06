@@ -1,6 +1,5 @@
 // src/screens/DashboardScreen.jsx — Dashboard unificado admin
 import { useState, useMemo } from "react";
-import { generarPDFDashboard } from "../utils/generarPDF_Dashboard";
 import { useAppData } from "../context/AppDataContext";
 import { exportarExcel } from "../utils/exportarExcel";
 import "../styles/DashboardScreen.css";
@@ -331,23 +330,7 @@ export default function DashboardScreen() {
     const { jornadas, plan, data, limpiarSimulados, mantenimiento, getSupervisoresConEmail, getPlanSupervisor } = useAppData();
     const [tab, setTab] = useState("resumen");
     const [periodo, setPeriodo] = useState("mes");
-    const [showBorrar,  setShowBorrar]  = useState(false);
-    const [pdfLoading,  setPdfLoading]  = useState(false);
-
-    const handleDescargarPDF = async () => {
-        setPdfLoading(true);
-        try {
-            const result = await generarPDFDashboard({ jornadas, plan, getSupervisoresConEmail, getPlanSupervisor, periodo });
-            const a = document.createElement("a");
-            a.href = result.dataUrl;
-            a.download = result.filename;
-            a.click();
-        } catch (e) {
-            alert("Error al generar PDF: " + e.message);
-        } finally {
-            setPdfLoading(false);
-        }
-    };
+    const [showBorrar, setShowBorrar] = useState(false);
 
     // ── Filtrado por período ─────────────────────────────────
     const jornadasFiltradas = useMemo(() => {
@@ -440,26 +423,11 @@ export default function DashboardScreen() {
                 </div>
             )}
 
-            {/* Período + descarga PDF */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-                <div className="dash-periodo">
-                    {[["semana", "7 días"], ["mes", "30 días"], ["todo", "Todo"]].map(([k, l]) => (
-                        <button key={k} className={"dash-periodo-btn " + (periodo === k ? "active" : "")} onClick={() => setPeriodo(k)}>{l}</button>
-                    ))}
-                </div>
-                <button
-                    onClick={handleDescargarPDF}
-                    disabled={pdfLoading}
-                    style={{
-                        display: "flex", alignItems: "center", gap: 6,
-                        fontSize: 12, fontWeight: 700, padding: "7px 14px",
-                        borderRadius: 8, border: "1.5px solid #d0d8e8",
-                        background: pdfLoading ? "#f0f2f8" : "#fff",
-                        color: pdfLoading ? "#aab" : "#0056b3", cursor: pdfLoading ? "default" : "pointer",
-                    }}
-                >
-                    {pdfLoading ? "⏳ Generando..." : "⬇ Descargar PDF"}
-                </button>
+            {/* Período */}
+            <div className="dash-periodo">
+                {[["semana", "7 días"], ["mes", "30 días"], ["todo", "Todo"]].map(([k, l]) => (
+                    <button key={k} className={"dash-periodo-btn " + (periodo === k ? "active" : "")} onClick={() => setPeriodo(k)}>{l}</button>
+                ))}
             </div>
 
             {/* Tabs */}
@@ -471,7 +439,7 @@ export default function DashboardScreen() {
                 ))}
             </div>
 
-            {noData && tab !== "cumplimiento" && (
+            {noData && tab !== "cumplimiento" && tab !== "tiempos" && tab !== "puestos" && tab !== "km" && (
                 <div className="dash-empty">
                     <div className="dash-empty-icon">📊</div>
                     <p>Sin jornadas registradas en este período.</p>
@@ -745,7 +713,7 @@ export default function DashboardScreen() {
             })()}
 
             {/* ══ TIEMPOS ══ */}
-            {tab === "tiempos" && !noData && (
+            {tab === "tiempos" && (
                 <>
                     {/* Global */}
                     <div className="dash-card">
@@ -847,7 +815,7 @@ export default function DashboardScreen() {
             )}
 
             {/* ══ PUESTOS ══ */}
-            {tab === "puestos" && !noData && (
+            {tab === "puestos" && (
                 <>
                     <div className="dash-card">
                         <div className="dash-card-title">Visitas por puesto</div>
