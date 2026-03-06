@@ -9,7 +9,6 @@ import "./styles/global.css";
 
 import SplashScreen        from "./screens/LatamMapSplash";
 import LoadingScreen       from "./screens/LoadingScreen";
-import RoleSelectScreen    from "./screens/RoleSelectScreen";
 import Login               from "./screens/Login";
 import AdminScreen         from "./screens/AdminScreen";
 import SupervisorDashboard from "./screens/SupervisorDashboard";
@@ -30,6 +29,7 @@ function AppContent() {
     const [pendingDest, setPendingDest] = useState(null);
 
     const { jornadaActiva, dbReady } = useAppData();
+    const { user: authUser } = useAuth();
     const geo = useGeo();
 
     const goTo = (p) => setPhase(p);
@@ -46,28 +46,26 @@ function AppContent() {
         goTo("loading_post");
     };
 
-    const handleLoadingDone  = () => goTo(pendingDest);
+    const handleLoadingDone    = () => goTo(pendingDest);
     const handleIniciarJornada = () => { jornadaActiva ? goTo("menu") : goTo("jornada"); };
     const handleJornadaStarted = () => goTo("menu");
-    const handleModalClose   = () => { setModal(null); setUser(null); goTo("splash"); };
+    const handleModalClose     = () => { setModal(null); setUser(null); goTo("splash"); };
 
     const isAdmin    = phase === "admin";
-    const showHeader = !["splash", "loading", "loading_post", "login", "roleSelect"].includes(phase);
+    const showHeader = !["splash", "loading", "loading_post", "login"].includes(phase);
 
-    // ── Pantallas sin header ─────────────────────────────────────────────────
     if (phase === "splash")
-        return <SplashScreen onAdvance={() => goTo("loading")} />;
+        return <SplashScreen onSelect={handleRoleSelect} />;
 
     if (phase === "loading")
-        return <LoadingScreen onFinished={() => goTo("roleSelect")} />;
+        return <LoadingScreen onFinished={() => goTo("login")} />;
 
     if (phase === "loading_post" && user)
         return <LoadingScreen postLogin={true} userName={user.name} dbReady={dbReady} onFinished={handleLoadingDone} />;
 
-    if (phase === "roleSelect")
-        return <RoleSelectScreen onSelect={handleRoleSelect} />;
+    if (phase === "login")
+        return <Login forcedRole={loginRole} onLogin={handleLogin} onBack={() => goTo("splash")} />;
 
-    // ── Pantallas con header ──────────────────────────────────────────────────
     return (
         <div className="app">
             {showHeader && (
@@ -90,53 +88,27 @@ function AppContent() {
                     )}
                 </header>
             )}
-
             <main className="main">
-                {phase === "login" && (
-                    <Login forcedRole={loginRole} onLogin={handleLogin} onBack={() => goTo("roleSelect")} />
-                )}
-                {phase === "admin" && (
-                    <AdminScreen onExit={() => { setUser(null); goTo("roleSelect"); }} />
-                )}
-                {phase === "supervisor_dash" && user && (
-                    <SupervisorDashboard user={user} onIniciarJornada={handleIniciarJornada} />
-                )}
-                {phase === "jornada" && user && (
-                    <JornadaScreen user={user} onStarted={handleJornadaStarted} />
-                )}
-                {phase === "menu" && (
-                    <MenuScreen onSelect={goTo} />
-                )}
-                {phase === "capacitacion" && (
-                    <CapacitacionScreen onBack={() => goTo("menu")} />
-                )}
-                {phase === "otra" && (
-                    <OtraActividadScreen geo={geo} onBack={() => goTo("menu")} />
-                )}
-                {phase === "ctrl" && (
-                    <ControlScreen geo={geo} onBack={() => goTo("menu")} />
-                )}
-                {phase === "fin" && (
-                    <FinJornadaScreen onClosed={(j) => setModal(j)} onBack={() => goTo("menu")} />
-                )}
+                {phase === "admin"          && <AdminScreen onExit={() => { setUser(null); goTo("splash"); }} />}
+                {phase === "supervisor_dash" && user && <SupervisorDashboard user={user} onIniciarJornada={handleIniciarJornada} />}
+                {phase === "jornada"        && user && <JornadaScreen user={user} onStarted={handleJornadaStarted} />}
+                {phase === "menu"           && <MenuScreen onSelect={goTo} />}
+                {phase === "capacitacion"   && <CapacitacionScreen onBack={() => goTo("menu")} />}
+                {phase === "otra"           && <OtraActividadScreen geo={geo} onBack={() => goTo("menu")} />}
+                {phase === "ctrl"           && <ControlScreen geo={geo} onBack={() => goTo("menu")} />}
+                {phase === "fin"            && <FinJornadaScreen onClosed={(j) => setModal(j)} onBack={() => goTo("menu")} />}
             </main>
-
             {modal && <SendModal session={modal} onClose={handleModalClose} />}
         </div>
     );
 }
 
-function AppDataProviderWithAuth({ children }) {
-    const { user } = useAuth();
-    return <AppDataProvider uid={user?.uid}>{children}</AppDataProvider>;
-}
-
 export default function App() {
     return (
         <AuthProvider>
-            <AppDataProviderWithAuth>
+            <AppDataProvider>
                 <AppContent />
-            </AppDataProviderWithAuth>
+            </AppDataProvider>
         </AuthProvider>
     );
 }
