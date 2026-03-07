@@ -1,7 +1,9 @@
 // src/screens/SupervisorDashboard.jsx
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAppData } from "../context/AppDataContext";
 import { useAuth } from "../context/AuthContext";
+import { db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 import "../styles/SupervisorDashboard.css";
 import AnalistaDashboard from "./AnalistaDashboard";
 
@@ -132,10 +134,38 @@ function DayProgressBar({ semana, useMes = false }) {
 
 export default function SupervisorDashboard({ user: userProp, onIniciarJornada }) {
     const [vistaAnalista, setVistaAnalista] = useState(false);
-    // Usar authUser del contexto para tener esAnalista siempre actualizado
-    // Si el admin asigna la vista analista, se refleja sin reloguear
+    const [firestoreData, setFirestoreData] = useState(null);
+
     const { user: authUser } = useAuth();
-    const user = authUser || userProp; // authUser tiene prioridad (siempre fresco)
+    const user = authUser || userProp;
+
+    // Leer campos de analista directo de Firestore como fuente de verdad
+    // Cubre casos donde el onSnapshot falló o el campo fue agregado después del login
+    useEffect(() => {
+        const uid = user?.uid;
+        if (!uid) return;
+        getDoc(doc(db, "usuarios", uid)).then(snap => {
+            if (snap.exists()) {
+                const d = snap.data();
+                setFirestoreData({
+                    esAnalista:           d.esAnalista === true,
+                    zona:                 d.zona || null,
+                    objetivosVisibles:    d.objetivosVisibles || null,
+                    vehiculosVisibles:    d.vehiculosVisibles || null,
+                    supervisoresVisibles: d.supervisoresVisibles || null,
+                });
+            }
+        }).catch(e => console.warn("SupervisorDashboard Firestore read:", e));
+    }, [user?.uid]);
+
+    // Merge: firestoreData tiene prioridad sobre lo que vino por props/context
+    const analista = firestoreData || {
+        esAnalista:           user?.esAnalista === true,
+        zona:                 user?.zona,
+        objetivosVisibles:    user?.objetivosVisibles,
+        vehiculosVisibles:    user?.vehiculosVisibles,
+        supervisoresVisibles: user?.supervisoresVisibles,
+    };
     const {
         plan: planGlobal,
         getPlanSupervisor, getObjetivosSemana,
@@ -503,19 +533,19 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada }
             )}
 
             {/* ── Vista Analista (solo si está habilitado) ── */}
-            {user.esAnalista && (
+            {analista.esAnalista && (
                 <button
                     className="btn btn-secondary"
                     style={{ marginBottom: 8, borderColor: "#c9a227", color: "#7a5c00",
                         background: vistaAnalista ? "#fff8d6" : "transparent" }}
                     onClick={() => setVistaAnalista(v => !v)}
                 >
-                    📊 {vistaAnalista ? "▲ Cerrar vista analista" : "▼ Vista Analista — " + (user.zona || "Mi zona")}
+                    📊 {vistaAnalista ? "▲ Cerrar vista analista" : "▼ Vista Analista — " + (analista.zona || "Mi zona")}
                 </button>
             )}
 
-            {vistaAnalista && user.esAnalista && (
-                <AnalistaDashboard user={user} />
+            {vistaAnalista && analista.esAnalista && (
+                <AnalistaDashboard user={{ ...user, ...analista }} />
             )}
 
             <button className="btn btn-primary" onClick={onIniciarJornada}>

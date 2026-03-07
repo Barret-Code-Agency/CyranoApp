@@ -460,9 +460,15 @@ export default function UsersScreen() {
     };
 
     const handleSaveAnalista = async (uid, datos) => {
-        await actualizarUsuario(uid, datos);
-        showToast("✓ Configuración analista guardada");
-        cargar();
+        try {
+            console.log("[UsersScreen] handleSaveAnalista uid:", uid, "datos:", JSON.stringify(datos));
+            await actualizarUsuario(uid, datos);
+            showToast("✓ Configuración analista guardada");
+            cargar();
+        } catch(e) {
+            console.error("[UsersScreen] Error guardando analista:", e);
+            showToast("❌ Error: " + e.message);
+        }
     };
 
     const filtrados = usuarios.filter(u => {
