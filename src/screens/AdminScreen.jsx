@@ -283,16 +283,133 @@ function ExportarScreen({ jornadas, plan, planesSuper, getSupervisoresConEmail, 
 }
 
 // ── Historial ─────────────────────────────────────────────────────────────────
+function JornadaDetalle({ j, onClose }) {
+    const km    = Math.max(0, Number(j.kmFinal||0) - Number(j.kmInicial||0));
+    const acts  = j.actividades || [];
+    const ctrls = acts.filter(a => a.tipo==="ctrl");
+    const caps  = acts.filter(a => a.tipo==="cap");
+    const otros = acts.filter(a => a.tipo!=="ctrl" && a.tipo!=="cap");
+
+    return (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:1000,
+            display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}
+            onClick={onClose}>
+            <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:560,
+                maxHeight:"85vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,45,114,0.25)" }}
+                onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div style={{ background:"linear-gradient(135deg,#002d72,#003f9a)", borderRadius:"16px 16px 0 0",
+                    padding:"16px 20px", color:"#fff", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                    <div>
+                        <div style={{ fontSize:11, opacity:0.7, fontWeight:600, letterSpacing:1 }}>JORNADA</div>
+                        <div style={{ fontSize:20, fontWeight:800, marginTop:2 }}>{j.jornadaID||"—"}</div>
+                        <div style={{ fontSize:13, opacity:0.85, marginTop:4 }}>{j.nombre||"—"} · {j.fecha||"—"}</div>
+                    </div>
+                    <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none",
+                        color:"#fff", borderRadius:8, padding:"6px 12px", cursor:"pointer", fontSize:13, fontWeight:700 }}>
+                        ✕
+                    </button>
+                </div>
+                {/* Métricas */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:1, background:"#e8eaf2" }}>
+                    {[
+                        { icon:"🚗", label:"Vehículo",    val:(j.vehiculo||"—").split(" ")[0] },
+                        { icon:"📍", label:"Km recorridos", val: km>0?km+" km":"—" },
+                        { icon:"⏰", label:"Inicio",      val:j.horaInicio||"—" },
+                        { icon:"🏁", label:"Fin",         val:j.horaFin||"—" },
+                    ].map(m => (
+                        <div key={m.label} style={{ background:"#f8f9fc", padding:"12px 8px", textAlign:"center" }}>
+                            <div style={{ fontSize:18 }}>{m.icon}</div>
+                            <div style={{ fontWeight:800, fontSize:14, color:"#0d1b3e", marginTop:2 }}>{m.val}</div>
+                            <div style={{ fontSize:10, color:"#8894ac", fontWeight:600 }}>{m.label}</div>
+                        </div>
+                    ))}
+                </div>
+                {/* Km detalle */}
+                <div style={{ padding:"12px 20px", borderBottom:"1px solid #f0f2f7",
+                    display:"flex", gap:16, fontSize:12, color:"#555" }}>
+                    <span>Km inicial: <strong>{j.kmInicial||"—"}</strong></span>
+                    <span>Km final: <strong>{j.kmFinal||"—"}</strong></span>
+                </div>
+                {/* Actividades */}
+                <div style={{ padding:"16px 20px" }}>
+                    {ctrls.length > 0 && (
+                        <div style={{ marginBottom:14 }}>
+                            <div style={{ fontSize:11, fontWeight:800, color:"#003087", letterSpacing:1,
+                                marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
+                                <span style={{ background:"#eef2ff", padding:"2px 8px", borderRadius:99 }}>🎯 CONTROLES ({ctrls.length})</span>
+                            </div>
+                            {ctrls.map((c,i) => (
+                                <div key={i} style={{ background:"#f8f9fc", borderRadius:8, padding:"8px 12px",
+                                    marginBottom:6, borderLeft:"3px solid #003087", fontSize:12 }}>
+                                    <div style={{ fontWeight:700 }}>{c.objetivo||c.puesto||"—"}</div>
+                                    <div style={{ color:"#8894ac", marginTop:2 }}>
+                                        {c.inicio||""}{c.fin?" → "+c.fin:""}{c.anomalia==="Sí" ? " · ⚠️ Anomalía" : ""}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {caps.length > 0 && (
+                        <div style={{ marginBottom:14 }}>
+                            <div style={{ fontSize:11, fontWeight:800, color:"#7c3aed", letterSpacing:1,
+                                marginBottom:8 }}>
+                                <span style={{ background:"#f5f3ff", padding:"2px 8px", borderRadius:99 }}>🎓 CAPACITACIONES ({caps.length})</span>
+                            </div>
+                            {caps.map((c,i) => (
+                                <div key={i} style={{ background:"#f8f9fc", borderRadius:8, padding:"8px 12px",
+                                    marginBottom:6, borderLeft:"3px solid #7c3aed", fontSize:12 }}>
+                                    <div style={{ fontWeight:700 }}>{c.tema||c.descripcion||"Sin tema"}</div>
+                                    <div style={{ color:"#8894ac", marginTop:2 }}>
+                                        {c.duracion ? c.duracion+" min" : ""}{c.cantPersonas ? " · "+c.cantPersonas+" personas" : ""}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {otros.length > 0 && (
+                        <div>
+                            <div style={{ fontSize:11, fontWeight:800, color:"#6b7280", letterSpacing:1, marginBottom:8 }}>
+                                <span style={{ background:"#f3f4f6", padding:"2px 8px", borderRadius:99 }}>📋 OTRAS ACTIVIDADES ({otros.length})</span>
+                            </div>
+                            {otros.map((a,i) => (
+                                <div key={i} style={{ background:"#f8f9fc", borderRadius:8, padding:"8px 12px",
+                                    marginBottom:6, borderLeft:"3px solid #d1d5db", fontSize:12 }}>
+                                    <div style={{ fontWeight:600 }}>{a.tipo||"—"} {a.descripcion||a.detalle||""}</div>
+                                    <div style={{ color:"#8894ac" }}>{a.inicio||""}{a.fin?" → "+a.fin:""}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {acts.length === 0 && (
+                        <div style={{ textAlign:"center", color:"#aaa", padding:16, fontSize:13 }}>
+                            Sin actividades registradas
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function HistorialAdminScreen({ jornadas }) {
-    const [busqueda,  setBusqueda]  = useState("");
-    const [filtroSup, setFiltroSup] = useState("todos");
+    const [busqueda,   setBusqueda]   = useState("");
+    const [filtroSup,  setFiltroSup]  = useState("todos");
+    const [periodo,    setPeriodo]    = useState("todo");
+    const [detalle,    setDetalle]    = useState(null);
 
     const supervisores = useMemo(() =>
         ["todos", ...[...new Set(jornadas.map(j => j.nombre).filter(Boolean))].sort()], [jornadas]);
 
-    const filtradas = useMemo(() =>
-        [...jornadas]
+    const filtradas = useMemo(() => {
+        const hoy = new Date(); hoy.setHours(23,59,59,999);
+        return [...jornadas]
             .filter(j => {
+                if (periodo !== "todo") {
+                    const desde = new Date(hoy); desde.setDate(hoy.getDate() - Number(periodo)); desde.setHours(0,0,0,0);
+                    const jFecha = new Date(j.creadaEn || j.fecha || 0);
+                    if (jFecha < desde) return false;
+                }
                 if (filtroSup !== "todos" && j.nombre !== filtroSup) return false;
                 if (busqueda.trim()) {
                     const b = busqueda.toLowerCase();
@@ -304,67 +421,152 @@ function HistorialAdminScreen({ jornadas }) {
                 return true;
             })
             .sort((a,b) => (b.fecha||"")>(a.fecha||"") ? 1 : -1)
-            .slice(0, 100),
-        [jornadas, busqueda, filtroSup]);
+            .slice(0, 200);
+    }, [jornadas, busqueda, filtroSup, periodo]);
+
+    // Stats de filtradas
+    const stats = useMemo(() => {
+        const kmTotal  = filtradas.reduce((s,j) => s + Math.max(0, Number(j.kmFinal||0) - Number(j.kmInicial||0)), 0);
+        const ctrlTotal= filtradas.reduce((s,j) => s + (j.actividades||[]).filter(a=>a.tipo==="ctrl").length, 0);
+        const capTotal = filtradas.reduce((s,j) => s + (j.actividades||[]).filter(a=>a.tipo==="cap").length, 0);
+        const sups     = [...new Set(filtradas.map(j=>j.nombre).filter(Boolean))].length;
+        return { kmTotal, ctrlTotal, capTotal, sups };
+    }, [filtradas]);
+
+    const PERIODOS = [{k:"7",l:"7 días"},{k:"30",l:"30 días"},{k:"90",l:"3 meses"},{k:"todo",l:"Todo"}];
 
     return (
         <>
+            {detalle && <JornadaDetalle j={detalle} onClose={() => setDetalle(null)} />}
+
             <div className="admin-header">
                 <div>
-                    <div className="screen-title">Historial</div>
-                    <div className="screen-sub">{jornadas.length} jornadas registradas</div>
+                    <div className="screen-title">Historial de jornadas</div>
+                    <div className="screen-sub">{jornadas.length} jornadas en total</div>
                 </div>
             </div>
-            <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
-                <input placeholder="🔍 Buscar por nombre, ID, vehículo..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                    style={{ flex:1, minWidth:200, padding:"8px 12px", borderRadius:8, border:"1.5px solid var(--color-border)", fontSize:13 }} />
+
+            {/* KPIs */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
+                {[
+                    { icon:"📋", label:"Jornadas",     val:filtradas.length,    color:"#003087" },
+                    { icon:"🎯", label:"Controles",    val:stats.ctrlTotal,     color:"#003087" },
+                    { icon:"🎓", label:"Capacitaciones",val:stats.capTotal,     color:"#7c3aed" },
+                    { icon:"🚗", label:"Km totales",   val:stats.kmTotal>0?stats.kmTotal+" km":"—", color:"#10b981" },
+                ].map(k => (
+                    <div key={k.label} style={{ background:"#fff", border:"1px solid var(--color-border)",
+                        borderRadius:10, padding:"10px 8px", textAlign:"center",
+                        boxShadow:"0 1px 4px rgba(0,45,114,0.07)" }}>
+                        <div style={{ fontSize:20 }}>{k.icon}</div>
+                        <div style={{ fontWeight:800, fontSize:18, color:k.color, lineHeight:1.1 }}>{k.val}</div>
+                        <div style={{ fontSize:10, color:"#8894ac", fontWeight:600, marginTop:2 }}>{k.label}</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Filtros */}
+            <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+                <div style={{ display:"flex", gap:3, background:"#f0f2f8", borderRadius:8, padding:3 }}>
+                    {PERIODOS.map(p => (
+                        <button key={p.k} onClick={() => setPeriodo(p.k)}
+                            style={{ padding:"5px 10px", borderRadius:6, fontSize:11, fontWeight:700, cursor:"pointer",
+                                border:"none", background:periodo===p.k?"#003087":"transparent",
+                                color:periodo===p.k?"#fff":"var(--color-muted)" }}>
+                            {p.l}
+                        </button>
+                    ))}
+                </div>
+                <input placeholder="🔍 Buscar nombre, ID, vehículo..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                    style={{ flex:1, minWidth:160, padding:"7px 12px", borderRadius:8,
+                        border:"1.5px solid var(--color-border)", fontSize:12 }} />
                 <select value={filtroSup} onChange={e => setFiltroSup(e.target.value)}
-                    style={{ padding:"8px 12px", borderRadius:8, border:"1.5px solid var(--color-border)", fontSize:13 }}>
-                    {supervisores.map(s => <option key={s} value={s}>{s==="todos"?"— Todos los supervisores —":s}</option>)}
+                    style={{ padding:"7px 10px", borderRadius:8, border:"1.5px solid var(--color-border)", fontSize:12 }}>
+                    {supervisores.map(s => <option key={s} value={s}>{s==="todos"?"👤 Todos":s}</option>)}
                 </select>
             </div>
-            <div style={{ overflowX:"auto" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                    <thead>
-                        <tr style={{ background:"#002d72", color:"#fff" }}>
-                            {["ID","Fecha","Supervisor","Vehículo","Km ini","Km fin","Km rec.","Ctrl","Cap","Inicio","Fin"].map(h => (
-                                <th key={h} style={{ padding:"8px 6px", textAlign:"left", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filtradas.length === 0 ? (
-                            <tr><td colSpan={11} style={{ textAlign:"center", padding:24, color:"#8894ac" }}>Sin resultados</td></tr>
-                        ) : filtradas.map((j, i) => {
-                            const km    = Math.max(0, Number(j.kmFinal||0) - Number(j.kmInicial||0));
-                            const ctrls = (j.actividades||[]).filter(a => a.tipo==="ctrl").length;
-                            const caps  = (j.actividades||[]).filter(a => a.tipo==="cap").length;
-                            return (
-                                <tr key={i} style={{ background:i%2===0?"#f8f9fc":"#fff", borderBottom:"1px solid #e8eaf2" }}>
-                                    <td style={{ padding:"6px", fontWeight:700, color:"#003087", fontSize:11 }}>{j.jornadaID||"—"}</td>
-                                    <td style={{ padding:"6px", whiteSpace:"nowrap" }}>{j.fecha||"—"}</td>
-                                    <td style={{ padding:"6px", fontWeight:600 }}>{(j.nombre||"").split(" ").slice(0,2).join(" ")}</td>
-                                    <td style={{ padding:"6px", fontSize:11 }}>{(j.vehiculo||"—").split("—")[0].trim()}</td>
-                                    <td style={{ padding:"6px" }}>{j.kmInicial||"—"}</td>
-                                    <td style={{ padding:"6px" }}>{j.kmFinal||"—"}</td>
-                                    <td style={{ padding:"6px" }}>
-                                        {km>0?<span style={{ background:"#f0fdf4",color:"#16a34a",fontWeight:700,padding:"2px 6px",borderRadius:99,fontSize:11 }}>{km} km</span>:"—"}
-                                    </td>
-                                    <td style={{ padding:"6px", textAlign:"center" }}>
-                                        {ctrls>0?<span style={{ background:"#eef2ff",color:"#003087",fontWeight:700,padding:"2px 6px",borderRadius:99,fontSize:11 }}>{ctrls}</span>:"0"}
-                                    </td>
-                                    <td style={{ padding:"6px", textAlign:"center" }}>
-                                        {caps>0?<span style={{ background:"#f5f3ff",color:"#7c3aed",fontWeight:700,padding:"2px 6px",borderRadius:99,fontSize:11 }}>{caps}</span>:"—"}
-                                    </td>
-                                    <td style={{ padding:"6px", color:"#6b7280", whiteSpace:"nowrap" }}>{j.horaInicio||"—"}</td>
-                                    <td style={{ padding:"6px", color:"#6b7280", whiteSpace:"nowrap" }}>{j.horaFin||"—"}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+
+            {/* Tarjetas de jornadas */}
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {filtradas.length === 0 ? (
+                    <div style={{ textAlign:"center", padding:40, color:"#8894ac", fontSize:14,
+                        background:"#f8f9fc", borderRadius:12 }}>
+                        Sin jornadas para los filtros seleccionados
+                    </div>
+                ) : filtradas.map((j, i) => {
+                    const km    = Math.max(0, Number(j.kmFinal||0) - Number(j.kmInicial||0));
+                    const ctrls = (j.actividades||[]).filter(a=>a.tipo==="ctrl").length;
+                    const caps  = (j.actividades||[]).filter(a=>a.tipo==="cap").length;
+                    const cerrada = j.estado === "cerrada" || !!j.horaFin;
+                    return (
+                        <div key={i}
+                            onClick={() => setDetalle(j)}
+                            style={{ background:"#fff", border:"1px solid var(--color-border)", borderRadius:10,
+                                padding:"12px 14px", cursor:"pointer", transition:"all 0.1s ease",
+                                boxShadow:"0 1px 3px rgba(0,45,114,0.06)",
+                                borderLeft:`4px solid ${cerrada?"#10b981":"#f59e0b"}` }}
+                            onMouseEnter={e => e.currentTarget.style.boxShadow="0 4px 12px rgba(0,45,114,0.15)"}
+                            onMouseLeave={e => e.currentTarget.style.boxShadow="0 1px 3px rgba(0,45,114,0.06)"}
+                        >
+                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+                                {/* Left */}
+                                <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                                        <span style={{ fontWeight:800, fontSize:13, color:"#003087" }}>
+                                            {j.jornadaID||"—"}
+                                        </span>
+                                        <span style={{ fontSize:12, color:"#555", fontWeight:600 }}>
+                                            {j.fecha||"—"}
+                                        </span>
+                                        <span style={{ fontSize:11, background: cerrada?"#f0fdf4":"#fef3c7",
+                                            color: cerrada?"#16a34a":"#92400e", fontWeight:700,
+                                            padding:"1px 7px", borderRadius:99 }}>
+                                            {cerrada?"✓ Cerrada":"⏳ Activa"}
+                                        </span>
+                                    </div>
+                                    <div style={{ fontSize:13, fontWeight:700, color:"#0d1b3e", marginTop:4 }}>
+                                        {j.nombre||"—"}
+                                    </div>
+                                    <div style={{ fontSize:11, color:"#8894ac", marginTop:2 }}>
+                                        🚗 {(j.vehiculo||"—").split(" ").slice(0,3).join(" ")}
+                                        {j.horaInicio ? " · ⏰ "+j.horaInicio : ""}
+                                        {j.horaFin    ? " → "+j.horaFin      : ""}
+                                    </div>
+                                </div>
+                                {/* Right — badges */}
+                                <div style={{ display:"flex", flexDirection:"column", gap:4, alignItems:"flex-end", flexShrink:0 }}>
+                                    {km > 0 && (
+                                        <span style={{ background:"#f0fdf4", color:"#16a34a", fontWeight:800,
+                                            padding:"3px 9px", borderRadius:99, fontSize:12 }}>
+                                            {km} km
+                                        </span>
+                                    )}
+                                    <div style={{ display:"flex", gap:4 }}>
+                                        {ctrls > 0 && (
+                                            <span style={{ background:"#eef2ff", color:"#003087", fontWeight:800,
+                                                padding:"3px 9px", borderRadius:99, fontSize:11 }}>
+                                                🎯 {ctrls}
+                                            </span>
+                                        )}
+                                        {caps > 0 && (
+                                            <span style={{ background:"#f5f3ff", color:"#7c3aed", fontWeight:800,
+                                                padding:"3px 9px", borderRadius:99, fontSize:11 }}>
+                                                🎓 {caps}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span style={{ fontSize:10, color:"#b0b8cc" }}>Ver detalle →</span>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
-            {filtradas.length===100 && <div style={{ textAlign:"center",fontSize:12,color:"#8894ac",marginTop:8 }}>Mostrando los 100 más recientes</div>}
+            {filtradas.length===200 && (
+                <div style={{ textAlign:"center", fontSize:12, color:"#8894ac", marginTop:12, padding:8,
+                    background:"#f8f9fc", borderRadius:8 }}>
+                    Mostrando las 200 más recientes — usá los filtros para acotar
+                </div>
+            )}
         </>
     );
 }
