@@ -15,7 +15,7 @@ const normHora = (t) => {
         const isPM = /p/i.test(m12[4]);
         if (isPM && h !== 12) h += 12;
         if (!isPM && h === 12) h = 0;
-        return String(h).padStart(2,"0") + ":" + String(mn).padStart(2,"0");
+        return String(h).padStart(2, "0") + ":" + String(mn).padStart(2, "0");
     }
     return s;
 };
@@ -24,8 +24,8 @@ const diffMin = (a, b) => { if (!a || !b) return 0; let d = toMin(b) - toMin(a);
 const fmtHs = (min) => { if (!min || min <= 0) return "00:00"; return String(Math.floor(min / 60)).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0"); };
 
 const normAct = (a) => {
-    const hi = a.horaInicio || (a.iniciadaEn   ? a.iniciadaEn.slice(11,16)   : null);
-    const hf = a.horaFin    || (a.finalizadaEn ? a.finalizadaEn.slice(11,16) : null);
+    const hi = a.horaInicio || (a.iniciadaEn ? a.iniciadaEn.slice(11, 16) : null);
+    const hf = a.horaFin || (a.finalizadaEn ? a.finalizadaEn.slice(11, 16) : null);
     return { ...a, horaInicio: normHora(hi), horaFin: normHora(hf) };
 };
 
@@ -36,19 +36,19 @@ const calcTiempos = (session) => {
     let supervision = 0, apoyo = 0, admin = 0, traslado = 0;
     let taller = 0, vulnerab = 0, reclamos = 0, gremial = 0, almuerzo = 0, otras = 0;
     acts.forEach(a => {
-        const d    = diffMin(a.horaInicio, a.horaFin);
+        const d = diffMin(a.horaInicio, a.horaFin);
         const act2 = (a.actividad || "").toLowerCase();
         if (a.tipo === "ctrl") supervision += d;
         else if (a.tipo === "cap") apoyo += d;
         else if (a.tipo === "otra") {
-            if      (act2.includes("admin"))               admin     += d;
-            else if (act2.includes("traslado"))            traslado  += d;
-            else if (act2.includes("reparac") || act2.includes("taller")) taller  += d;
+            if (act2.includes("admin")) admin += d;
+            else if (act2.includes("traslado")) traslado += d;
+            else if (act2.includes("reparac") || act2.includes("taller")) taller += d;
             else if (act2.includes("vulnerab") || act2.includes("riesgo")) vulnerab += d;
-            else if (act2.includes("reclamo"))             reclamos  += d;
-            else if (act2.includes("gremial"))             gremial   += d;
+            else if (act2.includes("reclamo")) reclamos += d;
+            else if (act2.includes("gremial")) gremial += d;
             else if (act2.includes("almuerzo") || act2.includes("cena")) almuerzo += d;
-            else                                           otras     += d;
+            else otras += d;
         }
     });
     for (let i = 1; i < acts.length; i++) {
@@ -68,11 +68,11 @@ const promedioCtrl = (ctrl) => {
 const ratingLabel = (avg) => {
     if (avg === null || avg === undefined) return null;
     const pts = avg * 10;
-    if (avg <= 1) return { txt: "Muy mal",  pts, color: [220, 38, 38]  };
-    if (avg <= 3) return { txt: "Mal",       pts, color: [234, 88, 12]  };
-    if (avg <= 5) return { txt: "Normal",    pts, color: [202, 138, 4]  };
-    if (avg <= 7) return { txt: "Bien",      pts, color: [22, 163, 74]  };
-    return                { txt: "Muy bien", pts, color: [15, 118, 110] };
+    if (avg <= 1) return { txt: "Muy mal", pts, color: [220, 38, 38] };
+    if (avg <= 3) return { txt: "Mal", pts, color: [234, 88, 12] };
+    if (avg <= 5) return { txt: "Normal", pts, color: [202, 138, 4] };
+    if (avg <= 7) return { txt: "Bien", pts, color: [22, 163, 74] };
+    return { txt: "Muy bien", pts, color: [15, 118, 110] };
 };
 
 // Carga imagen como base64 via canvas
@@ -119,20 +119,20 @@ export async function generarHojaSupervision(session) {
 
     // Normalizar horas de la sesión a 24h
     const sesHoraInicio = normHora(session.horaInicio) || session.horaInicio || "—";
-    const sesHoraFin    = normHora(session.horaFin)    || session.horaFin    || "—";
+    const sesHoraFin = normHora(session.horaFin) || session.horaFin || "—";
 
     const acts = [...(session.actividades || [])].map(normAct)
         .filter(a => a.horaInicio && a.horaFin)
         .sort((a, b) => toMin(a.horaInicio) - toMin(b.horaInicio));
 
     doc.setLineWidth(0.2);
-    const R  = (x, y, w, h, fill) => {
+    const R = (x, y, w, h, fill) => {
         if (fill) { doc.setFillColor(...fill); doc.rect(x, y, w, h, "F"); }
         else { doc.setDrawColor(190, 200, 220); doc.rect(x, y, w, h, "S"); }
     };
     const RR = (x, y, w, h, r, fill) => { doc.setFillColor(...fill); doc.roundedRect(x, y, w, h, r, r, "F"); };
-    const L  = (x1, y1, x2, y2, c) => { if (c) doc.setDrawColor(...c); doc.line(x1, y1, x2, y2); };
-    const T  = (t, x, y, sz, bold, al, color) => {
+    const L = (x1, y1, x2, y2, c) => { if (c) doc.setDrawColor(...c); doc.line(x1, y1, x2, y2); };
+    const T = (t, x, y, sz, bold, al, color) => {
         doc.setFontSize(sz || 7);
         doc.setFont("helvetica", bold ? "bold" : "normal");
         doc.setTextColor(...(color || [0, 0, 0]));
@@ -165,7 +165,7 @@ export async function generarHojaSupervision(session) {
             doc.addImage(logoData.data, "PNG", M + 2, y + LOGO_MARGIN, lw, lh);
             logoOk = true;
         }
-    } catch {}
+    } catch { }
 
     if (!logoOk) {
         RR(M + 1, y + 2, 38, HEADER_H - 4, 1, [0, 48, 135]);
@@ -196,26 +196,26 @@ export async function generarHojaSupervision(session) {
     };
 
     // Fila 1: identificación
-    campo("Colaborador",  session.nombre || "—",           M,       22, 50);
-    campo("Fecha",        session.fecha  || "—",            M + 72,  12, 22);
-    campo("Vehículo",     vehiculoFmt,                      M + 106, 14, 44);
-    campo("Km Inicio",    session.kmInicial || "—",         M + 164, 14, 18);
-    campo("Km Final",     session.kmFinal   || "—",         M + 196, 13, 18);
-    campo("Total Km",     kmRec > 0 ? kmRec + " km" : "—", M + 227, 13, 18);
+    campo("Colaborador", session.nombre || "—", M, 22, 50);
+    campo("Fecha", session.fecha || "—", M + 72, 12, 22);
+    campo("Vehículo", vehiculoFmt, M + 106, 14, 44);
+    campo("Km Inicio", session.kmInicial || "—", M + 164, 14, 18);
+    campo("Km Final", session.kmFinal || "—", M + 196, 13, 18);
+    campo("Total Km", kmRec > 0 ? kmRec + " km" : "—", M + 227, 13, 18);
     y += H6;
 
     // Fila 2: tiempos + email
     const totalMin = (session.cerradaEn && session.creadaEn)
         ? Math.round((new Date(session.cerradaEn) - new Date(session.creadaEn)) / 60000)
         : diffMin(sesHoraInicio, sesHoraFin);
-    campo("Hora inicio",    sesHoraInicio,               M,       16, 16);
-    campo("Hora fin",       sesHoraFin,                  M + 32,  14, 16);
-    campo("Total Hs",       fmtHs(totalMin),             M + 62,  14, 14);
-    campo("Hs Traslados",   fmtHs(tiempos.traslado),    M + 90,  16, 16);
+    campo("Hora inicio", sesHoraInicio, M, 16, 16);
+    campo("Hora fin", sesHoraFin, M + 32, 14, 16);
+    campo("Total Hs", fmtHs(totalMin), M + 62, 14, 14);
+    campo("Hs Traslados", fmtHs(tiempos.traslado), M + 90, 16, 16);
     campo("Hs Supervisión", fmtHs(tiempos.supervision), M + 122, 18, 16);
-    campo("Hs Apoyo/Cap.",  fmtHs(tiempos.apoyo),       M + 156, 17, 16);
-    campo("Hs Admin.",      fmtHs(tiempos.admin),       M + 189, 14, 14);
-    campo("Email",          session.email || "—",        M + 217, 12, 38);
+    campo("Hs Apoyo/Cap.", fmtHs(tiempos.apoyo), M + 156, 17, 16);
+    campo("Hs Admin.", fmtHs(tiempos.admin), M + 189, 14, 14);
+    campo("Email", session.email || "—", M + 217, 12, 38);
     y += H6;
 
     // Fila 3: actividades especiales
@@ -228,25 +228,25 @@ export async function generarHojaSupervision(session) {
         T(String(val ?? ""), x + lw + 1, y + 3.5, 5.5, false, "left", val ? [30, 30, 30] : [180, 180, 180]);
     };
     const fmtHsOpt = (m) => m > 0 ? fmtHs(m) : "";
-    campoF3("Horas Almuerzo",  fmtHsOpt(tiempos.almuerzo),  M,        28, 18);
-    campoF3("Análisis riesgos",fmtHsOpt(tiempos.vulnerab),  M + 46,   28, 18);
-    campoF3("Visita gremial",  fmtHsOpt(tiempos.gremial),   M + 92,   24, 18);
-    campoF3("Capacitacion",    fmtHsOpt(tiempos.apoyo),     M + 134,  22, 18);
-    campoF3("Atencion reclamos",fmtHsOpt(tiempos.reclamos), M + 174,  30, 54);
+    campoF3("Horas Almuerzo", fmtHsOpt(tiempos.almuerzo), M, 28, 18);
+    campoF3("Análisis riesgos", fmtHsOpt(tiempos.vulnerab), M + 46, 28, 18);
+    campoF3("Visita gremial", fmtHsOpt(tiempos.gremial), M + 92, 24, 18);
+    campoF3("Capacitacion", fmtHsOpt(tiempos.apoyo), M + 134, 22, 18);
+    campoF3("Atencion reclamos", fmtHsOpt(tiempos.reclamos), M + 174, 30, 54);
     y += H3 + 1.5;
 
     // ── ENCABEZADO TABLA ──────────────────────────────────────────────────────
     const COLS = [
-        { l: "OBJETIVO / PUESTO",     w: 42 },
-        { l: "H. ENT.",               w: 12 },
-        { l: "H. SAL.",               w: 12 },
-        { l: "VIGILADOR",             w: 34 },
-        { l: "ACTIVIDAD",             w: 19 },
-        { l: "PAG.",                  w:  9 },
-        { l: "ANOMALÍA",              w: 13 },
-        { l: "CALIFICACIÓN",          w: 30 },
-        { l: "GPS",                   w: 30 },
-        { l: "OBSERVACIONES / NOTAS", w:  0 },
+        { l: "OBJETIVO / PUESTO", w: 42 },
+        { l: "H. ENT.", w: 12 },
+        { l: "H. SAL.", w: 12 },
+        { l: "VIGILADOR", w: 34 },
+        { l: "ACTIVIDAD", w: 19 },
+        { l: "PAG.", w: 9 },
+        { l: "ANOMALÍA", w: 13 },
+        { l: "CALIFICACIÓN", w: 30 },
+        { l: "GPS", w: 30 },
+        { l: "OBSERVACIONES / NOTAS", w: 0 },
     ];
     let cx2 = M;
     COLS.forEach(c => { c.x = cx2; cx2 += c.w; });
@@ -274,10 +274,10 @@ export async function generarHojaSupervision(session) {
     }
 
     linea.slice(0, MAX).forEach((act, idx) => {
-        const ry  = y + idx * RH;
+        const ry = y + idx * RH;
         const cy2 = ry + 4.8;
-        const C   = COLS;
-        const cc  = (col, val, sz, bold, al, color) =>
+        const C = COLS;
+        const cc = (col, val, sz, bold, al, color) =>
             T(String(val ?? "—"), C[col].x + (al === "center" ? C[col].w / 2 : 1), cy2, sz || 5, bold, al || "left", color || [20, 20, 20]);
 
         const bg = act.tipo === "_traslado" ? [232, 246, 255]
@@ -300,7 +300,7 @@ export async function generarHojaSupervision(session) {
         } else if (act.tipo === "_traslado") {
             cc(0, "—", 5, false, "center", [100, 150, 190]);
             cc(1, act.horaInicio, 5.5, false, "center", [16, 110, 190]);
-            cc(2, act.horaFin,    5.5, false, "center", [16, 110, 190]);
+            cc(2, act.horaFin, 5.5, false, "center", [16, 110, 190]);
             cc(3, "—", 5, false, "center", [100, 150, 190]);
             RR(C[4].x + 1, ry + 1.2, C[4].w - 2, RH - 2.5, 1, [210, 237, 255]);
             T("Traslado", C[4].x + C[4].w / 2, cy2, 5, true, "center", [16, 110, 190]);
@@ -308,10 +308,10 @@ export async function generarHojaSupervision(session) {
 
         } else if (act.tipo === "ctrl") {
             const prom = promedioCtrl(act);
-            const rl   = prom !== null ? ratingLabel(prom) : null;
+            const rl = prom !== null ? ratingLabel(prom) : null;
             cc(0, (act.objetivo || "—").substring(0, 28), 5);
             cc(1, act.horaInicio || "—", 5.5, false, "center");
-            cc(2, act.horaFin    || "—", 5.5, false, "center");
+            cc(2, act.horaFin || "—", 5.5, false, "center");
             cc(3, (act.vigilador || "—").split(" ").slice(0, 3).join(" "), 4.8);
             RR(C[4].x + 1, ry + 1.2, C[4].w - 2, RH - 2.5, 1, [228, 240, 255]);
             T("Superv.", C[4].x + C[4].w / 2, cy2, 4.8, true, "center", [0, 48, 135]);
@@ -335,7 +335,7 @@ export async function generarHojaSupervision(session) {
         } else if (act.tipo === "cap") {
             cc(0, "—", 5, false, "center", [160, 160, 160]);
             cc(1, act.horaInicio || "—", 5.5, false, "center");
-            cc(2, act.horaFin    || "—", 5.5, false, "center");
+            cc(2, act.horaFin || "—", 5.5, false, "center");
             cc(3, "—", 5, false, "center", [160, 160, 160]);
             RR(C[4].x + 1, ry + 1.2, C[4].w - 2, RH - 2.5, 1, [220, 246, 255]);
             T("Capacit.", C[4].x + C[4].w / 2, cy2, 4.8, true, "center", [14, 165, 233]);
@@ -347,20 +347,20 @@ export async function generarHojaSupervision(session) {
             // Colores y etiquetas según tipo de actividad
             const tipoMeta = (() => {
                 const a = activNom.toLowerCase();
-                if (a.includes("traslado personal"))   return { lbl: "Traslado",  bg: [230,245,255], fg: [16,110,190]  };
-                if (a.includes("traslado elemento"))   return { lbl: "Traslado",  bg: [230,245,255], fg: [16,110,190]  };
-                if (a.includes("reparac"))             return { lbl: "Taller",    bg: [255,240,220], fg: [160,80,0]    };
-                if (a.includes("admin"))               return { lbl: "Admin.",    bg: [240,255,240], fg: [22,120,60]   };
-                if (a.includes("vulnerab"))            return { lbl: "Vulnerab.", bg: [250,235,255], fg: [120,0,180]   };
-                if (a.includes("riesgo"))              return { lbl: "Riesgos",   bg: [255,235,235], fg: [180,0,0]     };
-                if (a.includes("reclamo"))             return { lbl: "Reclamos",  bg: [255,245,220], fg: [160,100,0]   };
-                if (a.includes("gremial"))             return { lbl: "Gremial",   bg: [235,250,255], fg: [0,130,160]   };
-                if (a.includes("almuerzo") || a.includes("cena")) return { lbl: "Almuerzo", bg: [250,250,230], fg: [120,120,0] };
-                return { lbl: "Otras", bg: [255,246,220], fg: [180,100,0] };
+                if (a.includes("traslado personal")) return { lbl: "Traslado", bg: [230, 245, 255], fg: [16, 110, 190] };
+                if (a.includes("traslado elemento")) return { lbl: "Traslado", bg: [230, 245, 255], fg: [16, 110, 190] };
+                if (a.includes("reparac")) return { lbl: "Taller", bg: [255, 240, 220], fg: [160, 80, 0] };
+                if (a.includes("admin")) return { lbl: "Admin.", bg: [240, 255, 240], fg: [22, 120, 60] };
+                if (a.includes("vulnerab")) return { lbl: "Vulnerab.", bg: [250, 235, 255], fg: [120, 0, 180] };
+                if (a.includes("riesgo")) return { lbl: "Riesgos", bg: [255, 235, 235], fg: [180, 0, 0] };
+                if (a.includes("reclamo")) return { lbl: "Reclamos", bg: [255, 245, 220], fg: [160, 100, 0] };
+                if (a.includes("gremial")) return { lbl: "Gremial", bg: [235, 250, 255], fg: [0, 130, 160] };
+                if (a.includes("almuerzo") || a.includes("cena")) return { lbl: "Almuerzo", bg: [250, 250, 230], fg: [120, 120, 0] };
+                return { lbl: "Otras", bg: [255, 246, 220], fg: [180, 100, 0] };
             })();
             cc(0, (act.lugar || act.lugarActividad || "—").substring(0, 28), 5);
             cc(1, act.horaInicio || "—", 5.5, false, "center");
-            cc(2, act.horaFin    || "—", 5.5, false, "center");
+            cc(2, act.horaFin || "—", 5.5, false, "center");
             cc(3, "—", 5, false, "center", [160, 160, 160]);
             RR(C[4].x + 1, ry + 1.2, C[4].w - 2, RH - 2.5, 1, tipoMeta.bg);
             T(tipoMeta.lbl, C[4].x + C[4].w / 2, cy2, 4.8, true, "center", tipoMeta.fg);
@@ -383,26 +383,26 @@ export async function generarHojaSupervision(session) {
     T("RESUMEN", M + 4, y + RS_H / 2 + 2, 5.5, true, "left", [0, 48, 135]);
 
     const ctrlList = acts.filter(a => a.tipo === "ctrl");
-    const capList  = acts.filter(a => a.tipo === "cap");
+    const capList = acts.filter(a => a.tipo === "cap");
     const otraList = acts.filter(a => a.tipo === "otra");
 
     // Construir métricas dinámicas — solo mostrar tiempos > 0
     const mets = [
-        { l: "Controles",   v: String(ctrlList.length),                              c: [0, 48, 135]   },
-        { l: "Capacit.",    v: String(capList.length),                               c: [14, 165, 233] },
-        { l: "Otras",       v: String(otraList.length),                              c: [245, 158, 11] },
-        { l: "Hs Superv.",  v: fmtHs(tiempos.supervision),                          c: [0, 48, 135]   },
-        { l: "Hs Traslado", v: fmtHs(tiempos.traslado),                             c: [16, 163, 127] },
-        ...(tiempos.apoyo    > 0 ? [{ l: "Hs Apoyo",    v: fmtHs(tiempos.apoyo),    c: [14, 165, 233] }] : []),
-        ...(tiempos.admin    > 0 ? [{ l: "Hs Admin.",   v: fmtHs(tiempos.admin),    c: [245, 158, 11] }] : []),
-        ...(tiempos.taller   > 0 ? [{ l: "Hs Taller",   v: fmtHs(tiempos.taller),  c: [160, 80, 0]   }] : []),
-        ...(tiempos.vulnerab > 0 ? [{ l: "Hs Vuln/Riesg",v: fmtHs(tiempos.vulnerab), c: [120, 0, 180]  }] : []),
-        ...(tiempos.reclamos > 0 ? [{ l: "Hs Reclamos", v: fmtHs(tiempos.reclamos),c: [160, 100, 0]  }] : []),
-        ...(tiempos.gremial  > 0 ? [{ l: "Hs Gremial",  v: fmtHs(tiempos.gremial), c: [0, 130, 160]  }] : []),
-        ...(tiempos.almuerzo > 0 ? [{ l: "Hs Almuerzo", v: fmtHs(tiempos.almuerzo),c: [120, 120, 0]  }] : []),
-        ...(tiempos.otras    > 0 ? [{ l: "Hs Otras",    v: fmtHs(tiempos.otras),   c: [180, 100, 0]  }] : []),
-        { l: "Km recorr.",  v: kmRec > 0 ? kmRec + " km" : "—",                     c: [80, 80, 80]   },
-        { l: "Nocturnos",   v: String(ctrlList.filter(c => c.turno === "nocturno").length), c: [99, 90, 200] },
+        { l: "Controles", v: String(ctrlList.length), c: [0, 48, 135] },
+        { l: "Capacitación.", v: String(capList.length), c: [14, 165, 233] },
+        { l: "Otras Activ.", v: String(otraList.length), c: [245, 158, 11] },
+        { l: "Supervisión.", v: fmtHs(tiempos.supervision), c: [0, 48, 135] },
+        { l: "Traslados", v: fmtHs(tiempos.traslado), c: [16, 163, 127] },
+        ...(tiempos.apoyo > 0 ? [{ l: "Apoyo", v: fmtHs(tiempos.apoyo), c: [14, 165, 233] }] : []),
+        ...(tiempos.admin > 0 ? [{ l: "Administrativas.", v: fmtHs(tiempos.admin), c: [245, 158, 11] }] : []),
+        ...(tiempos.taller > 0 ? [{ l: "Taller", v: fmtHs(tiempos.taller), c: [160, 80, 0] }] : []),
+        ...(tiempos.vulnerab > 0 ? [{ l: "Hs Seguridad", v: fmtHs(tiempos.vulnerab), c: [120, 0, 180] }] : []),
+        ...(tiempos.reclamos > 0 ? [{ l: "Atenc. al personal", v: fmtHs(tiempos.reclamos), c: [160, 100, 0] }] : []),
+        ...(tiempos.gremial > 0 ? [{ l: "Visita Gremial", v: fmtHs(tiempos.gremial), c: [0, 130, 160] }] : []),
+        ...(tiempos.almuerzo > 0 ? [{ l: "Almuerzo", v: fmtHs(tiempos.almuerzo), c: [120, 120, 0] }] : []),
+        ...(tiempos.otras > 0 ? [{ l: "Otras tareas", v: fmtHs(tiempos.otras), c: [180, 100, 0] }] : []),
+        { l: "Km recorridos.", v: kmRec > 0 ? kmRec + " km" : "—", c: [80, 80, 80] },
+        { l: "Nocturnos", v: String(ctrlList.filter(c => c.turno === "nocturno").length), c: [99, 90, 200] },
         { l: "Fin de sem.", v: String(ctrlList.filter(c => c.esFinDeSemana).length), c: [220, 70, 150] },
     ];
 
@@ -411,7 +411,7 @@ export async function generarHojaSupervision(session) {
     mets.forEach((m, i) => {
         const mx = startX + i * mw;
         if (i > 0) { doc.setDrawColor(210, 218, 235); L(mx, y + 1.5, mx, y + RS_H - 1.5); }
-        T(m.v, mx + mw / 2, y + 6,          8.5, true,  "center", m.c);
+        T(m.v, mx + mw / 2, y + 6, 8.5, true, "center", m.c);
         T(m.l, mx + mw / 2, y + RS_H - 1.5, 4.2, false, "center", [120, 120, 120]);
     });
 
