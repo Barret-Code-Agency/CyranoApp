@@ -29,7 +29,7 @@ function AppContent() {
     const [pendingDest, setPendingDest] = useState(null);
 
     const { jornadaActiva, dbReady } = useAppData();
-    const { logout } = useAuth();
+    const { logout, user: authUser } = useAuth();
     const geo = useGeo();
 
     const goTo = (p) => setPhase(p);
@@ -40,6 +40,7 @@ function AppContent() {
     };
 
     const handleLogin = (u) => {
+        // u includes: role, zona, esAnalista, objetivosVisibles, vehiculosVisibles from AuthContext
         setUser(u);
         const dest = u.role === "admin" ? "admin" : (jornadaActiva ? "menu" : "supervisor_dash");
         setPendingDest(dest);
@@ -99,8 +100,8 @@ function AppContent() {
             )}
             <main className="main">
                 {phase === "admin"          && <AdminScreen onExit={() => { setUser(null); goTo("splash"); }} />}
-                {phase === "supervisor_dash" && user && <SupervisorDashboard user={user} onIniciarJornada={handleIniciarJornada} />}
-                {phase === "jornada"        && user && <JornadaScreen user={user} onStarted={handleJornadaStarted} />}
+                {phase === "supervisor_dash" && (user || authUser) && <SupervisorDashboard user={authUser || user} onIniciarJornada={handleIniciarJornada} />}
+                {phase === "jornada"        && (user || authUser) && <JornadaScreen user={authUser || user} onStarted={handleJornadaStarted} />}
                 {phase === "menu"           && <MenuScreen onSelect={goTo} />}
                 {phase === "capacitacion"   && <CapacitacionScreen onBack={() => goTo("menu")} />}
                 {phase === "otra"           && <OtraActividadScreen geo={geo} onBack={() => goTo("menu")} />}

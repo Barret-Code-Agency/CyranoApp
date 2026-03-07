@@ -12,7 +12,7 @@ import {
     updateProfile,
 } from "firebase/auth";
 import {
-    doc, getDoc, setDoc, updateDoc, collection, getDocs, serverTimestamp,
+    doc, getDoc, setDoc, updateDoc, collection, getDocs, serverTimestamp, onSnapshot,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
@@ -34,33 +34,41 @@ export function AuthProvider({ children }) {
 
     // Escuchar cambios de sesión Firebase
     useEffect(() => {
+        let unsubDoc = null; // listener en doc del usuario
+
         const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+            // Limpiar listener anterior si había
+            if (unsubDoc) { unsubDoc(); unsubDoc = null; }
+
             if (firebaseUser) {
-                const data = await fetchUserData(firebaseUser.uid);
-                if (data && data.activo !== false) {
-                    setUser({
-                        uid: firebaseUser.uid,
-                        email: firebaseUser.email,
-                        name: data.nombre || firebaseUser.email.split("@")[0],
-                        role: data.rol || "operator",
-                        activo: data.activo !== false,
-                        zona: data.zona || null,
-                        objetivosVisibles: data.objetivosVisibles || null,
-                        vehiculosVisibles: data.vehiculosVisibles || null,
-                        esAnalista: data.esAnalista === true,
-                        supervisoresVisibles: data.supervisoresVisibles || null,
-                    });
-                } else {
-                    // Usuario desactivado o sin datos → forzar logout
-                    await signOut(auth);
-                    setUser(null);
-                }
+                // Suscripción en tiempo real al doc del usuario
+                // → si el admin cambia esAnalista/zona/etc, el usuario lo ve sin reloguear
+                unsubDoc = onSnapshot(getUserDoc(firebaseUser.uid), (snap) => {
+                    const data = snap.data();
+                    if (data && data.activo !== false) {
+                        setUser({
+                            uid: firebaseUser.uid,
+                            email: firebaseUser.email,
+                            name: data.nombre || firebaseUser.email.split("@")[0],
+                            role: data.rol || "operator",
+                            activo: data.activo !== false,
+                            zona: data.zona || null,
+                            objetivosVisibles: data.objetivosVisibles || null,
+                            vehiculosVisibles: data.vehiculosVisibles || null,
+                            esAnalista: data.esAnalista === true,
+                            supervisoresVisibles: data.supervisoresVisibles || null,
+                        });
+                    } else {
+                        signOut(auth);
+                        setUser(null);
+                    }
+                });
             } else {
                 setUser(null);
             }
             setLoading(false);
         });
-        return unsub;
+        return () => { unsub(); if (unsubDoc) unsubDoc(); };
     }, []);
 
     // ── Login ────────────────────────────────────────────────────────────────
