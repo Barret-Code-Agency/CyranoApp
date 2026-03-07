@@ -140,7 +140,9 @@ function AnalistaConfig({ u, onSave }) {
 
     const handleSave = async () => {
         setSaving(true);
-        await onSave(u.uid, { zona, esAnalista: habilitado, objetivosVisibles: objSel, vehiculosVisibles: vehSel, supervisoresVisibles: supSel });
+        const payload = { zona, esAnalista: habilitado, objetivosVisibles: objSel, vehiculosVisibles: vehSel, supervisoresVisibles: supSel };
+        console.log("[AnalistaConfig] Guardando para uid:", u.uid, payload);
+        await onSave(u.uid, payload);
         setSaving(false);
         setOk(true);
         setTimeout(() => setOk(false), 2000);

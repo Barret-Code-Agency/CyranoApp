@@ -43,26 +43,49 @@ export function AuthProvider({ children }) {
             if (firebaseUser) {
                 // Suscripción en tiempo real al doc del usuario
                 // → si el admin cambia esAnalista/zona/etc, el usuario lo ve sin reloguear
-                unsubDoc = onSnapshot(getUserDoc(firebaseUser.uid), (snap) => {
-                    const data = snap.data();
-                    if (data && data.activo !== false) {
-                        setUser({
-                            uid: firebaseUser.uid,
-                            email: firebaseUser.email,
-                            name: data.nombre || firebaseUser.email.split("@")[0],
-                            role: data.rol || "operator",
-                            activo: data.activo !== false,
-                            zona: data.zona || null,
-                            objetivosVisibles: data.objetivosVisibles || null,
-                            vehiculosVisibles: data.vehiculosVisibles || null,
-                            esAnalista: data.esAnalista === true,
-                            supervisoresVisibles: data.supervisoresVisibles || null,
+                unsubDoc = onSnapshot(
+                    getUserDoc(firebaseUser.uid),
+                    (snap) => {
+                        const data = snap.data();
+                        if (data && data.activo !== false) {
+                            setUser({
+                                uid: firebaseUser.uid,
+                                email: firebaseUser.email,
+                                name: data.nombre || firebaseUser.email.split("@")[0],
+                                role: data.rol || "operator",
+                                activo: data.activo !== false,
+                                zona: data.zona || null,
+                                objetivosVisibles: data.objetivosVisibles || null,
+                                vehiculosVisibles: data.vehiculosVisibles || null,
+                                esAnalista: data.esAnalista === true,
+                                supervisoresVisibles: data.supervisoresVisibles || null,
+                            });
+                        } else {
+                            signOut(auth);
+                            setUser(null);
+                        }
+                    },
+                    (err) => {
+                        // Error 400 / token expirado: fallback a getDoc sin listener
+                        console.warn("[AuthContext] onSnapshot error, fallback a getDoc:", err.code);
+                        fetchUserData(firebaseUser.uid).then(data => {
+                            if (data && data.activo !== false) {
+                                setUser({
+                                    uid: firebaseUser.uid,
+                                    email: firebaseUser.email,
+                                    name: data.nombre || firebaseUser.email.split("@")[0],
+                                    role: data.rol || "operator",
+                                    activo: data.activo !== false,
+                                    zona: data.zona || null,
+                                    objetivosVisibles: data.objetivosVisibles || null,
+                                    vehiculosVisibles: data.vehiculosVisibles || null,
+                                    esAnalista: data.esAnalista === true,
+                                    supervisoresVisibles: data.supervisoresVisibles || null,
+                                });
+                            }
                         });
-                    } else {
-                        signOut(auth);
-                        setUser(null);
                     }
-                });
+                );
             } else {
                 setUser(null);
             }

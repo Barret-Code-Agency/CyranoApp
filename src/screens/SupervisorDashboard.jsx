@@ -1,6 +1,7 @@
 // src/screens/SupervisorDashboard.jsx
 import { useState, useMemo } from "react";
 import { useAppData } from "../context/AppDataContext";
+import { useAuth } from "../context/AuthContext";
 import "../styles/SupervisorDashboard.css";
 import AnalistaDashboard from "./AnalistaDashboard";
 
@@ -129,8 +130,12 @@ function DayProgressBar({ semana, useMes = false }) {
     );
 }
 
-export default function SupervisorDashboard({ user, onIniciarJornada }) {
+export default function SupervisorDashboard({ user: userProp, onIniciarJornada }) {
     const [vistaAnalista, setVistaAnalista] = useState(false);
+    // Usar authUser del contexto para tener esAnalista siempre actualizado
+    // Si el admin asigna la vista analista, se refleja sin reloguear
+    const { user: authUser } = useAuth();
+    const user = authUser || userProp; // authUser tiene prioridad (siempre fresco)
     const {
         plan: planGlobal,
         getPlanSupervisor, getObjetivosSemana,
