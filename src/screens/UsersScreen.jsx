@@ -126,19 +126,21 @@ function AnalistaConfig({ u, onSave }) {
     const [habilitado, setHabilitado] = useState(u.esAnalista === true);
     const [objSel,     setObjSel]     = useState(Array.isArray(u.objetivosVisibles) ? u.objetivosVisibles : []);
     const [vehSel,     setVehSel]     = useState(Array.isArray(u.vehiculosVisibles) ? u.vehiculosVisibles : []);
+    const [supSel,     setSupSel]     = useState(Array.isArray(u.supervisoresVisibles) ? u.supervisoresVisibles : []);
     const [saving,     setSaving]     = useState(false);
     const [ok,         setOk]         = useState(false);
 
     const { data: appData } = useAppData();
-    const objetivos = Array.isArray(appData?.objetivos) ? appData.objetivos : [];
-    const vehiculos = Array.isArray(appData?.vehiculos) ? appData.vehiculos : [];
+    const objetivos    = Array.isArray(appData?.objetivos)    ? appData.objetivos    : [];
+    const vehiculos    = Array.isArray(appData?.vehiculos)    ? appData.vehiculos    : [];
+    const supervisores = Array.isArray(appData?.supervisores) ? appData.supervisores : [];
 
     const toggleArr = (arr, setArr, val) =>
         setArr(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
 
     const handleSave = async () => {
         setSaving(true);
-        await onSave(u.uid, { zona, esAnalista: habilitado, objetivosVisibles: objSel, vehiculosVisibles: vehSel });
+        await onSave(u.uid, { zona, esAnalista: habilitado, objetivosVisibles: objSel, vehiculosVisibles: vehSel, supervisoresVisibles: supSel });
         setSaving(false);
         setOk(true);
         setTimeout(() => setOk(false), 2000);
@@ -248,6 +250,41 @@ function AnalistaConfig({ u, onSave }) {
                             </div>
                         </div>
                     </>)}
+
+                        {/* Supervisores de la zona */}
+                        <div style={{ background: "#fff", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 2 }}>
+                                SUPERVISORES DE LA ZONA ({supSel.length} seleccionados)
+                            </div>
+                            <div style={{ fontSize: 11, color: "#8894ac", marginBottom: 8 }}>
+                                El analista solo verá jornadas de estos supervisores
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 120, overflowY: "auto",
+                                border: "1px solid var(--color-border)", borderRadius: 8, padding: 8 }}>
+                                {supervisores.length === 0 ? (
+                                    <span style={{ fontSize: 11, color: "#aaa" }}>No hay supervisores en Config → agregalos primero</span>
+                                ) : supervisores.map(sup => (
+                                    <button key={sup} onClick={() => toggleArr(supSel, setSupSel, sup)}
+                                        style={{ padding: "3px 8px", borderRadius: 99, fontSize: 11, cursor: "pointer",
+                                            border: supSel.includes(sup) ? "2px solid #7c3aed" : "1px solid var(--color-border)",
+                                            background: supSel.includes(sup) ? "#f5f3ff" : "transparent",
+                                            color: supSel.includes(sup) ? "#7c3aed" : "var(--color-muted)",
+                                            fontWeight: supSel.includes(sup) ? 700 : 400 }}>
+                                        👤 {sup}
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                                <button onClick={() => setSupSel(supervisores)}
+                                    style={{ fontSize: 10, color: "#7c3aed", background: "none", border: "none", cursor: "pointer" }}>
+                                    ✓ Todos
+                                </button>
+                                <button onClick={() => setSupSel([])}
+                                    style={{ fontSize: 10, color: "var(--color-muted)", background: "none", border: "none", cursor: "pointer" }}>
+                                    ✗ Ninguno
+                                </button>
+                            </div>
+                        </div>
 
                     <button onClick={handleSave} disabled={saving}
                         style={{ background: "#c9a227", color: "#fff", border: "none", borderRadius: 8,

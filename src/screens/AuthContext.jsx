@@ -48,6 +48,7 @@ export function AuthProvider({ children }) {
                         objetivosVisibles: data.objetivosVisibles || null,
                         vehiculosVisibles: data.vehiculosVisibles || null,
                         esAnalista: data.esAnalista === true,
+                        supervisoresVisibles: data.supervisoresVisibles || null,
                     });
                 } else {
                     // Usuario desactivado o sin datos → forzar logout
@@ -85,6 +86,7 @@ export function AuthProvider({ children }) {
             objetivosVisibles: data.objetivosVisibles || null,
             vehiculosVisibles: data.vehiculosVisibles || null,
             esAnalista: data.esAnalista === true,
+            supervisoresVisibles: data.supervisoresVisibles || null,
         };
     };
 

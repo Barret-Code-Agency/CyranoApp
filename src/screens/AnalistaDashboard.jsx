@@ -40,6 +40,7 @@ export default function AnalistaDashboard({ user }) {
 
     const objVisibles = user.objetivosVisibles?.length > 0 ? user.objetivosVisibles : null;
     const vehVisibles = user.vehiculosVisibles?.length > 0 ? user.vehiculosVisibles : null;
+    const supVisibles = user.supervisoresVisibles?.length > 0 ? user.supervisoresVisibles : null;
     const zona        = user.zona || "Mi zona";
 
     // Filter jornadas by period
@@ -52,11 +53,21 @@ export default function AnalistaDashboard({ user }) {
                 const jFecha = new Date(j.creadaEn || j.fecha || 0);
                 if (jFecha < desde) return false;
             }
-            // Filter by assigned vehicles if set
-            if (vehVisibles && j.vehiculo && !vehVisibles.includes(j.vehiculo)) return false;
+            // Filtrar por supervisores de la zona
+            if (supVisibles && supVisibles.length > 0) {
+                const nombreJ = (j.nombre || "").trim();
+                // match parcial: el nombre en la jornada puede ser "Apellido, Nombre"
+                const match = supVisibles.some(s =>
+                    nombreJ.toLowerCase().includes(s.toLowerCase()) ||
+                    s.toLowerCase().includes(nombreJ.toLowerCase())
+                );
+                if (!match) return false;
+            }
+            // Filtrar por vehículos asignados
+            if (vehVisibles && vehVisibles.length > 0 && j.vehiculo && !vehVisibles.includes(j.vehiculo)) return false;
             return true;
         });
-    }, [jornadas, periodo, vehVisibles]);
+    }, [jornadas, periodo, vehVisibles, supVisibles]);
 
     // All controls from filtered jornadas
     const controles = useMemo(() =>
@@ -125,7 +136,8 @@ export default function AnalistaDashboard({ user }) {
                         </div>
                         <div style={{ fontWeight: 800, fontSize: 16, color: "#0d1b3e" }}>Zona {zona}</div>
                         <div style={{ fontSize: 11, color: "#8894ac", marginTop: 2 }}>
-                            {objVisibles ? objVisibles.length + " objetivos asignados" : "Todos los objetivos"}
+                            {supVisibles ? supVisibles.length + " supervisores" : "Todos los supervisores"}
+                            {objVisibles ? " · " + objVisibles.length + " objetivos" : ""}
                             {vehVisibles ? " · " + vehVisibles.length + " vehículos" : ""}
                         </div>
                     </div>
