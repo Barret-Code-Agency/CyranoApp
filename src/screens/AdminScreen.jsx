@@ -1,6 +1,7 @@
 // src/screens/AdminScreen.jsx
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppData } from "../context/AppDataContext";
+import { exportarExcel } from "../utils/exportarExcel";
 import DashboardScreen      from "./DashboardScreen";
 import PlanSupervisorScreen from "./PlanSupervisorScreen";
 import UsersScreen          from "./UsersScreen";
@@ -12,7 +13,9 @@ const ADMIN_TABS = [
     { key: "planes",    icon: "📋", label: "Planes" },
     { key: "usuarios",  icon: "👥", label: "Usuarios" },
     { key: "vehiculos", icon: "🚗", label: "Vehículos" },
-    { key: "config",    icon: "⚙️", label: "Configuración" },
+    { key: "config",     icon: "⚙️", label: "Configuración" },
+    { key: "exportar",   icon: "📤", label: "Exportar" },
+    { key: "historial",  icon: "🗂️", label: "Historial" },
 ];
 
 function EditableList({ icon, title, dataKey, items, onUpdate }) {
@@ -86,6 +89,159 @@ function ConfigPanel({ onUpdate, showToast }) {
     );
 }
 
+
+// ── Pantalla Exportar ─────────────────────────────────────────────────────────
+function ExportarScreen({ jornadas, plan, planesSuper, getSupervisoresConEmail, getPlanSupervisor }) {
+    const [loading, setLoading] = useState(false);
+    const [ok, setOk] = useState(false);
+
+    const handleExport = async () => {
+        setLoading(true);
+        try {
+            await exportarExcel({ jornadas, plan, planesSuper, getSupervisoresConEmail, getPlanSupervisor });
+            setOk(true);
+            setTimeout(() => setOk(false), 3000);
+        } catch (e) {
+            alert("Error al exportar: " + e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const totalJornadas = jornadas.length;
+    const supervisores  = [...new Set(jornadas.map(j => j.nombre).filter(Boolean))];
+    const controles     = jornadas.reduce((s, j) => s + (j.actividades || []).filter(a => a.tipo === "ctrl").length, 0);
+
+    return (
+        <>
+            <div className="admin-header">
+                <div>
+                    <div className="screen-title">Exportar datos</div>
+                    <div className="screen-sub">Descargá el historial completo en Excel</div>
+                </div>
+            </div>
+            <div className="admin-section" style={{ textAlign: "center", padding: "32px 16px" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📊</div>
+                <div style={{ fontWeight: 800, fontSize: 18, color: "#0d1b3e", marginBottom: 8 }}>
+                    Exportar a Excel
+                </div>
+                <div style={{ color: "var(--color-muted)", fontSize: 13, marginBottom: 24 }}>
+                    {totalJornadas} jornadas · {controles} controles · {supervisores.length} supervisores
+                </div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 16 }}>
+                    {["📋 Resumen general","👤 Por supervisor","🎯 Por puesto","🚗 Km & vehículos"].map(l => (
+                        <span key={l} style={{ background: "#f0f4ff", color: "#003087", border: "1px solid #c8d4f0",
+                            borderRadius: 99, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>{l}</span>
+                    ))}
+                </div>
+                <button className="btn btn-primary" disabled={loading} onClick={handleExport}
+                    style={{ padding: "12px 32px", fontSize: 15 }}>
+                    {loading ? "⏳ Generando..." : ok ? "✓ Descargado" : "📤 Descargar Excel"}
+                </button>
+            </div>
+        </>
+    );
+}
+
+// ── Pantalla Historial ────────────────────────────────────────────────────────
+function HistorialAdminScreen({ jornadas }) {
+    const [busqueda, setBusqueda] = useState("");
+    const [filtroSup, setFiltroSup] = useState("todos");
+
+    const supervisores = useMemo(() =>
+        ["todos", ...[...new Set(jornadas.map(j => j.nombre).filter(Boolean))].sort()],
+        [jornadas]
+    );
+
+    const filtradas = useMemo(() => {
+        return [...jornadas]
+            .filter(j => {
+                if (filtroSup !== "todos" && j.nombre !== filtroSup) return false;
+                if (busqueda.trim()) {
+                    const b = busqueda.toLowerCase();
+                    return (j.nombre || "").toLowerCase().includes(b)
+                        || (j.jornadaID || "").toLowerCase().includes(b)
+                        || (j.vehiculo || "").toLowerCase().includes(b)
+                        || (j.fecha || "").includes(b);
+                }
+                return true;
+            })
+            .sort((a, b) => (b.fecha || "") > (a.fecha || "") ? 1 : -1)
+            .slice(0, 100);
+    }, [jornadas, busqueda, filtroSup]);
+
+    return (
+        <>
+            <div className="admin-header">
+                <div>
+                    <div className="screen-title">Historial</div>
+                    <div className="screen-sub">{jornadas.length} jornadas registradas</div>
+                </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <input
+                    placeholder="🔍 Buscar por nombre, ID, vehículo..."
+                    value={busqueda}
+                    onChange={e => setBusqueda(e.target.value)}
+                    style={{ flex: 1, minWidth: 200, padding: "8px 12px", borderRadius: 8,
+                        border: "1.5px solid var(--color-border)", fontSize: 13 }}
+                />
+                <select value={filtroSup} onChange={e => setFiltroSup(e.target.value)}
+                    style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid var(--color-border)", fontSize: 13 }}>
+                    {supervisores.map(s => (
+                        <option key={s} value={s}>{s === "todos" ? "— Todos los supervisores —" : s}</option>
+                    ))}
+                </select>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                        <tr style={{ background: "#002d72", color: "#fff" }}>
+                            {["ID","Fecha","Supervisor","Vehículo","Km ini","Km fin","Km rec.","Controles","Inicio","Fin"].map(h => (
+                                <th key={h} style={{ padding: "8px 6px", textAlign: "left", fontWeight: 700, whiteSpace: "nowrap" }}>{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filtradas.length === 0 ? (
+                            <tr><td colSpan={10} style={{ textAlign: "center", padding: 24, color: "#8894ac" }}>Sin resultados</td></tr>
+                        ) : filtradas.map((j, i) => {
+                            const km = Math.max(0, Number(j.kmFinal||0) - Number(j.kmInicial||0));
+                            const ctrls = (j.actividades||[]).filter(a => a.tipo === "ctrl").length;
+                            return (
+                                <tr key={i} style={{ background: i % 2 === 0 ? "#f8f9fc" : "#fff",
+                                    borderBottom: "1px solid #e8eaf2" }}>
+                                    <td style={{ padding: "6px", fontWeight: 700, color: "#003087", fontSize: 11 }}>{j.jornadaID || "—"}</td>
+                                    <td style={{ padding: "6px", whiteSpace: "nowrap" }}>{j.fecha || "—"}</td>
+                                    <td style={{ padding: "6px", fontWeight: 600 }}>{(j.nombre||"").split(" ").slice(0,2).join(" ")}</td>
+                                    <td style={{ padding: "6px", fontSize: 11 }}>{(j.vehiculo||"—").split("—")[0].trim()}</td>
+                                    <td style={{ padding: "6px" }}>{j.kmInicial || "—"}</td>
+                                    <td style={{ padding: "6px" }}>{j.kmFinal || "—"}</td>
+                                    <td style={{ padding: "6px" }}>
+                                        {km > 0 ? <span style={{ background: "#f0fdf4", color: "#16a34a", fontWeight: 700,
+                                            padding: "2px 6px", borderRadius: 99, fontSize: 11 }}>{km} km</span> : "—"}
+                                    </td>
+                                    <td style={{ padding: "6px", textAlign: "center" }}>
+                                        {ctrls > 0 ? <span style={{ background: "#eef2ff", color: "#003087", fontWeight: 700,
+                                            padding: "2px 6px", borderRadius: 99, fontSize: 11 }}>{ctrls}</span> : "0"}
+                                    </td>
+                                    <td style={{ padding: "6px", color: "#6b7280", whiteSpace: "nowrap" }}>{j.horaInicio || "—"}</td>
+                                    <td style={{ padding: "6px", color: "#6b7280", whiteSpace: "nowrap" }}>{j.horaFin || "—"}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            {filtradas.length === 100 && (
+                <div style={{ textAlign: "center", fontSize: 12, color: "#8894ac", marginTop: 8 }}>
+                    Mostrando los 100 más recientes
+                </div>
+            )}
+        </>
+    );
+}
+
 export default function AdminScreen({ onExit }) {
     const { updateConfig } = useAppData();
     const [activeTab, setActiveTab] = useState("dashboard");
@@ -145,6 +301,17 @@ export default function AdminScreen({ onExit }) {
                     </div>
                     <ConfigPanel onUpdate={handleUpdate} showToast={showToast} />
                 </>
+            )}
+
+            {/* ══ EXPORTAR ══ */}
+            {activeTab === "exportar" && (
+                <ExportarScreen jornadas={jornadas} plan={plan} planesSuper={planesSuper}
+                    getSupervisoresConEmail={getSupervisoresConEmail} getPlanSupervisor={getPlanSupervisor} />
+            )}
+
+            {/* ══ HISTORIAL ══ */}
+            {activeTab === "historial" && (
+                <HistorialAdminScreen jornadas={jornadas} />
             )}
 
             <div style={{ marginTop: "var(--space-5)" }}>

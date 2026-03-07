@@ -143,26 +143,44 @@ function AnalistaConfig({ u, onSave }) {
     };
 
     return (
-        <div style={{ borderTop: "1px solid var(--color-border)", marginTop: 8, paddingTop: 8 }}>
+        <div style={{ borderTop: "1.5px solid #f0e68c", marginTop: 10, paddingTop: 10, background: "#fffef7", borderRadius: "0 0 10px 10px", padding: "10px 12px 12px" }}>
             <button
                 onClick={() => setOpen(o => !o)}
                 style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12,
-                    fontWeight: 700, color: "#c9a227", display: "flex", alignItems: "center", gap: 6 }}
+                    fontWeight: 700, color: "#7a5c00", display: "flex", alignItems: "center", gap: 6, width: "100%" }}
             >
-                📊 {open ? "▲" : "▼"} Vista Analista {habilitado ? <span style={{ background: "#fef3c7", color: "#92400e", padding: "1px 7px", borderRadius: 99, fontSize: 10 }}>Activo</span> : ""}
+                <span style={{ fontSize: 14 }}>📊</span>
+                <span>Vista Analista — Configuración de zona</span>
+                <span style={{ marginLeft: "auto" }}>{open ? "▲" : "▼"}</span>
+                {habilitado && <span style={{ background: "#c9a227", color: "#fff", padding: "1px 8px", borderRadius: 99, fontSize: 10, fontWeight: 800 }}>ACTIVO</span>}
             </button>
+
+            {!open && habilitado && (
+                <div style={{ fontSize: 11, color: "#7a5c00", marginTop: 4 }}>
+                    Zona: <strong>{zona || "—"}</strong> · {objSel.length} objetivos · {vehSel.length} vehículos asignados
+                </div>
+            )}
+
             {open && (
-                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 14 }}>
                     {/* Habilitar */}
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600 }}>
-                        <input type="checkbox" checked={habilitado} onChange={e => setHabilitado(e.target.checked)} />
-                        Habilitar vista analista para este usuario
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600,
+                        background: "#fff", border: "1.5px solid var(--color-border)", borderRadius: 8, padding: "10px 12px", cursor: "pointer" }}>
+                        <input type="checkbox" checked={habilitado} onChange={e => setHabilitado(e.target.checked)}
+                            style={{ width: 16, height: 16, cursor: "pointer" }} />
+                        <div>
+                            <div>Habilitar Vista Analista para este usuario</div>
+                            <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 400, marginTop: 2 }}>
+                                Le aparecerá el botón "📊 Vista Analista" en su dashboard personal
+                            </div>
+                        </div>
                     </label>
 
                     {habilitado && (<>
                         {/* Zona */}
-                        <div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 4 }}>ZONA</div>
+                        <div style={{ background: "#fff", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 2 }}>ZONA GEOGRÁFICA</div>
+                            <div style={{ fontSize: 11, color: "#8894ac", marginBottom: 8 }}>Define el nombre de zona que verá el usuario en su panel</div>
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                                 {ZONAS.map(z => (
                                     <button key={z} onClick={() => setZona(z)}
@@ -177,10 +195,11 @@ function AnalistaConfig({ u, onSave }) {
                         </div>
 
                         {/* Objetivos visibles */}
-                        <div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 4 }}>
-                                OBJETIVOS VISIBLES ({objSel.length} sel.)
+                        <div style={{ background: "#fff", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 2 }}>
+                                PUESTOS / OBJETIVOS QUE PUEDE VER ({objSel.length} seleccionados)
                             </div>
+                            <div style={{ fontSize: 11, color: "#8894ac", marginBottom: 8 }}>Solo verá controles realizados en estos puestos</div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 160, overflowY: "auto",
                                 border: "1px solid var(--color-border)", borderRadius: 8, padding: 8 }}>
                                 {appData.objetivos.map(obj => (
@@ -207,10 +226,11 @@ function AnalistaConfig({ u, onSave }) {
                         </div>
 
                         {/* Vehículos visibles */}
-                        <div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 4 }}>
-                                VEHÍCULOS DE LA ZONA ({vehSel.length} sel.)
+                        <div style={{ background: "#fff", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 2 }}>
+                                VEHÍCULOS DE LA ZONA ({vehSel.length} seleccionados)
                             </div>
+                            <div style={{ fontSize: 11, color: "#8894ac", marginBottom: 8 }}>Solo verá jornadas de estos vehículos en la vista analista</div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 120, overflowY: "auto",
                                 border: "1px solid var(--color-border)", borderRadius: 8, padding: 8 }}>
                                 {appData.vehiculos.map(veh => (
