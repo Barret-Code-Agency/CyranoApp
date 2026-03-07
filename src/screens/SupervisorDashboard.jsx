@@ -1,5 +1,5 @@
 // src/screens/SupervisorDashboard.jsx
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useAppData } from "../context/AppDataContext";
 import "../styles/SupervisorDashboard.css";
 import AnalistaDashboard from "./AnalistaDashboard";

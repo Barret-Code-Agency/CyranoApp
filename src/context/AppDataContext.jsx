@@ -5,7 +5,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import {
     collection, doc, setDoc, addDoc,
-    onSnapshot, query, where, orderBy, writeBatch,
+    onSnapshot, query, where, writeBatch,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
@@ -163,9 +163,8 @@ export function AppDataProvider({ children, uid }) {
         try {
             const q = query(
                 collection(db, "jornadas"),
-                where("empresaId", "==", EMPRESA_ID),
-                orderBy("creadaEn", "desc")
-            );
+                where("empresaId", "==", EMPRESA_ID)
+            ); // sin orderBy para no requerir índice compuesto — se ordena en JS
             unsubs.push(onSnapshot(q,
                 (snap) => {
                     setJornadas(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
