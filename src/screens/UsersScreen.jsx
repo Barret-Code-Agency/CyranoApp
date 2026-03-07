@@ -251,7 +251,6 @@ function AnalistaConfig({ u, onSave }) {
                                 ))}
                             </div>
                         </div>
-                    </>)}
 
                         {/* Supervisores de la zona */}
                         <div style={{ background: "#fff", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 12px" }}>
@@ -264,7 +263,7 @@ function AnalistaConfig({ u, onSave }) {
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 120, overflowY: "auto",
                                 border: "1px solid var(--color-border)", borderRadius: 8, padding: 8 }}>
                                 {supervisores.length === 0 ? (
-                                    <span style={{ fontSize: 11, color: "#aaa" }}>No hay supervisores en Config → agregalos primero</span>
+                                    <span style={{ fontSize: 11, color: "#aaa" }}>Agregar supervisores en Config primero</span>
                                 ) : supervisores.map(sup => (
                                     <button key={sup} onClick={() => toggleArr(supSel, setSupSel, sup)}
                                         style={{ padding: "3px 8px", borderRadius: 99, fontSize: 11, cursor: "pointer",
@@ -287,11 +286,14 @@ function AnalistaConfig({ u, onSave }) {
                                 </button>
                             </div>
                         </div>
+                    </>)}
 
+                    {/* Botón guardar — siempre visible cuando open */}
                     <button onClick={handleSave} disabled={saving}
                         style={{ background: "#c9a227", color: "#fff", border: "none", borderRadius: 8,
-                            padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                        {saving ? "Guardando..." : ok ? "✓ Guardado" : "💾 Guardar config analista"}
+                            padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                            width: "100%" }}>
+                        {saving ? "⏳ Guardando..." : ok ? "✓ Guardado" : "💾 Guardar configuración analista"}
                     </button>
                 </div>
             )}
