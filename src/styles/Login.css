@@ -131,7 +131,7 @@
 }
 
 .lw-brand span {
-    color: #ff3347;
+    color: var(--color-gold);
 }
 
 .lw-divider-line {

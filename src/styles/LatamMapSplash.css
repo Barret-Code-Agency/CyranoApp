@@ -183,8 +183,20 @@
     box-shadow: 0 6px 20px rgba(0,45,114,0.16);
     transform: translateY(-2px);
 }
-.cta-btn--admin:hover { border-color: #c9a227; background: #fffdf0; }
-.cta-btn--user:hover  { border-color: #002d72; background: #f0f4ff; }
+.cta-btn--admin { border-color: #d4a820; background: linear-gradient(135deg, #fffef5, #fff8e1); color: #7a5c00; }
+.cta-btn--admin:hover { border-color: #b8860b; background: linear-gradient(135deg, #fff8d6, #ffeea0); box-shadow: 0 6px 20px rgba(212,168,32,0.25); }
+.cta-btn--user  { border-color: #b0bcd8; background: linear-gradient(135deg, #f5f8ff, #eef2ff); color: #002d72; }
+.cta-btn--user:hover  { border-color: #002d72; background: linear-gradient(135deg, #e8eeff, #d6e0ff); box-shadow: 0 6px 20px rgba(0,45,114,0.18); }
+
+/* ── Flag flip on hover ── */
+.flag-card-inner {
+    transform-style: preserve-3d;
+    transition: transform 0.7s cubic-bezier(.4,0,.2,1), box-shadow 0.25s ease !important;
+}
+.flag-item:hover .flag-card-inner {
+    transform: rotateY(360deg) !important;
+    box-shadow: 0 14px 28px rgba(0,45,114,0.22) !important;
+}
 .cta-dot {
     color: #c9a227;
     margin-right: 6px;

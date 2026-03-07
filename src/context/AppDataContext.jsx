@@ -233,6 +233,19 @@ export function AppDataProvider({ children, uid }) {
             ));
         } catch (e) { setPlanState(load("cyrano_plan", DEFAULT_PLAN)); markReady(); }
 
+        // 4. Config global (objetivos, vehículos, vigiladores, etc.)
+        try {
+            unsubs.push(onSnapshot(
+                doc(db, "empresas", EMPRESA_ID, "datos", "config_global"),
+                (snap) => {
+                    if (snap.exists() && snap.data().config) {
+                        setConfig(prev => ({ ...DEFAULT_CONFIG, ...snap.data().config }));
+                    }
+                },
+                (err) => { console.warn("[Firestore] config_global:", err.code); }
+            ));
+        } catch (e) { /* usa DEFAULT_CONFIG */ }
+
             unsubs.forEach(u => u && unsubFirestore.push(u));
             })();
         });
@@ -244,7 +257,19 @@ export function AppDataProvider({ children, uid }) {
     }, []);
 
     // ── Config ────────────────────────────────────────────────────────────────
-    const updateConfig = (key, value) => setConfig((p) => ({ ...p, [key]: value }));
+    const updateConfig = (key, value) => {
+        setConfig((p) => {
+            const next = { ...p, [key]: value };
+            // Persistir en Firestore para que todos los dispositivos lo vean
+            if (dbReady) {
+                setDoc(
+                    doc(db, "empresas", EMPRESA_ID, "datos", "config_global"),
+                    { config: next, updatedAt: new Date().toISOString() }
+                ).catch(err => console.error("updateConfig Firestore:", err));
+            }
+            return next;
+        });
+    };
     const resetConfig  = () => setConfig(DEFAULT_CONFIG);
 
     // ── Plan global ───────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import { useAppData } from "../context/AppDataContext";
 import "../styles/SupervisorDashboard.css";
+import AnalistaDashboard from "./AnalistaDashboard";
 
 const WEEK_RANGES = { 1: "1–7", 2: "8–14", 3: "15–21", 4: "22–28" };
 const TURNO_ICON  = { diurno: "☀️", nocturno: "🌙", mixto: "🔄" };
@@ -105,13 +106,10 @@ function DayProgressBar({ semana, useMes = false }) {
     } else {
         const WEEK_RANGES_NUM = { 1:[1,7], 2:[8,14], 3:[15,21], 4:[22,28] };
         const [dIni, dFin] = WEEK_RANGES_NUM[semana] || [1,7];
-        const diasHabiles  = 5;
-        let pasados = 0;
-        for (let d = dIni; d <= Math.min(dayInMonth, dFin); d++) {
-            const dow = new Date(hoy.getFullYear(), hoy.getMonth(), d).getDay();
-            if (dow >= 1 && dow <= 5) pasados++;
-        }
-        pct   = Math.round(pasados / diasHabiles * 100);
+        // Progreso: días transcurridos del rango vs total del rango (7 días)
+        const diasEnRango = dFin - dIni + 1; // siempre 7
+        const diasPasados = Math.max(0, Math.min(dayInMonth, dFin) - dIni + 1);
+        pct   = Math.min(Math.round(diasPasados / diasEnRango * 100), 100);
         label = "avance de semana";
     }
 
@@ -132,6 +130,7 @@ function DayProgressBar({ semana, useMes = false }) {
 }
 
 export default function SupervisorDashboard({ user, onIniciarJornada }) {
+    const [vistaAnalista, setVistaAnalista] = useState(false);
     const {
         plan: planGlobal,
         getPlanSupervisor, getObjetivosSemana,
@@ -284,7 +283,6 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
             {/* ══ BANNER SEMANA ══ */}
             {semana ? (
                 <div className="sup-week-banner">
-                    <div className="sup-week-banner-top">
                     <div className="sup-week-left">
                         <div className="sup-week-label">SEMANA ACTUAL</div>
                         <div className="sup-week-num">{semana}</div>
@@ -297,11 +295,11 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                                     <div className="sup-circle-sub">{realGlobalSemana}/{reqGlobalSemana}</div>
                                 </div>
                             )}
-                            {!sinPlanGlobal && (
+                            {!sinPlanIndivid && (
                                 <div className="sup-week-circle-item">
                                     <div className="sup-circle-label">Mi plan</div>
-                                    <CircleProgress pct={!sinPlanIndivid ? pctIndivSemana : pctGlobalSemana} size={54} />
-                                    <div className="sup-circle-sub">{realGlobalSemana}/{!sinPlanIndivid ? reqIndivSemana : reqGlobalSemana}</div>
+                                    <CircleProgress pct={pctIndivSemana} size={54} />
+                                    <div className="sup-circle-sub">{realGlobalSemana}/{reqIndivSemana}</div>
                                 </div>
                             )}
                         </div>
@@ -322,11 +320,7 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                             requerido={0}
                             color="#8b5cf6" />
                     </div>
-                    </div>{/* end sup-week-banner-top */}
-                    {/* Avance de semana — ancho completo */}
-                    <div className="sup-week-bar-footer">
-                        <DayProgressBar semana={semana} />
-                    </div>
+
                 </div>
             ) : (
                 <div className="sup-no-plan">⚠️ Días 29–31 — Sin plan para estos días.</div>
@@ -501,6 +495,22 @@ export default function SupervisorDashboard({ user, onIniciarJornada }) {
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* ── Vista Analista (solo si está habilitado) ── */}
+            {user.esAnalista && (
+                <button
+                    className="btn btn-secondary"
+                    style={{ marginBottom: 8, borderColor: "#c9a227", color: "#7a5c00",
+                        background: vistaAnalista ? "#fff8d6" : "transparent" }}
+                    onClick={() => setVistaAnalista(v => !v)}
+                >
+                    📊 {vistaAnalista ? "▲ Cerrar vista analista" : "▼ Vista Analista — " + (user.zona || "Mi zona")}
+                </button>
+            )}
+
+            {vistaAnalista && user.esAnalista && (
+                <AnalistaDashboard user={user} />
             )}
 
             <button className="btn btn-primary" onClick={onIniciarJornada}>

@@ -75,7 +75,7 @@ export default function LatamMapSplash({ onSelect }) {
                             🔐 Administrador
                         </button>
                         <button className="cta-btn cta-btn--user" onClick={(e) => { e.stopPropagation(); onSelect("user"); }}>
-                            👤 Supervisor
+                            👤 Usuario
                         </button>
                     </div>
                 </div>

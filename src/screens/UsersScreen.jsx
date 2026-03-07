@@ -2,9 +2,10 @@
 // Panel del admin para crear, ver, desactivar y resetear contraseñas
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useAppData } from "../context/AppDataContext";
 import "../styles/UsersScreen.css";
 
-const ROL_LABEL = { admin: "Administrador", operator: "Supervisor" };
+const ROL_LABEL = { admin: "Administrador", operator: "Supervisor/Analista" };
 const ROL_COLOR = { admin: "red", operator: "blue" };
 
 // ── Formulario nuevo usuario ──────────────────────────────────────────────────
@@ -114,8 +115,131 @@ function NuevoUsuarioForm({ onCreated, onCancel }) {
     );
 }
 
+
+// ── Zonas disponibles ─────────────────────────────────────────────────────────
+const ZONAS = ["Buenos Aires", "Santa Cruz"];
+
+// ── Config Vista Analista (dentro de tarjeta de usuario) ──────────────────────
+function AnalistaConfig({ u, onSave }) {
+    const [open,    setOpen]    = useState(false);
+    const [zona,    setZona]    = useState(u.zona || "");
+    const [habilitado, setHabilitado] = useState(u.esAnalista === true);
+    const [objSel,  setObjSel]  = useState(u.objetivosVisibles || []);
+    const [vehSel,  setVehSel]  = useState(u.vehiculosVisibles || []);
+    const [saving,  setSaving]  = useState(false);
+    const [ok,      setOk]      = useState(false);
+
+    const { data: appData } = useAppData();
+
+    const toggleArr = (arr, setArr, val) =>
+        setArr(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
+
+    const handleSave = async () => {
+        setSaving(true);
+        await onSave(u.uid, { zona, esAnalista: habilitado, objetivosVisibles: objSel, vehiculosVisibles: vehSel });
+        setSaving(false);
+        setOk(true);
+        setTimeout(() => setOk(false), 2000);
+    };
+
+    return (
+        <div style={{ borderTop: "1px solid var(--color-border)", marginTop: 8, paddingTop: 8 }}>
+            <button
+                onClick={() => setOpen(o => !o)}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12,
+                    fontWeight: 700, color: "#c9a227", display: "flex", alignItems: "center", gap: 6 }}
+            >
+                📊 {open ? "▲" : "▼"} Vista Analista {habilitado ? <span style={{ background: "#fef3c7", color: "#92400e", padding: "1px 7px", borderRadius: 99, fontSize: 10 }}>Activo</span> : ""}
+            </button>
+            {open && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* Habilitar */}
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600 }}>
+                        <input type="checkbox" checked={habilitado} onChange={e => setHabilitado(e.target.checked)} />
+                        Habilitar vista analista para este usuario
+                    </label>
+
+                    {habilitado && (<>
+                        {/* Zona */}
+                        <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 4 }}>ZONA</div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                {ZONAS.map(z => (
+                                    <button key={z} onClick={() => setZona(z)}
+                                        style={{ padding: "4px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                            border: zona === z ? "2px solid #c9a227" : "1.5px solid var(--color-border)",
+                                            background: zona === z ? "#fff8d6" : "transparent",
+                                            color: zona === z ? "#7a5c00" : "var(--color-muted)" }}>
+                                        {z}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Objetivos visibles */}
+                        <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 4 }}>
+                                OBJETIVOS VISIBLES ({objSel.length} sel.)
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 160, overflowY: "auto",
+                                border: "1px solid var(--color-border)", borderRadius: 8, padding: 8 }}>
+                                {appData.objetivos.map(obj => (
+                                    <button key={obj} onClick={() => toggleArr(objSel, setObjSel, obj)}
+                                        style={{ padding: "3px 8px", borderRadius: 99, fontSize: 11, cursor: "pointer",
+                                            border: objSel.includes(obj) ? "2px solid var(--color-primary)" : "1px solid var(--color-border)",
+                                            background: objSel.includes(obj) ? "var(--color-primary-xlight)" : "transparent",
+                                            color: objSel.includes(obj) ? "var(--color-primary)" : "var(--color-muted)",
+                                            fontWeight: objSel.includes(obj) ? 700 : 400 }}>
+                                        {obj}
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                                <button onClick={() => setObjSel(appData.objetivos)}
+                                    style={{ fontSize: 10, color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}>
+                                    ✓ Todos
+                                </button>
+                                <button onClick={() => setObjSel([])}
+                                    style={{ fontSize: 10, color: "var(--color-muted)", background: "none", border: "none", cursor: "pointer" }}>
+                                    ✗ Ninguno
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Vehículos visibles */}
+                        <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 4 }}>
+                                VEHÍCULOS DE LA ZONA ({vehSel.length} sel.)
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 120, overflowY: "auto",
+                                border: "1px solid var(--color-border)", borderRadius: 8, padding: 8 }}>
+                                {appData.vehiculos.map(veh => (
+                                    <button key={veh} onClick={() => toggleArr(vehSel, setVehSel, veh)}
+                                        style={{ padding: "3px 8px", borderRadius: 99, fontSize: 11, cursor: "pointer",
+                                            border: vehSel.includes(veh) ? "2px solid #10b981" : "1px solid var(--color-border)",
+                                            background: vehSel.includes(veh) ? "#f0fdf4" : "transparent",
+                                            color: vehSel.includes(veh) ? "#065f46" : "var(--color-muted)",
+                                            fontWeight: vehSel.includes(veh) ? 700 : 400 }}>
+                                        {veh}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </>)}
+
+                    <button onClick={handleSave} disabled={saving}
+                        style={{ background: "#c9a227", color: "#fff", border: "none", borderRadius: 8,
+                            padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                        {saving ? "Guardando..." : ok ? "✓ Guardado" : "💾 Guardar config analista"}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ── Tarjeta de usuario ────────────────────────────────────────────────────────
-function UsuarioCard({ u, currentUid, onToggle, onReset }) {
+function UsuarioCard({ u, currentUid, onToggle, onReset, onSaveAnalista }) {
     const [expanded,   setExpanded]   = useState(false);
     const [resetting,  setResetting]  = useState(false);
     const [toggling,   setToggling]   = useState(false);
@@ -158,9 +282,17 @@ function UsuarioCard({ u, currentUid, onToggle, onReset }) {
                         {!u.activo && <span className="usr-inactivo-badge">Inactivo</span>}
                     </div>
                     <div className="usr-card-email">{u.email}</div>
-                    <span className={`usr-rol-tag ${ROL_COLOR[u.rol]}`}>
-                        {ROL_LABEL[u.rol] || u.rol}
-                    </span>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
+                        <span className={`usr-rol-tag ${ROL_COLOR[u.rol]}`}>
+                            {ROL_LABEL[u.rol] || u.rol}
+                        </span>
+                        {u.esAnalista && (
+                            <span style={{ background: "#fff8d6", color: "#7a5c00", border: "1px solid #d4a820",
+                                borderRadius: 99, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>
+                                📊 Analista{u.zona ? " · " + u.zona : ""}
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <span className="usr-chevron">{expanded ? "▲" : "▼"}</span>
             </div>
@@ -175,6 +307,11 @@ function UsuarioCard({ u, currentUid, onToggle, onReset }) {
                         <span className="info-k">Creado</span>
                         <span className="info-v">{fmtFecha(u.creadoEn)}</span>
                     </div>
+
+                    {/* ── Vista Analista ── */}
+                    {u.rol === "operator" && (
+                        <AnalistaConfig u={u} onSave={onSaveAnalista} />
+                    )}
 
                     <div className="usr-card-actions">
                         {/* Reset contraseña */}
@@ -259,6 +396,12 @@ export default function UsersScreen() {
         await resetPassword(email);
     };
 
+    const handleSaveAnalista = async (uid, datos) => {
+        await actualizarUsuario(uid, datos);
+        showToast("✓ Configuración analista guardada");
+        cargar();
+    };
+
     const filtrados = usuarios.filter(u => {
         if (filtro === "admin")    return u.rol === "admin";
         if (filtro === "operator") return u.rol === "operator";
@@ -269,6 +412,7 @@ export default function UsersScreen() {
     const activos   = usuarios.filter(u => u.activo !== false).length;
     const admins    = usuarios.filter(u => u.rol === "admin").length;
     const operators = usuarios.filter(u => u.rol === "operator").length;
+    const analistas = usuarios.filter(u => u.esAnalista === true).length;
 
     return (
         <div className="usr-screen">
@@ -288,6 +432,10 @@ export default function UsersScreen() {
                 <div className="usr-stat">
                     <div className="usr-stat-val red">{admins}</div>
                     <div className="usr-stat-label">Admins</div>
+                </div>
+                <div className="usr-stat">
+                    <div className="usr-stat-val" style={{ color: "#c9a227" }}>{analistas}</div>
+                    <div className="usr-stat-label">Analistas</div>
                 </div>
                 <div className="usr-stat">
                     <div className="usr-stat-val muted">{usuarios.length - activos}</div>
@@ -336,6 +484,7 @@ export default function UsersScreen() {
                         currentUid={user?.uid}
                         onToggle={handleToggle}
                         onReset={handleReset}
+                        onSaveAnalista={handleSaveAnalista}
                     />
                 ))
             )}

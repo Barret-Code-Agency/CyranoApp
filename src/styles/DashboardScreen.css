@@ -59,9 +59,13 @@
     transition: all var(--transition-fast);
 }
 
+.dash-tab:hover {
+    color: #c9a227;
+}
 .dash-tab.active {
-    color: var(--color-primary);
-    border-bottom-color: var(--color-primary);
+    color: #c9a227;
+    border-bottom-color: #c9a227;
+    font-weight: 700;
 }
 
 /* ── Cards ── */

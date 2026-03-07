@@ -6,8 +6,6 @@ import PlanSupervisorScreen from "./PlanSupervisorScreen";
 import UsersScreen          from "./UsersScreen";
 import VehiculosScreen      from "./VehiculosScreen";
 import "../styles/AdminScreen.css";
-import { exportarExcel }    from "../utils/exportarExcel";
-import HistorialScreen       from "./HistorialScreen";
 
 const ADMIN_TABS = [
     { key: "dashboard", icon: "📊", label: "Dashboard" },
@@ -15,8 +13,6 @@ const ADMIN_TABS = [
     { key: "usuarios",  icon: "👥", label: "Usuarios" },
     { key: "vehiculos", icon: "🚗", label: "Vehículos" },
     { key: "config",    icon: "⚙️", label: "Configuración" },
-    { key: "reportes",  icon: "📥", label: "Exportar" },
-    { key: "historial", icon: "📁", label: "Historial" },
 ];
 
 function EditableList({ icon, title, dataKey, items, onUpdate }) {
@@ -91,29 +87,32 @@ function ConfigPanel({ onUpdate, showToast }) {
 }
 
 export default function AdminScreen({ onExit }) {
-    const { updateConfig, jornadas, plan, planesSuper, getSupervisoresConEmail, getPlanSupervisor } = useAppData();
+    const { updateConfig } = useAppData();
     const [activeTab, setActiveTab] = useState("dashboard");
     const [toast, setToast]         = useState("");
     const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2100); };
-    const [exporting, setExporting] = useState(false);
-    const handleExcel = async () => {
-        setExporting(true);
-        try {
-            const fn = await exportarExcel({ jornadas, plan, planesSuper, getSupervisoresConEmail, getPlanSupervisor });
-            showToast("✓ Exportado: " + fn);
-        } catch (e) {
-            showToast("✗ Error: " + e.message);
-        } finally {
-            setExporting(false);
-        }
-    };
     const handleUpdate = (key, value) => { updateConfig(key, value); showToast("✓ Guardado"); };
 
     return (
         <>
-            <div className="admin-tab-bar">
+            <div style={{
+                display: "flex", gap: 0, borderBottom: "2px solid var(--color-border)",
+                marginBottom: 20, overflowX: "auto", scrollbarWidth: "none", flexShrink: 0
+            }}>
                 {ADMIN_TABS.map((t) => (
-                    <button key={t.key} className={`admin-tab-btn ${activeTab === t.key ? "active" : ""}`} onClick={() => setActiveTab(t.key)}>
+                    <button key={t.key}
+                        onClick={() => setActiveTab(t.key)}
+                        style={{
+                            border: "none", background: "transparent",
+                            padding: "9px 14px", fontSize: 12, fontWeight: 600,
+                            cursor: "pointer", whiteSpace: "nowrap",
+                            display: "flex", alignItems: "center", gap: 5,
+                            borderBottom: activeTab === t.key ? "2px solid #c9a227" : "2px solid transparent",
+                            marginBottom: -2,
+                            color: activeTab === t.key ? "#c9a227" : "var(--color-muted)",
+                            transition: "all 0.12s ease",
+                        }}
+                    >
                         <span>{t.icon}</span>{t.label}
                     </button>
                 ))}
@@ -134,41 +133,6 @@ export default function AdminScreen({ onExit }) {
             {activeTab === "planes"    && <PlanSupervisorScreen />}
             {activeTab === "usuarios"  && <UsersScreen />}
             {activeTab === "vehiculos" && <VehiculosScreen canEdit={true} />}
-
-            {activeTab === "reportes" && (
-                <>
-                    <div className="admin-header">
-                        <div>
-                            <div className="screen-title">Exportar</div>
-                            <div className="screen-sub">Descargá el reporte mensual en Excel</div>
-                        </div>
-                    </div>
-                    <div style={{ padding: "24px 16px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 480 }}>
-                        <div style={{ background: "#f8f9fc", border: "1px solid #e0e4f0", borderRadius: 12, padding: "20px 18px" }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: "#0d1b3e", marginBottom: 6 }}>📊 Reporte Mensual Excel</div>
-                            <div style={{ fontSize: 12, color: "#6b7a99", marginBottom: 16, lineHeight: 1.6 }}>
-                                Incluye 4 hojas:<br />
-                                · Resumen mensual por supervisor<br />
-                                · Cumplimiento por objetivo/puesto<br />
-                                · Detalle de jornadas<br />
-                                · Tendencia semanal (últimas 8 semanas)
-                            </div>
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleExcel}
-                                disabled={exporting}
-                                style={{ width: "100%" }}
-                            >
-                                {exporting ? "⏳ Generando..." : "⬇ Descargar Excel"}
-                            </button>
-                        </div>
-                    </div>
-                </>
-            )}
-
-            {activeTab === "historial" && (
-                <HistorialScreen />
-            )}
 
             {activeTab === "config" && (
                 <>

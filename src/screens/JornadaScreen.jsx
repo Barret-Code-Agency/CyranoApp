@@ -98,11 +98,11 @@ export default function JornadaScreen({ user, onStarted, onBack }) {
                 <div className="row">
                     <div className="field">
                         <label className="label">Nombre</label>
-                        <input value={editNombre} onChange={(e) => setEditNombre(e.target.value)} placeholder="Nombre" />
+                        <input value={editNombre} readOnly style={{ background: "var(--color-surface2)", color: "var(--color-muted)", cursor: "not-allowed" }} />
                     </div>
                     <div className="field">
                         <label className="label">Apellido</label>
-                        <input value={editApellido} onChange={(e) => setEditApellido(e.target.value)} placeholder="Apellido" />
+                        <input value={editApellido} readOnly style={{ background: "var(--color-surface2)", color: "var(--color-muted)", cursor: "not-allowed" }} />
                     </div>
                 </div>
                 <div className="field">

@@ -80,14 +80,19 @@ function AppContent() {
                     </div>
                     {user && (
                         <button
-                            className="user-chip"
-                            title="Cerrar sesión"
-                            style={{ cursor: "pointer", background: "none", border: "none", padding: 0 }}
                             onClick={async () => { await logout(); setUser(null); goTo("splash"); }}
+                            style={{
+                                cursor: "pointer", border: "1.5px solid",
+                                borderColor: isAdmin ? "var(--color-primary)" : "var(--color-border)",
+                                borderRadius: "var(--radius-full)",
+                                background: isAdmin ? "var(--color-primary-ghost)" : "var(--color-surface2)",
+                                padding: "5px 12px", display: "flex", alignItems: "center",
+                                gap: 6, fontSize: 11, fontWeight: 700,
+                                color: isAdmin ? "var(--color-primary)" : "var(--color-text-secondary)",
+                                whiteSpace: "nowrap", transition: "all 0.15s ease",
+                            }}
                         >
-                            <div className="user-avatar" style={isAdmin ? { background: "var(--color-primary)", color: "#fff" } : {}}>
-                                {user.name ? user.name[0].toUpperCase() : "?"}
-                            </div>
+                            🚪 Cerrar sesión
                         </button>
                     )}
                 </header>
