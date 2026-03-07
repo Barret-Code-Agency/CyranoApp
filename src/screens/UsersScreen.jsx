@@ -121,15 +121,17 @@ const ZONAS = ["Buenos Aires", "Santa Cruz"];
 
 // ── Config Vista Analista (dentro de tarjeta de usuario) ──────────────────────
 function AnalistaConfig({ u, onSave }) {
-    const [open,    setOpen]    = useState(false);
-    const [zona,    setZona]    = useState(u.zona || "");
+    const [open,       setOpen]       = useState(false);
+    const [zona,       setZona]       = useState(u.zona || "");
     const [habilitado, setHabilitado] = useState(u.esAnalista === true);
-    const [objSel,  setObjSel]  = useState(u.objetivosVisibles || []);
-    const [vehSel,  setVehSel]  = useState(u.vehiculosVisibles || []);
-    const [saving,  setSaving]  = useState(false);
-    const [ok,      setOk]      = useState(false);
+    const [objSel,     setObjSel]     = useState(Array.isArray(u.objetivosVisibles) ? u.objetivosVisibles : []);
+    const [vehSel,     setVehSel]     = useState(Array.isArray(u.vehiculosVisibles) ? u.vehiculosVisibles : []);
+    const [saving,     setSaving]     = useState(false);
+    const [ok,         setOk]         = useState(false);
 
     const { data: appData } = useAppData();
+    const objetivos = Array.isArray(appData?.objetivos) ? appData.objetivos : [];
+    const vehiculos = Array.isArray(appData?.vehiculos) ? appData.vehiculos : [];
 
     const toggleArr = (arr, setArr, val) =>
         setArr(arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
@@ -202,7 +204,7 @@ function AnalistaConfig({ u, onSave }) {
                             <div style={{ fontSize: 11, color: "#8894ac", marginBottom: 8 }}>Solo verá controles realizados en estos puestos</div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 160, overflowY: "auto",
                                 border: "1px solid var(--color-border)", borderRadius: 8, padding: 8 }}>
-                                {appData.objetivos.map(obj => (
+                                {objetivos.map(obj => (
                                     <button key={obj} onClick={() => toggleArr(objSel, setObjSel, obj)}
                                         style={{ padding: "3px 8px", borderRadius: 99, fontSize: 11, cursor: "pointer",
                                             border: objSel.includes(obj) ? "2px solid var(--color-primary)" : "1px solid var(--color-border)",
@@ -214,7 +216,7 @@ function AnalistaConfig({ u, onSave }) {
                                 ))}
                             </div>
                             <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                                <button onClick={() => setObjSel(appData.objetivos)}
+                                <button onClick={() => setObjSel(objetivos)}
                                     style={{ fontSize: 10, color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}>
                                     ✓ Todos
                                 </button>
@@ -233,7 +235,7 @@ function AnalistaConfig({ u, onSave }) {
                             <div style={{ fontSize: 11, color: "#8894ac", marginBottom: 8 }}>Solo verá jornadas de estos vehículos en la vista analista</div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 120, overflowY: "auto",
                                 border: "1px solid var(--color-border)", borderRadius: 8, padding: 8 }}>
-                                {appData.vehiculos.map(veh => (
+                                {vehiculos.map(veh => (
                                     <button key={veh} onClick={() => toggleArr(vehSel, setVehSel, veh)}
                                         style={{ padding: "3px 8px", borderRadius: 99, fontSize: 11, cursor: "pointer",
                                             border: vehSel.includes(veh) ? "2px solid #10b981" : "1px solid var(--color-border)",
