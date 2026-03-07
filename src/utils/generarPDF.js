@@ -216,7 +216,24 @@ export async function generarHojaSupervision(session) {
     campo("Hs Apoyo/Cap.",  fmtHs(tiempos.apoyo),       M + 156, 17, 16);
     campo("Hs Admin.",      fmtHs(tiempos.admin),       M + 189, 14, 14);
     campo("Email",          session.email || "—",        M + 217, 12, 38);
-    y += H6 + 1.5;
+    y += H6;
+
+    // Fila 3: actividades especiales
+    const H3 = 5.4;
+    const campoF3 = (lbl, val, x, lw, vw) => {
+        doc.setDrawColor(200, 210, 228);
+        R(x, y, lw + vw, H3, [248, 250, 255]);
+        R(x, y, lw, H3, [225, 232, 248]);
+        T(lbl, x + 1, y + 3.5, 4.5, true, "left", [0, 48, 135]);
+        T(String(val ?? ""), x + lw + 1, y + 3.5, 5.5, false, "left", val ? [30, 30, 30] : [180, 180, 180]);
+    };
+    const fmtHsOpt = (m) => m > 0 ? fmtHs(m) : "";
+    campoF3("Horas Almuerzo",  fmtHsOpt(tiempos.almuerzo),  M,        28, 18);
+    campoF3("Análisis riesgos",fmtHsOpt(tiempos.vulnerab),  M + 46,   28, 18);
+    campoF3("Visita gremial",  fmtHsOpt(tiempos.gremial),   M + 92,   24, 18);
+    campoF3("Capacitacion",    fmtHsOpt(tiempos.apoyo),     M + 134,  22, 18);
+    campoF3("Atencion reclamos",fmtHsOpt(tiempos.reclamos), M + 174,  30, 54);
+    y += H3 + 1.5;
 
     // ── ENCABEZADO TABLA ──────────────────────────────────────────────────────
     const COLS = [

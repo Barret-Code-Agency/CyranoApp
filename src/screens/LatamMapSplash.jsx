@@ -68,16 +68,16 @@ export default function LatamMapSplash({ onSelect }) {
             </div>
 
             <div className={`splash-cta ${ctaVisible ? 'visible' : ''}`}>
-                <p className="splash-access-label">Acceder como</p>
-                <div className="splash-role-btns">
-                    <button className="role-btn role-btn--admin" onClick={() => onSelect("admin")}>
-                        <span className="role-btn-icon">🔐</span>
-                        <span className="role-btn-label">Administrador</span>
-                    </button>
-                    <button className="role-btn role-btn--sup" onClick={() => onSelect("supervisor")}>
-                        <span className="role-btn-icon">👤</span>
-                        <span className="role-btn-label">Usuario</span>
-                    </button>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                    <p style={{ color: "#8894ac", fontSize: 11, margin: 0, letterSpacing: 3, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, textTransform: "uppercase" }}>Acceder como</p>
+                    <div style={{ display: "flex", gap: 12 }}>
+                        <button className="cta-btn cta-btn--admin" onClick={(e) => { e.stopPropagation(); onSelect("admin"); }}>
+                            🔐 Administrador
+                        </button>
+                        <button className="cta-btn cta-btn--user" onClick={(e) => { e.stopPropagation(); onSelect("user"); }}>
+                            👤 Supervisor
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
