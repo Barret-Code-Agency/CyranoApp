@@ -12,7 +12,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    background: linear-gradient(135deg, #0030a0 0%, #001a6e 100%);
+    background: var(--color-primary);
+    margin-top: 12px;
     border-radius: 14px;
     padding: 16px 18px;
     color: #fff;
@@ -181,10 +182,11 @@
 }
 
 .cv-btn-sn,
-.cv-btn-cn {
+.cv-btn-cn,
+.cv-btn-na {
     font-size: 11px;
     font-weight: 700;
-    padding: 4px 10px;
+    padding: 4px 9px;
     border-radius: 6px;
     border: 1.5px solid #d0d8e8;
     background: #f5f7fc;
@@ -204,6 +206,17 @@
     background: #dc2626;
     border-color: #dc2626;
     color: #fff;
+}
+
+.cv-btn-na.active {
+    background: #6b7280;
+    border-color: #6b7280;
+    color: #fff;
+}
+
+/* Ítem sin responder — borde izquierdo suave para visibilidad */
+.cv-item.sin-respuesta {
+    border-left: 3px solid #f59e0b;
 }
 
 /* ── Card ── */

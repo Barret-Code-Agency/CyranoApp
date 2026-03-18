@@ -137,6 +137,7 @@ export const PERMISOS_BASE = {
         libro_actas:        true,
         realizar_ronda:     true,
         pedido_insumos:     true,
+        control_vehicular:  true,
     },
 };
 

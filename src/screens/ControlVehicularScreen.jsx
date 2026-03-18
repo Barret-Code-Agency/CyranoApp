@@ -121,7 +121,7 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
         onConfirmar(datos);
     };
 
-    const puedeConfirmar = respondidos >= Math.floor(TOTAL_ITEMS * 0.7) && sinNovedad !== null;
+    const puedeConfirmar = respondidos === TOTAL_ITEMS && sinNovedad !== null;
 
     return (
         <div className="cv-root">
@@ -170,7 +170,7 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
                                     const key = `${sec.id}__${item}`;
                                     const val = checks[key];
                                     return (
-                                        <div key={item} className={`cv-item ${val === "sn" ? "sn" : val === "cn" ? "cn" : ""}`}>
+                                        <div key={item} className={`cv-item ${val === "sn" ? "sn" : val === "cn" ? "cn" : val === "na" ? "na" : "sin-respuesta"}`}>
                                             <span className="cv-item-label">{item}</span>
                                             <div className="cv-item-btns">
                                                 <button
@@ -181,6 +181,10 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
                                                     className={`cv-btn-cn ${val === "cn" ? "active" : ""}`}
                                                     onClick={() => setCheck(key, val === "cn" ? null : "cn")}
                                                 >C/N</button>
+                                                <button
+                                                    className={`cv-btn-na ${val === "na" ? "active" : ""}`}
+                                                    onClick={() => setCheck(key, val === "na" ? null : "na")}
+                                                >N/A</button>
                                             </div>
                                         </div>
                                     );
@@ -244,10 +248,10 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
             >
                 {pdfLoading ? "⏳ Generando PDF..." : "✅ Confirmar control y continuar"}
             </button>
-            {!puedeConfirmar && respondidos < Math.floor(TOTAL_ITEMS * 0.7) && (
-                <div className="cv-hint">Completá al menos el 70% del checklist para continuar</div>
+            {!puedeConfirmar && respondidos < TOTAL_ITEMS && (
+                <div className="cv-hint">Respondé todos los ítems del checklist para continuar ({TOTAL_ITEMS - respondidos} pendientes)</div>
             )}
-            {!puedeConfirmar && respondidos >= Math.floor(TOTAL_ITEMS * 0.7) && sinNovedad === null && (
+            {!puedeConfirmar && respondidos === TOTAL_ITEMS && sinNovedad === null && (
                 <div className="cv-hint">Indicá si hay novedades antes de continuar</div>
             )}
             <button className="btn btn-secondary" onClick={onOmitir} style={{ color: "var(--color-muted)", borderColor: "rgba(0,0,0,0.1)" }}>

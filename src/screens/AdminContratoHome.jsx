@@ -34,13 +34,6 @@ const MODULOS = [
         color:  "blue",
     },
     {
-        id:     "asig_supervisores",
-        icon:   "🎯",
-        titulo: "Asignación de supervisores",
-        desc:   "Asigná supervisores a los objetivos del contrato",
-        color:  "blue",
-    },
-    {
         id:     "asig_personal",
         icon:   "👥",
         titulo: "Asignación de personal",

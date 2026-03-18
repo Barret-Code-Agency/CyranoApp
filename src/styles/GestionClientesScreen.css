@@ -119,6 +119,13 @@
 }
 .gc-item-main strong { font-size: 15px; color: var(--color-text-primary); }
 
+.gc-item-nombre-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .gc-item-badge {
     display: inline-block;
     font-size: 11px;

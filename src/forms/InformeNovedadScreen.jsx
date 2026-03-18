@@ -319,7 +319,7 @@ export default function InformeNovedadScreen({ onBack }) {
                             value={selCliente}
                             onChange={e => { setSelCliente(e.target.value); setSelObjetivo(""); setSelPuesto(""); }}>
                             <option value="">— Seleccioná cliente —</option>
-                            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.codigo ? ` (${c.codigo})` : ""}</option>)}
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.codigo ? `${c.codigo} · ` : ""}{c.nombre}</option>)}
                         </select>
                     </Field>
 
@@ -345,7 +345,7 @@ export default function InformeNovedadScreen({ onBack }) {
                             onChange={e => setSelPuesto(e.target.value)}
                             disabled={!selObjetivo}>
                             <option value="">— Seleccioná puesto —</option>
-                            {puestosFiltrados.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                            {puestosFiltrados.sort((a,b) => (a.numero??999)-(b.numero??999)).map(p => <option key={p.id} value={p.id}>{clienteObj?.codigo ? `${clienteObj.codigo}/${p.numero ?? "?"} · ` : ""}{p.nombre}</option>)}
                         </select>
                     </Field>
 

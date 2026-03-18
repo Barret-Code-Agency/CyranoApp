@@ -10,15 +10,68 @@ import RondasVigScreen from "./RondasVigScreen";
 import InformeSencilloScreen from "../forms/InformeSencilloScreen";
 import InformeNovedadScreen from "../forms/InformeNovedadScreen";
 import VerInformesScreen from "../forms/VerInformesScreen";
+import ControlVehicularScreen from "./ControlVehicularScreen";
 import "../styles/VigHome.css";
 
+// ── Selector de vehículo antes del checklist ──────────────────────────────────
+function SelectorVehiculo({ vehiculos = [], supervisor, onBack }) {
+    const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState(null);
+    const [iniciado, setIniciado] = useState(false);
+
+    if (iniciado && vehiculoSeleccionado) {
+        return (
+            <ControlVehicularScreen
+                vehiculo={vehiculoSeleccionado}
+                supervisor={supervisor}
+                onConfirmar={() => setIniciado(false)}
+                onOmitir={onBack}
+            />
+        );
+    }
+
+    return (
+        <div className="vh-subpanel">
+            <button className="vh-back" onClick={onBack}>← Volver al panel</button>
+            <div className="vh-subpanel-title">🚗 Control de Vehículo</div>
+            <div className="vh-opciones" style={{ flexDirection: "column", gap: "12px", padding: "16px 0" }}>
+                <label style={{ fontWeight: 600, marginBottom: 4 }}>Seleccioná el vehículo a controlar:</label>
+                <select
+                    className="vig-select"
+                    value={vehiculoSeleccionado || ""}
+                    onChange={e => setVehiculoSeleccionado(e.target.value)}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 15 }}
+                >
+                    <option value="">-- Seleccionar vehículo --</option>
+                    {vehiculos.map(v => (
+                        <option key={v} value={v}>{v}</option>
+                    ))}
+                </select>
+                <button
+                    className="vh-opcion vh-opcion--blue"
+                    disabled={!vehiculoSeleccionado}
+                    onClick={() => setIniciado(true)}
+                    style={{ marginTop: 8, opacity: vehiculoSeleccionado ? 1 : 0.5 }}
+                >
+                    <span className="vh-opcion-icon">✅</span>
+                    <div className="vh-opcion-info">
+                        <strong>Iniciar checklist</strong>
+                        <small>{vehiculoSeleccionado || "Seleccioná un vehículo primero"}</small>
+                    </div>
+                    <span className="vh-modulo-arrow">›</span>
+                </button>
+            </div>
+        </div>
+    );
+}
+
 const MODULOS = [
-    { id: "libro_actas",   icon: "📖", titulo: "Libro de Actas Digital", descripcion: "Registrá novedades y actas de tu turno",    permiso: "libro_actas"   },
-    { id: "realizar_ronda",icon: "🗺️", titulo: "Realizar Ronda",         descripcion: "Iniciá y registrá tu ronda de vigilancia",  permiso: "realizar_ronda"},
-    { id: "planillas",     icon: "📊", titulo: "Planillas",               descripcion: "Consultá tus planillas operativas",         permiso: "planillas"     },
-    { id: "informes",      icon: "📄", titulo: "Informes",                descripcion: "Creá o consultá informes de tu puesto",     permiso: "informes"      },
-    { id: "turnos_ver",    icon: "🕐", titulo: "Mis Turnos",              descripcion: "Consultá tu calendario de turnos",          permiso: "turnos_ver"    },
-    { id: "pedido_insumos",icon: "📦", titulo: "Pedido de Insumos",       descripcion: "Solicitá materiales o insumos para tu puesto", permiso: "pedido_insumos"},
+    { id: "libro_actas",      icon: "📖", titulo: "Libro de Actas Digital", descripcion: "Registrá novedades y actas de tu turno",        permiso: "libro_actas"      },
+    { id: "realizar_ronda",   icon: "🗺️", titulo: "Realizar Ronda",         descripcion: "Iniciá y registrá tu ronda de vigilancia",      permiso: "realizar_ronda"   },
+    { id: "control_vehicular",icon: "🚗", titulo: "Control de Vehículo",    descripcion: "Realizá el checklist de tu vehículo asignado",  permiso: "control_vehicular"},
+    { id: "planillas",        icon: "📊", titulo: "Planillas",               descripcion: "Consultá tus planillas operativas",             permiso: "planillas"        },
+    { id: "informes",         icon: "📄", titulo: "Informes",                descripcion: "Creá o consultá informes de tu puesto",         permiso: "informes"         },
+    { id: "turnos_ver",       icon: "🕐", titulo: "Mis Turnos",              descripcion: "Consultá tu calendario de turnos",              permiso: "turnos_ver"       },
+    { id: "pedido_insumos",   icon: "📦", titulo: "Pedido de Insumos",       descripcion: "Solicitá materiales o insumos para tu puesto",  permiso: "pedido_insumos"   },
 ];
 
 // ── Sub-pantalla Informes ──────────────────────────────────────────────────────
@@ -139,7 +192,7 @@ function PanelPlanillas({ onBack }) {
 // ── Pantalla principal ─────────────────────────────────────────────────────────
 export default function VigHome({ onLogout, user: propUser }) {
     const { user: authUser, logout } = useAuth();
-    const { empresaLogos } = useAppData();
+    const { empresaLogos, data } = useAppData();
     const [seccion, setSeccion] = useState(null);
 
     // authUser = Firebase Auth context (puede tardar en llegar)
@@ -149,9 +202,10 @@ export default function VigHome({ onLogout, user: propUser }) {
     const handleLogout = async () => { await logout(); onLogout?.(); };
 
     const handleModulo = (id) => {
-        if (id === "informes")       setSeccion("informes");
-        if (id === "planillas")      setSeccion("planillas");
-        if (id === "realizar_ronda") setSeccion("realizar_ronda");
+        if (id === "informes")         setSeccion("informes");
+        if (id === "planillas")        setSeccion("planillas");
+        if (id === "realizar_ronda")   setSeccion("realizar_ronda");
+        if (id === "control_vehicular") setSeccion("control_vehicular");
     };
 
     const headerJSX = (
@@ -169,9 +223,19 @@ export default function VigHome({ onLogout, user: propUser }) {
         </header>
     );
 
-    if (seccion === "informes")       return <div className="vh-root">{headerJSX}<PanelInformes  onBack={() => setSeccion(null)} /></div>;
-    if (seccion === "planillas")      return <div className="vh-root">{headerJSX}<PanelPlanillas onBack={() => setSeccion(null)} /></div>;
-    if (seccion === "realizar_ronda") return <RondasVigScreen onBack={() => setSeccion(null)} />;
+    if (seccion === "informes")         return <div className="vh-root">{headerJSX}<PanelInformes  onBack={() => setSeccion(null)} /></div>;
+    if (seccion === "planillas")        return <div className="vh-root">{headerJSX}<PanelPlanillas onBack={() => setSeccion(null)} /></div>;
+    if (seccion === "realizar_ronda")   return <RondasVigScreen onBack={() => setSeccion(null)} />;
+    if (seccion === "control_vehicular") return (
+        <div className="vh-root">
+            {headerJSX}
+            <SelectorVehiculo
+                vehiculos={data?.vehiculos ?? []}
+                supervisor={user?.name ?? ""}
+                onBack={() => setSeccion(null)}
+            />
+        </div>
+    );
 
     return (
         <div className="vh-root">
