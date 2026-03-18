@@ -25,17 +25,17 @@ const flags = [
     { name: 'Venezuela',       src: 'https://flagcdn.com/ve.svg' },
 ];
 
-export default function LatamMapSplash({ onSelect }) {
-    const [visible, setVisible] = useState(false);
+export default function LatamMapSplash({ onContinue, onSuperAdmin }) {
+    const [visible,      setVisible]      = useState(false);
     const [flagsVisible, setFlagsVisible] = useState([]);
-    const [ctaVisible, setCtaVisible] = useState(false);
+    const [ctaVisible,   setCtaVisible]   = useState(false);
 
     useEffect(() => {
         const t1 = setTimeout(() => setVisible(true), 100);
         flags.forEach((_, i) => {
             setTimeout(() => setFlagsVisible(prev => [...prev, i]), 400 + i * 60);
         });
-        const t2 = setTimeout(() => setCtaVisible(true), 400 + flags.length * 60 + 300);
+        const t2 = setTimeout(() => setCtaVisible(true), 400 + flags.length * 60 + 200);
         return () => { clearTimeout(t1); clearTimeout(t2); };
     }, []);
 
@@ -44,7 +44,11 @@ export default function LatamMapSplash({ onSelect }) {
             <div className="splash-accent-bar" />
 
             <header className={`splash-header ${visible ? 'visible' : ''}`}>
-                <div className="splash-logo-box">
+                <div
+                    className="splash-logo-box splash-logo-box--admin"
+                    onClick={(e) => { e.stopPropagation(); onSuperAdmin?.(); }}
+                    title="Administración del sistema"
+                >
                     <img src="./images/Leon.png" width="110" height="110" alt="Cyrano Logo" />
                 </div>
                 <div>
@@ -56,29 +60,25 @@ export default function LatamMapSplash({ onSelect }) {
 
             <div className="splash-divider" />
 
+            {/* Instrucción */}
+            <p className={`splash-instruction ${ctaVisible ? 'visible' : ''}`}>
+                Bienvenido — haga click en la bandera de su país para ingresar
+            </p>
+
             <div className="splash-flags">
                 {flags.map((flag, i) => (
-                    <div key={flag.name} className={`flag-item ${flagsVisible.includes(i) ? 'shown' : ''}`}>
+                    <div
+                        key={flag.name}
+                        className={`flag-item ${flagsVisible.includes(i) ? 'shown' : ''}`}
+                        onClick={() => onContinue(flag)}
+                        title={flag.name}
+                    >
                         <div className="flag-card-inner">
                             <img src={flag.src} alt={flag.name} />
                             <div className="flag-name">{flag.name}</div>
                         </div>
                     </div>
                 ))}
-            </div>
-
-            <div className={`splash-cta ${ctaVisible ? 'visible' : ''}`}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                    <p style={{ color: "#8894ac", fontSize: 11, margin: 0, letterSpacing: 3, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, textTransform: "uppercase" }}>Acceder como</p>
-                    <div style={{ display: "flex", gap: 12 }}>
-                        <button className="cta-btn cta-btn--admin" onClick={(e) => { e.stopPropagation(); onSelect("admin"); }}>
-                            🔐 Administrador
-                        </button>
-                        <button className="cta-btn cta-btn--user" onClick={(e) => { e.stopPropagation(); onSelect("user"); }}>
-                            👤 Usuario
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
     );

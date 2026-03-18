@@ -1,0 +1,264 @@
+/* src/styles/GestionClientesScreen.css */
+
+.gc-root {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    background: var(--color-bg);
+    font-family: var(--font-main);
+}
+
+/* ── Header ── */
+.gc-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+.gc-back {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+}
+.gc-back:hover { background: var(--color-primary-ghost); }
+
+.gc-header-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+/* ── Breadcrumb ── */
+.gc-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    flex-wrap: wrap;
+}
+.gc-bc-link {
+    color: var(--color-primary);
+    cursor: pointer;
+    font-weight: 600;
+}
+.gc-bc-link:hover { text-decoration: underline; }
+.gc-bc-sep { color: var(--color-text-secondary); }
+.gc-bc-current { font-weight: 700; color: var(--color-text-primary); }
+
+/* ── Body ── */
+.gc-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    max-width: 700px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ── Section bar ── */
+.gc-section-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0 2px;
+}
+
+.gc-add-btn {
+    padding: 6px 14px;
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font-main);
+    transition: opacity 0.15s;
+}
+.gc-add-btn:hover { opacity: 0.9; }
+
+/* ── Items ── */
+.gc-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    transition: box-shadow 0.15s;
+}
+.gc-item--clickable { cursor: pointer; }
+.gc-item--clickable:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-color: var(--color-primary); }
+
+.gc-item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+.gc-item-main strong { font-size: 15px; color: var(--color-text-primary); }
+
+.gc-item-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: monospace;
+    background: var(--color-primary-ghost);
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    padding: 1px 7px;
+    letter-spacing: 0.5px;
+    width: fit-content;
+}
+
+.gc-item-sub {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.gc-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.gc-icon-btn {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface2);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+.gc-icon-btn:hover { background: var(--color-border); }
+.gc-icon-btn--del:hover { background: #fee2e2; border-color: #fca5a5; }
+
+.gc-arrow {
+    font-size: 20px;
+    color: var(--color-text-secondary);
+    margin-left: 2px;
+}
+
+.gc-empty {
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    padding: var(--space-5) 0;
+}
+
+/* ── Modal ── */
+.gc-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 100;
+    padding: var(--space-4);
+}
+
+@media (min-width: 500px) {
+    .gc-modal-overlay { align-items: center; }
+}
+
+.gc-modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+
+.gc-modal-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--color-text-primary);
+    text-transform: capitalize;
+}
+
+.gc-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: -8px;
+}
+
+.gc-input {
+    padding: 10px 12px;
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface2);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-family: var(--font-main);
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+}
+.gc-input:focus { border-color: var(--color-primary); background: var(--color-surface); }
+
+.gc-modal-btns {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    margin-top: var(--space-1);
+}
+
+.gc-btn {
+    padding: 9px 20px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-family: var(--font-main);
+    transition: all 0.15s;
+}
+.gc-btn--primary { background: var(--color-primary); color: #fff; }
+.gc-btn--primary:hover:not(:disabled) { opacity: 0.9; }
+.gc-btn--primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.gc-btn--ghost  { background: var(--color-surface2); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+.gc-btn--ghost:hover { background: var(--color-border); }
+
+.gc-error {
+    background: #fee2e2; color: #b91c1c;
+    border: 1px solid #fca5a5;
+    border-radius: var(--radius-md);
+    padding: 8px 12px; font-size: 13px;
+}

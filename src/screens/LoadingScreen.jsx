@@ -110,9 +110,9 @@ export default function LoadingScreen({ onFinished, postLogin = false, userName 
             <div className="loading-bg" />
 
             <div className="loading-logo-wrap">
-                <img src="/images/png-transparent-logo.png" alt="" className="loading-logo-base" />
+                <img src="/images/Leon.png" alt="" className="loading-logo-base" />
                 <img
-                    src="/images/png-transparent-logo.png"
+                    src="/images/Leon.png"
                     alt="Cyrano App"
                     className="loading-logo-fill"
                     style={{ clipPath: `inset(${clipY}% 0% 0% 0%)` }}

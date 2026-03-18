@@ -1,21 +1,24 @@
 # Dependencias
-node_modules
-
-# Build
-dist
-dist-ssr
+node_modules/
 
 # Variables de entorno — NUNCA subir al repo
 .env
 .env.local
 .env.production
+.env*.local
+
+# Build
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
 
 # Editor
-.vscode
-.idea
+.vscode/
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
-
-.vercel

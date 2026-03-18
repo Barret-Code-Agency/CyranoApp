@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    sourcemap: true,
+    sourcemap: false,          // no exponer código fuente en producción
+    drop: ["console", "debugger"], // elimina console.log/warn/error automáticamente
   },
 })

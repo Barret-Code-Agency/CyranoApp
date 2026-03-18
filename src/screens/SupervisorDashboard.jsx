@@ -132,7 +132,7 @@ function DayProgressBar({ semana, useMes = false }) {
     );
 }
 
-export default function SupervisorDashboard({ user: userProp, onIniciarJornada }) {
+export default function SupervisorDashboard({ user: userProp, onIniciarJornada, hideHeader = false }) {
     const [vistaAnalista, setVistaAnalista] = useState(false);
     const [firestoreData, setFirestoreData] = useState(null);
 
@@ -171,10 +171,11 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada }
         getPlanSupervisor, getObjetivosSemana,
         jornadas, jornadaActiva,
         getAlertasMantenimiento,
+        empresaLogos, empresaNombre,
     } = useAppData();
 
     const semana = getSemana();
-    const ps     = getPlanSupervisor(user.email);
+    const ps     = getPlanSupervisor(user.email) || getPlanSupervisor(user.name);
 
     const mesInicio = useMemo(() => {
         const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d;
@@ -283,24 +284,50 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada }
     // Cumplimiento del equipo contra plan global
     const pctEquipoMes   = reqGlobalMes > 0 ? Math.min(Math.round(totalEquipo / reqGlobalMes * 100), 100) : 0;
 
-    // Alertas semanas anteriores
+    // Alertas semanas anteriores — usa plan individual si existe, si no plan global
     const alertasPlan = useMemo(() => {
-        if (sinPlanGlobal || !semana || semana <= 1) return [];
+        if (!semana || semana <= 1) return [];
+
+        // Prioridad: plan individual del supervisor
+        const usarIndividual = !sinPlanIndivid && (ps?.objetivos || []).length > 0;
+        const objetivosBase  = usarIndividual
+            ? (ps?.objetivos || []).filter(o => (o.visitasPorSemana || 0) > 0)
+            : objGlobalSemana;
+
+        if (objetivosBase.length === 0) return [];
+
         const lista = [];
         for (let w = 1; w < semana; w++) {
-            objGlobalSemana.forEach(o => {
-                const real = controlesMes.filter(c => normObj(c.objetivo) === normObj(o.objetivo) && getSemanaDeCtrl(c) === w).length;
-                if (real < (o.visitasPorSemana || 1))
-                    lista.push({ semana: w, objetivo: o.objetivo, realizadas: real, requeridas: o.visitasPorSemana });
+            objetivosBase.forEach(o => {
+                // Plan individual: respetar patrón (solo alertar semanas que debía visitar)
+                if (usarIndividual) {
+                    const semanasActivas = semanasDePatron(o.patron, o.semanasCustom);
+                    if (!semanasActivas.includes(w)) return;
+                }
+                const real      = controlesMes.filter(c =>
+                    normObj(c.objetivo) === normObj(o.objetivo) && getSemanaDeCtrl(c) === w
+                ).length;
+                const requeridas = o.visitasPorSemana || 1;
+                if (real < requeridas)
+                    lista.push({ semana: w, objetivo: o.objetivo, realizadas: real, requeridas });
             });
         }
         return lista;
-    }, [sinPlanGlobal, semana, objGlobalSemana, controlesMes]);
+    }, [sinPlanIndivid, sinPlanGlobal, semana, ps, objGlobalSemana, controlesMes]);
 
     return (
         <div className="sup-dash">
-            <div className="sup-dash-title">Mi Panel</div>
-            <div className="sup-dash-sub">{user.name} · {mesNombre()}</div>
+            {!hideHeader && (
+                <div className="sup-dash-header">
+                    <div>
+                        <div className="sup-dash-title">Mi Panel — {empresaNombre}</div>
+                        <div className="sup-dash-sub">{user.name} · {mesNombre()}</div>
+                    </div>
+                    {empresaLogos?.panel && (
+                        <img src={empresaLogos.panel} alt="Logo empresa" className="sup-empresa-logo" />
+                    )}
+                </div>
+            )}
 
             {jornadaActiva && (
                 <div style={{

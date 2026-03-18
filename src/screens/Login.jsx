@@ -1,10 +1,17 @@
 // src/screens/Login.jsx — Firebase Auth
 import { useState } from "react";
 import { useAuth }  from "../context/AuthContext";
-import ShieldLogo   from "../components/ShieldLogo";
 import "../styles/Login.css";
 
-export default function Login({ onLogin, waiting }) {
+const ROLE_LABELS = {
+    super_admin:   { label: "Super Administrador",      icon: "⚙️",  variant: "super"    },
+    admin_empresa: { label: "Administrador de Empresa", icon: "🏛️", variant: "empresa"  },
+    admin:         { label: "Administrador de Contrato",icon: "🏢",  variant: "admin"    },
+    supervisor:    { label: "Supervisor",               icon: "🔍",  variant: "supervisor"},
+    user:          { label: "Vigilador",                icon: "👷",  variant: "user"     },
+};
+
+export default function Login({ onLogin, waiting, forcedRole, roleError, onBack }) {
     const { login } = useAuth();
 
     const [email,    setEmail]    = useState("");
@@ -51,12 +58,16 @@ export default function Login({ onLogin, waiting }) {
 
                     <div className="lw-logo-row">
                         <div className="lw-logo-ring">
-                            <ShieldLogo size={52} />
+                            <img
+                                src="/images/Leon.png"
+                                alt="Cyrano App"
+                                className="lw-leon"
+                            />
                         </div>
                         <div className="lw-brand-block">
                             <div className="lw-brand">CYRANO<span>APP</span></div>
                             <div className="lw-divider-line" />
-                            <div className="lw-tagline">Supervisión y Logística</div>
+                            <div className="lw-tagline">Sistema de Gestión de Seguridad</div>
                         </div>
                     </div>
                 </div>
@@ -64,6 +75,14 @@ export default function Login({ onLogin, waiting }) {
                 {/* ── Body ── */}
                 <div className="lw-body">
                     <div className="lw-title">Iniciar sesión</div>
+
+                    {forcedRole && ROLE_LABELS[forcedRole] && (
+                        <div className={`lw-role-badge lw-role-badge--${ROLE_LABELS[forcedRole].variant}`}>
+                            <span>{ROLE_LABELS[forcedRole].icon}</span>
+                            <span>{ROLE_LABELS[forcedRole].label}</span>
+                        </div>
+                    )}
+
                     <div className="lw-sub">Ingresá tus credenciales para continuar</div>
 
                     <div className="lw-field">
@@ -106,9 +125,9 @@ export default function Login({ onLogin, waiting }) {
                         </div>
                     </div>
 
-                    {error && (
+                    {(error || roleError) && (
                         <div className="lw-error">
-                            <span>⚠️</span> {error}
+                            <span>⚠️</span> {roleError || error}
                         </div>
                     )}
 
@@ -126,6 +145,12 @@ export default function Login({ onLogin, waiting }) {
                         Si olvidaste tu contraseña, contactá al administrador<br />
                         para que te envíe un mail de reseteo.
                     </p>
+
+                    {onBack && (
+                        <button className="lw-back" onClick={onBack}>
+                            ← Cambiar perfil
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

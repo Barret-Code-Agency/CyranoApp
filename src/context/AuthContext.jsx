@@ -1,6 +1,5 @@
 // src/context/AuthContext.jsx
-// Maneja autenticación Firebase + roles desde Firestore
-// Reemplaza loginDemo de helpers.js
+// Autenticación Firebase + roles + permisos resueltos desde Firestore
 
 import { createContext, useContext, useState, useEffect } from "react";
 import {
@@ -8,45 +7,56 @@ import {
     signOut,
     onAuthStateChanged,
     sendPasswordResetEmail,
-    createUserWithEmailAndPassword,
     updateProfile,
 } from "firebase/auth";
 import {
     doc, getDoc, setDoc, updateDoc, collection, getDocs, serverTimestamp,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { resolverPermisos, ROLES_CREABLES_POR } from "../config/roles";
 
 const AuthContext = createContext(null);
 
-// ── Helpers Firestore ─────────────────────────────────────────────────────────
-const getUserDoc = (uid) => doc(db, "usuarios", uid);
-const getUsuarios = () => collection(db, "usuarios");
+// ── Helpers Firestore ──────────────────────────────────────────────────────────
+const getUserDoc  = (uid)  => doc(db, "usuarios", uid);
+const getUsuarios = ()     => collection(db, "usuarios");
 
 export async function fetchUserData(uid) {
     const snap = await getDoc(getUserDoc(uid));
     return snap.exists() ? snap.data() : null;
 }
 
-// ── Provider ──────────────────────────────────────────────────────────────────
-export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);   // { uid, email, name, role, activo }
-    const [loading, setLoading] = useState(true);   // mientras Firebase resuelve la sesión
+// Construye el objeto de usuario completo con permisos resueltos
+function buildUser(uid, email, data) {
+    const rol      = data.rol      ?? "vigilador";
+    const permisos = resolverPermisos(rol, data.permisosOverride ?? {});
+    return {
+        uid,
+        email,
+        name:        data.nombre      ?? email.split("@")[0],
+        rol,
+        // compatibilidad hacia atrás (algunos componentes usan .role)
+        role:        rol === "admin_contrato" || rol === "admin_empresa" || rol === "super_admin"
+                        ? "admin" : "operator",
+        empresaId:   data.empresaId   ?? null,
+        contratoIds: data.contratoIds ?? [],
+        permisos,
+        activo:      data.activo !== false,
+    };
+}
 
-    // Escuchar cambios de sesión Firebase
+// ── Provider ───────────────────────────────────────────────────────────────────
+export function AuthProvider({ children }) {
+    const [user,    setUser]    = useState(null);
+    const [loading, setLoading] = useState(true);
+
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
                 const data = await fetchUserData(firebaseUser.uid);
                 if (data && data.activo !== false) {
-                    setUser({
-                        uid: firebaseUser.uid,
-                        email: firebaseUser.email,
-                        name: data.nombre || firebaseUser.email.split("@")[0],
-                        role: data.rol || "operator",
-                        activo: data.activo !== false,
-                    });
+                    setUser(buildUser(firebaseUser.uid, firebaseUser.email, data));
                 } else {
-                    // Usuario desactivado o sin datos → forzar logout
                     await signOut(auth);
                     setUser(null);
                 }
@@ -58,7 +68,7 @@ export function AuthProvider({ children }) {
         return unsub;
     }, []);
 
-    // ── Login ────────────────────────────────────────────────────────────────
+    // ── Login ──────────────────────────────────────────────────────────────────
     const login = async (email, password) => {
         const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
         const data = await fetchUserData(cred.user.uid);
@@ -69,49 +79,47 @@ export function AuthProvider({ children }) {
             throw new Error("Tu cuenta está desactivada. Contactá al administrador.");
         }
 
-        // Actualizar último acceso
         await updateDoc(getUserDoc(cred.user.uid), { ultimoAcceso: serverTimestamp() });
 
-        return {
-            uid: cred.user.uid,
-            email: cred.user.email,
-            name: data.nombre,
-            role: data.rol || "operator",
-        };
+        return buildUser(cred.user.uid, cred.user.email, data);
     };
 
-    // ── Logout ───────────────────────────────────────────────────────────────
+    // ── Logout ─────────────────────────────────────────────────────────────────
     const logout = async () => {
         await signOut(auth);
         setUser(null);
     };
 
-    // ── Crear usuario (solo admin) ────────────────────────────────────────────
-    // Crea la cuenta en Firebase Auth + documento en Firestore
-    const crearUsuario = async ({ email, password, nombre, rol }) => {
-        // Firebase crea la cuenta con la sesión del admin
-        // Usamos una app secundaria para no perder la sesión del admin
-        const { initializeApp } = await import("firebase/app");
+    // ── Crear usuario ──────────────────────────────────────────────────────────
+    // El creador solo puede asignar roles que tiene permitido (ROLES_CREABLES_POR)
+    const crearUsuario = async ({
+        email, password, nombre, rol,
+        empresaId    = null,
+        contratoIds  = [],
+        permisosOverride = {},
+    }) => {
+        const { initializeApp }                                  = await import("firebase/app");
         const { getAuth, createUserWithEmailAndPassword: crear } = await import("firebase/auth");
 
-        const secondaryApp = initializeApp(auth.app.options, "secondary_" + Date.now());
+        const secondaryApp  = initializeApp(auth.app.options, "secondary_" + Date.now());
         const secondaryAuth = getAuth(secondaryApp);
 
         try {
             const cred = await crear(secondaryAuth, email.trim(), password);
             await updateProfile(cred.user, { displayName: nombre });
 
-            // Guardar en Firestore
             await setDoc(getUserDoc(cred.user.uid), {
                 nombre,
-                email: email.trim(),
-                rol: rol || "operator",
-                activo: true,
-                creadoEn: serverTimestamp(),
-                ultimoAcceso: null,
+                email:           email.trim(),
+                rol:             rol ?? "vigilador",
+                empresaId,
+                contratoIds,
+                permisosOverride,
+                activo:          true,
+                creadoEn:        serverTimestamp(),
+                ultimoAcceso:    null,
             });
 
-            await secondaryAuth.signOut();
             return cred.user.uid;
         } finally {
             const { deleteApp } = await import("firebase/app");
@@ -120,27 +128,34 @@ export function AuthProvider({ children }) {
         }
     };
 
-    // ── Actualizar datos de usuario ───────────────────────────────────────────
+    // ── Actualizar usuario ─────────────────────────────────────────────────────
     const actualizarUsuario = async (uid, datos) => {
         await updateDoc(getUserDoc(uid), datos);
     };
 
-    // ── Reset de contraseña (envía mail automático) ───────────────────────────
+    // ── Reset contraseña ───────────────────────────────────────────────────────
     const resetPassword = async (email) => {
         await sendPasswordResetEmail(auth, email);
     };
 
-    // ── Listar todos los usuarios ─────────────────────────────────────────────
-    const listarUsuarios = async () => {
+    // ── Listar usuarios ────────────────────────────────────────────────────────
+    // Opcionalmente filtra por empresaId para que cada admin solo vea los suyos
+    const listarUsuarios = async (empresaId = null) => {
         const snap = await getDocs(getUsuarios());
-        return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+        const todos = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+        if (empresaId) return todos.filter(u => u.empresaId === empresaId);
+        return todos;
     };
+
+    // ── Roles que puede crear el usuario actual ────────────────────────────────
+    const rolesCreables = user ? (ROLES_CREABLES_POR[user.rol] ?? []) : [];
 
     return (
         <AuthContext.Provider value={{
             user, loading,
             login, logout,
             crearUsuario, actualizarUsuario, resetPassword, listarUsuarios,
+            rolesCreables,
         }}>
             {children}
         </AuthContext.Provider>

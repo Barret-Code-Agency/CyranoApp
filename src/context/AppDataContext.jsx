@@ -134,6 +134,8 @@ export function AppDataProvider({ children, uid }) {
     const [mantenimiento, setMantenimiento] = useState([]);
     const [dbReady,       setDbReady]       = useState(false);
     const [dbError,       setDbError]       = useState(null);
+    const [empresaLogos,  setEmpresaLogos]  = useState({ splash: null, panel: null });
+    const [empresaNombre, setEmpresaNombre] = useState("Brinks");
 
     // ── Persist local ────────────────────────────────────────────────────────
     useEffect(() => { save("cyrano_config",           config);          }, [config]);
@@ -158,6 +160,27 @@ export function AppDataProvider({ children, uid }) {
         const unsubs = [];
         let ready = 0;
         const markReady = () => { ready++; if (ready >= 3) setDbReady(true); };
+
+        // 0. Logos de empresa (doc raíz) — fallback a imágenes estáticas si no hay en Firestore
+        const LOGO_DEFAULTS = {
+            splash: "/images/png-transparent-logo.png",
+            panel:  "/images/png-transparent-logo.png",
+        };
+        try {
+            unsubs.push(onSnapshot(
+                doc(db, "empresas", EMPRESA_ID),
+                (snap) => {
+                    const d = snap.exists() ? snap.data() : {};
+                    setEmpresaLogos({
+                        splash: d.logoSplash ?? LOGO_DEFAULTS.splash,
+                        panel:  d.logoPanel  ?? LOGO_DEFAULTS.panel,
+                    });
+                    if (d.nombre) setEmpresaNombre(d.nombre);
+                }
+            ));
+        } catch {
+            setEmpresaLogos(LOGO_DEFAULTS);
+        }
 
         // 1. Jornadas — colección principal
         try {
@@ -445,6 +468,8 @@ export function AppDataProvider({ children, uid }) {
             resetSesion, limpiarSimulados,
             dbReady, dbError,
             empresaId: EMPRESA_ID,
+            empresaLogos,
+            empresaNombre,
         }}>
             {children}
         </AppDataContext.Provider>

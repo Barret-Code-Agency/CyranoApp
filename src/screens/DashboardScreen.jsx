@@ -739,11 +739,17 @@ export default function DashboardScreen() {
                         <BarraTiempos {...tiemposGlobal} showLabels />
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginTop: 16 }}>
                             {[
-                                { key: "ctrl", label: "Control", icon: "🎯" },
-                                { key: "cap", label: "Capacitación", icon: "📚" },
-                                { key: "otra", label: "Otras act.", icon: "🔧" },
-                                { key: "traslado", label: "Traslados", icon: "🚗" },
-                            ].map(t => (
+                                { key: "ctrl",     label: "Control",         icon: "🎯" },
+                                { key: "cap",      label: "Capacitación",    icon: "📚" },
+                                { key: "traslado", label: "Traslados",       icon: "🚗" },
+                                { key: "admin",    label: "Administrativo",  icon: "📋" },
+                                { key: "vulnerab", label: "Vuln./Riesgos",   icon: "⚠️" },
+                                { key: "reclamos", label: "Reclamos",        icon: "📣" },
+                                { key: "almuerzo", label: "Almuerzo/Cena",   icon: "🍽️" },
+                                { key: "taller",   label: "Taller/Rep.",     icon: "🔧" },
+                                { key: "gremial",  label: "Gremial",         icon: "🤝" },
+                                { key: "otras",    label: "Otras",           icon: "📌" },
+                            ].filter(t => tiemposGlobal[t.key] > 0).map(t => (
                                 <div key={t.key} style={{
                                     background: "#f8f9fc", borderRadius: 10, padding: "12px 8px",
                                     textAlign: "center", borderTop: `3px solid ${TIPO_COLOR[t.key]}`

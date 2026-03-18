@@ -1,0 +1,281 @@
+/* src/styles/ChecklistModal.css */
+
+.cm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    animation: fadeIn .15s ease;
+}
+
+.cm-modal {
+    background: var(--color-surface);
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    display: flex;
+    flex-direction: column;
+    animation: cmSlideUp .25s ease;
+    overflow: hidden;
+}
+
+@keyframes cmSlideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Barra de arrastre */
+.cm-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--color-border2);
+    border-radius: var(--radius-full);
+    margin: var(--space-3) auto var(--space-1);
+    flex-shrink: 0;
+}
+
+/* ── Header ── */
+.cm-header {
+    padding: 0 var(--space-5) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.cm-cp-nombre {
+    font-size: var(--text-xl);
+    font-weight: 800;
+    color: var(--color-primary);
+    margin-bottom: var(--space-1);
+}
+
+.cm-cp-meta {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+}
+
+/* ── Progreso de tareas ── */
+.cm-progress {
+    padding: var(--space-2) var(--space-5);
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.cm-progress-track {
+    flex: 1;
+    height: 5px;
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.cm-progress-fill {
+    height: 100%;
+    background: var(--color-success);
+    border-radius: var(--radius-full);
+    transition: width var(--transition-base);
+}
+
+.cm-progress-label {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--color-muted);
+    white-space: nowrap;
+}
+
+/* ── Lista de tareas ── */
+.cm-tasks {
+    overflow-y: auto;
+    flex: 1;
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.cm-task { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.cm-task-pregunta {
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--color-text);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+.cm-task-req-badge {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--color-danger);
+    background: var(--color-danger-ghost);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+
+.cm-task-ok-badge {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--color-success);
+    background: var(--color-success-ghost);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+
+/* ── Booleano (Sí / No) ── */
+.cm-bool-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+}
+
+.cm-bool-btn {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--color-border);
+    background: var(--color-bg);
+    font-size: var(--text-md);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    color: var(--color-text-secondary);
+}
+
+.cm-bool-btn--si.cm-selected {
+    background: var(--color-success-ghost);
+    border-color: var(--color-success);
+    color: var(--color-success);
+}
+
+.cm-bool-btn--no.cm-selected {
+    background: var(--color-danger-ghost);
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+}
+
+/* ── Selección múltiple ── */
+.cm-select-opts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.cm-select-opt {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--color-border);
+    background: var(--color-bg);
+    font-size: var(--text-base);
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    transition: all var(--transition-fast);
+    color: var(--color-text);
+}
+.cm-select-opt.cm-selected {
+    background: var(--color-primary-ghost);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+/* ── Número ── */
+.cm-number-input {
+    background: var(--color-bg);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--color-text);
+    width: 100%;
+    font-family: var(--font-body);
+    text-align: center;
+    transition: border-color var(--transition-fast);
+}
+.cm-number-input:focus { outline: none; border-color: var(--color-primary); }
+
+/* ── Texto libre ── */
+.cm-text-input {
+    background: var(--color-bg);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-base);
+    color: var(--color-text);
+    width: 100%;
+    font-family: var(--font-body);
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color var(--transition-fast);
+}
+.cm-text-input:focus { outline: none; border-color: var(--color-primary); }
+
+/* ── Foto ── */
+.cm-foto-area { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.cm-foto-btn {
+    background: var(--color-primary-ghost);
+    border: 2px dashed var(--color-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    text-align: center;
+    cursor: pointer;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-primary);
+    display: block;
+    transition: background var(--transition-fast);
+}
+.cm-foto-btn:hover { background: var(--color-primary-xlight); }
+
+.cm-foto-preview {
+    width: 100%;
+    border-radius: var(--radius-lg);
+    object-fit: cover;
+    max-height: 200px;
+    border: 1px solid var(--color-border);
+}
+
+/* ── Footer ── */
+.cm-footer {
+    padding: var(--space-4) var(--space-5);
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.cm-error {
+    color: var(--color-danger);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-align: center;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-danger-ghost);
+    border-radius: var(--radius-md);
+}
+
+.cm-submit-btn {
+    width: 100%;
+    background: var(--color-primary);
+    color: var(--color-white);
+    border: none;
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-md);
+    font-weight: 800;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    letter-spacing: 0.3px;
+}
+.cm-submit-btn:hover:not(:disabled) { background: var(--color-primary-dark); }
+.cm-submit-btn:disabled { background: var(--color-border2); cursor: not-allowed; }

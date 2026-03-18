@@ -91,6 +91,13 @@
     white-space: nowrap;
 }
 
+/* ── Viewport centrador para paneles de rol (50% en PC, full en mobile) ── */
+.panel-viewport {
+    width: 100%;
+    min-height: 100dvh;
+    background: var(--color-bg);
+}
+
 /* ── Main content area ── */
 .main {
     flex: 1;

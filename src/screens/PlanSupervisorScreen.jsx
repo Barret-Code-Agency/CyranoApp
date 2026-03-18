@@ -190,7 +190,11 @@ function EditorSupervisor({ sup, onBack, onSaved }) {
     };
 
     const handleSave = () => {
-        savePlanSupervisor(sup.email || sup.nombre, { nombre: sup.nombre, turnoBase, objetivos });
+        const payload = { nombre: sup.nombre, turnoBase, objetivos };
+        // Guardar siempre bajo el email si existe (para que SupervisorDashboard lo encuentre)
+        if (sup.email) savePlanSupervisor(sup.email, payload);
+        // También bajo el nombre (compatibilidad con planes viejos)
+        if (sup.nombre) savePlanSupervisor(sup.nombre, payload);
         setSaved(true);
         setTimeout(onSaved, 700);
     };

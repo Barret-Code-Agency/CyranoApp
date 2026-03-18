@@ -1,6 +1,6 @@
 const ShieldLogo = ({ size = 120, grayscale = false }) => (
     <img
-        src="/images/png-transparent-logo.png"
+        src="/images/Leon.png"
         alt="Cyrano App"
         width={size}
         height={size}
