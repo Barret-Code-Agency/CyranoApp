@@ -140,8 +140,9 @@ export function AppDataProvider({ children, uid }) {
     const [mantenimiento, setMantenimiento] = useState([]);
     const [dbReady,       setDbReady]       = useState(false);
     const [dbError,       setDbError]       = useState(null);
-    const [empresaLogos,  setEmpresaLogos]  = useState({ splash: null, panel: null });
-    const [empresaNombre, setEmpresaNombre] = useState("Brinks");
+    const [empresaLogos,   setEmpresaLogos]   = useState({ splash: null, panel: null });
+    const [empresaNombre,  setEmpresaNombre]  = useState("Brinks");
+    const [empresaModulos, setEmpresaModulos] = useState(null);
 
     // ── Persist local ────────────────────────────────────────────────────────
     useEffect(() => { save("cyrano_config",           config);          }, [config]);
@@ -181,7 +182,8 @@ export function AppDataProvider({ children, uid }) {
                         splash: d.logoSplash ?? LOGO_DEFAULTS.splash,
                         panel:  d.logoPanel  ?? LOGO_DEFAULTS.panel,
                     });
-                    if (d.nombre) setEmpresaNombre(d.nombre);
+                    if (d.nombre)   setEmpresaNombre(d.nombre);
+                    if (d.modulos)  setEmpresaModulos(d.modulos);
                 }
             ));
         } catch {
@@ -476,6 +478,7 @@ export function AppDataProvider({ children, uid }) {
             empresaId: EMPRESA_ID,
             empresaLogos,
             empresaNombre,
+            empresaModulos,
         }}>
             {children}
         </AppDataContext.Provider>

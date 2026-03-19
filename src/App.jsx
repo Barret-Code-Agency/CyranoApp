@@ -15,9 +15,9 @@ import LoadingScreen       from "./screens/LoadingScreen";
 import Login               from "./screens/Login";
 import AdminScreen         from "./screens/AdminScreen";
 import AdminContratoHome  from "./screens/AdminContratoHome";
-import AdminEmpresaScreen  from "./screens/AdminEmpresaScreen";
-import SupervisorDashboard from "./screens/SupervisorDashboard";
-import SupervisorHome      from "./screens/SupervisorHome";
+import SupervisorDashboard   from "./screens/SupervisorDashboard";
+import SupervisorHome        from "./screens/SupervisorHome";
+import AdministrativoHome   from "./screens/AdministrativoHome";
 import JornadaScreen       from "./screens/JornadaScreen";
 import MenuScreen          from "./screens/MenuScreen";
 import CapacitacionScreen  from "./screens/CapacitacionScreen";
@@ -60,13 +60,14 @@ function AppContent() {
         // Mapa: perfil seleccionado → roles Firebase permitidos
         const ROLES_PERMITIDOS = {
             super_admin:   ["super_admin"],
-            admin_empresa: ["admin_empresa"],
-            admin:         ["admin_contrato", "admin_empresa"],           // admin_empresa puede entrar como admin contrato
-            supervisor:    ["supervisor", "admin_contrato", "admin_empresa"],
-            user:          ["vigilador", "supervisor", "admin_contrato", "admin_empresa"],
+            admin:         ["admin_contrato"],
+            supervisor:    ["supervisor", "admin_contrato"],
+            administrativo:["administrativo"],
+            user:          ["vigilador", "supervisor", "admin_contrato"],
         };
-        const permitidos = ROLES_PERMITIDOS[loginRole] ?? [];
-        if (!permitidos.includes(u.rol)) {
+        const permitidos  = ROLES_PERMITIDOS[loginRole] ?? [];
+        const userRoles   = Array.isArray(u.roles) ? u.roles : [u.rol];
+        if (!permitidos.some(r => userRoles.includes(r))) {
             const msgs = {
                 admin:      "Tu cuenta no tiene permisos de Administrador.",
                 supervisor: "Tu cuenta no tiene permisos de Supervisor.",
@@ -82,8 +83,8 @@ function AppContent() {
         // Routing por perfil elegido (no por rol Firestore — un admin puede entrar como supervisor)
         let dest;
         if      (loginRole === "super_admin")   dest = "super_admin";
-        else if (loginRole === "admin_empresa") dest = "admin_empresa";
-        else if (loginRole === "admin")         dest = "admin";
+        else if (loginRole === "admin")          dest = "admin";
+        else if (loginRole === "administrativo") dest = "administrativo_home";
         else if (loginRole === "supervisor")    dest = "supervisor_dash";
         else if (loginRole === "user")          dest = "vig_home";
         else if (jornadaActiva) {
@@ -106,8 +107,8 @@ function AppContent() {
     const isAdmin    = phase === "admin";
     // Pantallas con header propio — no mostrar el header global
     const showHeader = !["splash", "loading", "loading_post", "login",
-                         "role_select", "super_admin", "admin_empresa", "vig_home",
-                         "supervisor_dash", "admin"].includes(phase);
+                         "role_select", "super_admin", "vig_home",
+                         "administrativo_home", "supervisor_dash", "admin"].includes(phase);
 
     if (phase === "splash")
         return <SplashScreen
@@ -143,11 +144,11 @@ function AppContent() {
     if (phase === "super_admin")
         return <SuperAdminScreen onExit={() => { setUser(null); goTo("splash"); }} />;
 
-    if (phase === "admin_empresa")
-        return <AdminEmpresaScreen onExit={() => { setUser(null); goTo("splash"); }} />;
-
     if (phase === "vig_home")
         return <div className="panel-viewport"><VigHome user={authUser || user} onLogout={() => { setUser(null); goTo("splash"); }} /></div>;
+
+    if (phase === "administrativo_home")
+        return <div className="panel-viewport"><AdministrativoHome user={authUser || user} onLogout={() => { setUser(null); goTo("splash"); }} /></div>;
 
     if (phase === "supervisor_dash" && (user || authUser))
         return <div className="panel-viewport"><SupervisorHome user={authUser || user} onIniciarJornada={handleIniciarJornada} onExit={() => { setUser(null); goTo("splash"); }} /></div>;

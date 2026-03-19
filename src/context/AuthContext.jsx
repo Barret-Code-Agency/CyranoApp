@@ -33,15 +33,17 @@ function buildUser(uid, email, data) {
     return {
         uid,
         email,
-        name:        data.nombre      ?? email.split("@")[0],
+        name:            data.nombre          ?? email.split("@")[0],
         rol,
+        roles:           Array.isArray(data.roles) && data.roles.length ? data.roles : [rol],
         // compatibilidad hacia atrás (algunos componentes usan .role)
-        role:        rol === "admin_contrato" || rol === "admin_empresa" || rol === "super_admin"
-                        ? "admin" : "operator",
-        empresaId:   data.empresaId   ?? null,
-        contratoIds: data.contratoIds ?? [],
+        role:            rol === "admin_contrato" || rol === "admin_empresa" || rol === "super_admin"
+                            ? "admin" : "operator",
+        empresaId:       data.empresaId       ?? null,
+        contratoIds:     data.contratoIds     ?? [],
         permisos,
-        activo:      data.activo !== false,
+        permisosModulos: data.permisosModulos ?? null,
+        activo:          data.activo !== false,
     };
 }
 

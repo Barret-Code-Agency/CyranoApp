@@ -4,11 +4,13 @@
 import { useState } from "react";
 import { useAuth }             from "../context/AuthContext";
 import { useAppData }          from "../context/AppDataContext";
-import AdminScreen             from "./AdminScreen";
+import AdminScreen              from "./AdminScreen";
 import PlantillasRondaScreen   from "./PlantillasRondaScreen";
 import MonitorRondasScreen     from "./MonitorRondasScreen";
 import VerInformesScreen       from "../forms/VerInformesScreen";
 import GestionClientesScreen   from "./GestionClientesScreen";
+import GestionPersonalScreen   from "./GestionPersonalScreen";
+import DashboardPersonalScreen from "./DashboardPersonalScreen";
 import "../styles/SupervisorHome.css";
 
 const MODULOS = [
@@ -17,6 +19,27 @@ const MODULOS = [
         icon:   "🔍",
         titulo: "Supervisión",
         desc:   "Panel completo de supervisión, objetivos y cumplimiento",
+        color:  "blue",
+    },
+    {
+        id:     "gestion_datos",
+        icon:   "🗄️",
+        titulo: "Gestión de datos",
+        desc:   "Clientes, objetivos y datos operativos del contrato",
+        color:  "blue",
+    },
+    {
+        id:     "dashboards_gestion",
+        icon:   "📊",
+        titulo: "Dashboards de gestión",
+        desc:   "Métricas y KPIs de la empresa",
+        color:  "blue",
+    },
+    {
+        id:     "dashboard_personal",
+        icon:   "👥",
+        titulo: "Dashboard de personal",
+        desc:   "Estado y novedades del personal",
         color:  "blue",
     },
     {
@@ -41,27 +64,6 @@ const MODULOS = [
         color:  "blue",
     },
     {
-        id:     "horas_extras",
-        icon:   "⏰",
-        titulo: "Horas extras",
-        desc:   "Registrá y gestioná las horas extras del personal",
-        color:  "gold",
-    },
-    {
-        id:     "horas_no_prestadas",
-        icon:   "🚫",
-        titulo: "Horas no prestadas",
-        desc:   "Registrá ausencias y horas no cumplidas",
-        color:  "red",
-    },
-    {
-        id:     "rondas_plantillas",
-        icon:   "🗺️",
-        titulo: "Plantillas de Ronda",
-        desc:   "Creá y gestioná rondas GPS con checkpoints y actividades",
-        color:  "blue",
-    },
-    {
         id:     "rondas_monitor",
         icon:   "📡",
         titulo: "Monitor de Rondas",
@@ -75,11 +77,32 @@ const MODULOS = [
         desc:   "Cargá clientes, objetivos y puestos con dirección y teléfono",
         color:  "blue",
     },
+    {
+        id:     "plan_seguridad",
+        icon:   "🛡️",
+        titulo: "Plan de seguridad",
+        desc:   "Cargá y gestioná el plan de seguridad del contrato",
+        color:  "blue",
+    },
+    {
+        id:     "plan_capacitacion",
+        icon:   "🎓",
+        titulo: "Plan de capacitación",
+        desc:   "Planificá y registrá las capacitaciones del personal",
+        color:  "blue",
+    },
+    {
+        id:     "analisis_riesgos",
+        icon:   "⚠️",
+        titulo: "Análisis de riesgos",
+        desc:   "Relevamiento y gestión de riesgos del objetivo",
+        color:  "gold",
+    },
 ];
 
 export default function AdminContratoHome({ onExit }) {
-    const { user, logout }               = useAuth();
-    const { empresaLogos, empresaNombre } = useAppData();
+    const { user, logout }                              = useAuth();
+    const { empresaLogos, empresaNombre, empresaModulos } = useAppData();
     const [seccion, setSeccion]           = useState(null);
 
     const handleLogout = async () => { await logout(); onExit?.(); };
@@ -128,6 +151,14 @@ export default function AdminContratoHome({ onExit }) {
         );
     }
 
+    if (seccion === "asig_personal") {
+        return (
+            <div className="sh-supervision-wrapper">
+                <GestionPersonalScreen onBack={() => setSeccion(null)} />
+            </div>
+        );
+    }
+
     // Supervisión → AdminScreen completo
     if (seccion === "supervision") {
         return (
@@ -151,6 +182,14 @@ export default function AdminContratoHome({ onExit }) {
         );
     }
 
+    if (seccion === "dashboard_personal") {
+        return (
+            <div className="sh-supervision-wrapper" style={{ maxWidth: "100%" }}>
+                <DashboardPersonalScreen onBack={() => setSeccion(null)} />
+            </div>
+        );
+    }
+
     // Resto de secciones — placeholder
     if (seccion) {
         const mod = MODULOS.find(m => m.id === seccion);
@@ -169,22 +208,26 @@ export default function AdminContratoHome({ onExit }) {
     return (
         <div className="sh-root">
             {renderHeader(false)}
-            <div className="sh-role-badge">🏢 Administrador de Contrato</div>
+            <div className="sh-role-badge">🏢 Gerencia de Operaciones</div>
             <div className="sh-grid">
-                {MODULOS.map(m => (
-                    <button
-                        key={m.id}
-                        className={`sh-modulo sh-modulo--${m.color}`}
-                        onClick={() => setSeccion(m.id)}
-                    >
-                        <span className="sh-modulo-icon">{m.icon}</span>
-                        <div className="sh-modulo-info">
-                            <strong>{m.titulo}</strong>
-                            <small>{m.desc}</small>
-                        </div>
-                        <span className="sh-modulo-arrow">›</span>
-                    </button>
-                ))}
+                {MODULOS.map(m => {
+                    const habilitado = empresaModulos == null || empresaModulos[m.id] !== false;
+                    return (
+                        <button
+                            key={m.id}
+                            className={`sh-modulo sh-modulo--${m.color} ${!habilitado ? "sh-modulo--disabled" : ""}`}
+                            disabled={!habilitado}
+                            onClick={() => habilitado && setSeccion(m.id)}
+                        >
+                            <span className="sh-modulo-icon">{m.icon}</span>
+                            <div className="sh-modulo-info">
+                                <strong>{m.titulo}</strong>
+                                <small>{habilitado ? m.desc : "Sin acceso"}</small>
+                            </div>
+                            {habilitado && <span className="sh-modulo-arrow">›</span>}
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );

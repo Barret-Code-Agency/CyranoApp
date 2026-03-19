@@ -7,26 +7,26 @@
 // ── Roles disponibles ─────────────────────────────────────────
 export const ROLES = {
     SUPER_ADMIN:    "super_admin",    // Cyrano — acceso total al sistema
-    ADMIN_EMPRESA:  "admin_empresa",  // Admin de empresa (ej: Brinks AR)
     ADMIN_CONTRATO: "admin_contrato", // Admin de contrato/cliente
     SUPERVISOR:     "supervisor",     // Supervisor de campo — gestiona vigiladores
+    ADMINISTRATIVO: "administrativo", // Personal administrativo
     VIGILADOR:      "vigilador",      // Operador de campo
 };
 
 // ── Labels para UI ────────────────────────────────────────────
 export const ROLE_LABELS = {
     super_admin:    "Super Administrador",
-    admin_empresa:  "Administrador de Empresa",
-    admin_contrato: "Administrador de Contrato",
-    supervisor:     "Supervisor",
+    admin_contrato: "Gerencia de Operaciones",
+    supervisor:     "Supervisor / Encargado",
+    administrativo: "Administrativo",
     vigilador:      "Vigilador",
 };
 
 export const ROLE_ICONS = {
     super_admin:    "⚙️",
-    admin_empresa:  "🏛️",
     admin_contrato: "🏢",
     supervisor:     "🔍",
+    administrativo: "🗂️",
     vigilador:      "👷",
 };
 
@@ -72,22 +72,6 @@ export const PERMISOS_BASE = {
         informes:           true,
         libro_actas:        true,
         realizar_ronda:     true,
-    },
-
-    admin_empresa: {
-        empresas:           false,
-        usuarios:           true,
-        supervision:        true,
-        control_rondas:     true,
-        plan_seguridad:     true,
-        plan_capacitacion:  true,
-        analisis_riesgos:   true,
-        turnos_cargar:      true,
-        turnos_ver:         true,
-        planillas:          true,
-        informes:           true,
-        libro_actas:        false,
-        realizar_ronda:     false,
     },
 
     admin_contrato: {
@@ -138,6 +122,10 @@ export const PERMISOS_BASE = {
         realizar_ronda:     true,
         pedido_insumos:     true,
         control_vehicular:  true,
+        inventarios:        true,
+        muro_procedimientos: true,
+        muro_comunicacion:  true,
+        capacitacion:       true,
     },
 };
 
@@ -151,30 +139,37 @@ export function resolverPermisos(rol, permisosOverride = {}) {
 
 // ── Helpers de verificación ───────────────────────────────────
 export const esSuperAdmin    = (rol) => rol === ROLES.SUPER_ADMIN;
-export const esAdminEmpresa  = (rol) => rol === ROLES.ADMIN_EMPRESA;
 export const esAdminContrato = (rol) => rol === ROLES.ADMIN_CONTRATO;
 export const esVigilador     = (rol) => rol === ROLES.VIGILADOR;
 
 // Es admin de algún nivel (no vigilador)
 export const esAdmin = (rol) =>
-    [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.ADMIN_CONTRATO].includes(rol);
+    [ROLES.SUPER_ADMIN, ROLES.ADMIN_CONTRATO].includes(rol);
 
 // Puede gestionar usuarios
 export const puedeGestionarUsuarios = (rol) =>
-    [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA].includes(rol);
+    [ROLES.SUPER_ADMIN, ROLES.ADMIN_CONTRATO].includes(rol);
 
 // Puede crear otros admins de contrato
 export const puedeCrarAdminContrato = (rol) =>
-    [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA].includes(rol);
+    rol === ROLES.SUPER_ADMIN;
 
 // Verificar un permiso puntual contra el objeto de permisos resueltos
 export const tienePermiso = (permisos, modulo) => permisos?.[modulo] === true;
+
+// ── Colores para badges de rol ────────────────────────────────
+export const ROLE_COLORS = {
+    super_admin:    "red",
+    admin_contrato: "blue",
+    supervisor:     "green",
+    administrativo: "teal",
+    vigilador:      "gray",
+};
 
 // ── Roles que puede crear cada rol ───────────────────────────
 // Controla qué roles puede asignar cada nivel en la UI de creación de usuarios
 export const ROLES_CREABLES_POR = {
     super_admin:    [ROLES.ADMIN_EMPRESA, ROLES.ADMIN_CONTRATO, ROLES.SUPERVISOR, ROLES.VIGILADOR],
-    admin_empresa:  [ROLES.ADMIN_CONTRATO, ROLES.SUPERVISOR, ROLES.VIGILADOR],
     admin_contrato: [ROLES.SUPERVISOR, ROLES.VIGILADOR],
     supervisor:     [],
     vigilador:      [],

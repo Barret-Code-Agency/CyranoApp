@@ -5,9 +5,9 @@ import "../styles/Login.css";
 
 const ROLE_LABELS = {
     super_admin:   { label: "Super Administrador",      icon: "⚙️",  variant: "super"    },
-    admin_empresa: { label: "Administrador de Empresa", icon: "🏛️", variant: "empresa"  },
-    admin:         { label: "Administrador de Contrato",icon: "🏢",  variant: "admin"    },
-    supervisor:    { label: "Supervisor",               icon: "🔍",  variant: "supervisor"},
+    admin:         { label: "Gerencia de Operaciones",  icon: "🏢",  variant: "admin"    },
+    supervisor:    { label: "Supervisor / Encargado",    icon: "🔍",  variant: "supervisor"},
+    administrativo:{ label: "Administrativo",          icon: "🗂️", variant: "administrativo"},
     user:          { label: "Vigilador",                icon: "👷",  variant: "user"     },
 };
 

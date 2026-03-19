@@ -182,6 +182,186 @@
 }
 
 
+/* ── Calendario semanal ──────────────────────────────────────────────────── */
+.vh-calendario {
+    margin: var(--space-4) var(--space-4) 0;
+    background: var(--color-surface);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.vh-cal-title {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface2);
+}
+
+/* Tira de 7 días */
+.vh-cal-strip {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.vh-cal-dia {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: var(--space-3) var(--space-1) var(--space-3);
+    background: none;
+    border: none;
+    border-right: 1px solid var(--color-border);
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: background var(--transition-base);
+    min-height: 100px;
+}
+
+.vh-cal-dia:last-child { border-right: none; }
+.vh-cal-dia:hover { background: var(--color-surface2); }
+
+.vh-cal-dia--hoy .vh-cal-daynum {
+    background: var(--color-primary);
+    color: var(--color-white);
+}
+
+.vh-cal-dia--sel {
+    background: var(--color-primary-ghost);
+}
+
+.vh-cal-dia--sel .vh-cal-dayname { color: var(--color-primary); }
+
+.vh-cal-dayname {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--color-muted);
+}
+
+.vh-cal-daynum {
+    font-size: var(--text-base);
+    font-weight: 800;
+    color: var(--color-text);
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-full);
+}
+
+/* Actividades dentro de la celda del día */
+.vh-cal-dia-acts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    margin-top: 2px;
+}
+
+.vh-cal-dia-empty {
+    font-size: 10px;
+    color: var(--color-border2);
+    text-align: center;
+}
+
+.vh-cal-dia-chip {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    text-align: center;
+    padding: 1px 3px;
+    border-radius: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.4;
+}
+
+.vh-cal-dia-chip--ronda        { background: rgba(40,167,69,0.15);  color: var(--color-success); }
+.vh-cal-dia-chip--capacitacion { background: var(--color-primary-ghost); color: var(--color-primary); }
+.vh-cal-dia-chip--informe      { background: var(--color-warn-ghost);    color: var(--color-warn);    }
+.vh-cal-dia-chip--turno        { background: var(--color-surface2);      color: var(--color-muted);   }
+.vh-cal-dia-chip--default      { background: var(--color-surface2);      color: var(--color-muted);   }
+
+/* Detalle del día */
+.vh-cal-detail {
+    padding: var(--space-3) var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-height: 80px;
+}
+
+.vh-cal-detail-fecha {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.vh-cal-hoy-badge {
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--color-primary);
+    color: var(--color-white);
+    border-radius: var(--radius-full);
+    padding: 1px 8px;
+    letter-spacing: 0.5px;
+}
+
+.vh-cal-empty {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    font-style: italic;
+    padding: var(--space-2) 0;
+}
+
+.vh-cal-acts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.vh-cal-act {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--color-border2);
+    background: var(--color-surface2);
+    font-size: var(--text-xs);
+}
+
+.vh-cal-act--ronda       { border-left-color: var(--color-success); }
+.vh-cal-act--capacitacion{ border-left-color: var(--color-primary); }
+.vh-cal-act--informe     { border-left-color: var(--color-warn);    }
+.vh-cal-act--turno       { border-left-color: var(--color-muted);   }
+.vh-cal-act--default     { border-left-color: var(--color-border2); }
+
+.vh-cal-act-hora {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-muted);
+    white-space: nowrap;
+    min-width: 36px;
+}
+
+.vh-cal-act-label {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
 /* ── Sub-panel (Informes, etc.) ─────────────────────────────────────────── */
 .vh-subpanel {
     padding: var(--space-6) var(--space-4);
@@ -242,9 +422,11 @@
 .vh-opcion--red:hover   { border-color: var(--color-danger);  background: var(--color-danger-ghost);  box-shadow: var(--shadow-sm); }
 
 /* Borde izquierdo de color por variante */
-.vh-opcion--blue  { border-left: 4px solid var(--color-primary); }
-.vh-opcion--green { border-left: 4px solid var(--color-success); }
-.vh-opcion--red   { border-left: 4px solid var(--color-danger);  }
+.vh-opcion--blue   { border-left: 4px solid var(--color-primary); }
+.vh-opcion--green  { border-left: 4px solid var(--color-success); }
+.vh-opcion--red    { border-left: 4px solid var(--color-danger);  }
+.vh-opcion--orange { border-left: 4px solid var(--color-orange);  }
+.vh-opcion--orange:hover { border-color: var(--color-orange); background: var(--color-orange-ghost); box-shadow: var(--shadow-sm); }
 
 .vh-opcion-icon {
     font-size: var(--text-2xl);
@@ -277,4 +459,24 @@
     background: var(--color-surface2);
     border-radius: var(--radius-xl);
     border: 1px dashed var(--color-border2);
+}
+
+/* ── Selector de vehículo ─────────────────────────────────────────────────── */
+.vig-select {
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--color-border);
+    background: var(--color-surface);
+    font-size: var(--text-base);
+    font-family: var(--font-body);
+    color: var(--color-text);
+    outline: none;
+    transition: border-color var(--transition-base);
+    appearance: auto;
+}
+
+.vig-select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(0, 45, 114, 0.1);
 }

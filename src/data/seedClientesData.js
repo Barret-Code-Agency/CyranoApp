@@ -1,120 +1,63 @@
 // src/data/seedClientesData.js
-// Datos iniciales de clientes, objetivos y puestos para importar en Firestore.
-// Cada puesto tiene un `numero` único dentro del cliente (ID Objetivo en planillas).
+// Fuente única de verdad — generado desde clientes.xlsx
+// Estructura plana: clientes (Razón Social) + objetivos (una fila = un objetivo)
+// codigo = CC-Proyecto-Objetivo  |  horas = contrato estándar por día (no se usa aún)
 
-export const SEED_DATA = [
-    {
-        cliente:  { nombre: "BSC", codigo: "217/1" },
-        objetivos: [
-            {
-                nombre: "Sucursal Bs As", zona: "CABA", provincia: "Buenos Aires",
-                puestos: [
-                    { numero: 1,  nombre: "Administración", direccion: "Avenida Rabanal 3120, CABA", telefono: "" },
-                ],
-            },
-            {
-                nombre: "Sucursal Santa Cruz", zona: "Caleta Olivia", provincia: "Santa Cruz",
-                puestos: [
-                    { numero: 2,  nombre: "Administración", direccion: "Administración Sur, Caleta Olivia", telefono: "" },
-                ],
-            },
-        ],
-    },
-    {
-        cliente:  { nombre: "Brinks Argentina S.A.", codigo: "220/139" },
-        objetivos: [
-            {
-                nombre: "Buenos Aires", zona: "CABA", provincia: "Buenos Aires",
-                puestos: [
-                    { numero: 1,  nombre: "Recepción Brinks",  direccion: "Avenida Rabanal 3120, CABA", telefono: "" },
-                    { numero: 2,  nombre: "Carga Segura",      direccion: "Avenida Rabanal 3120, CABA", telefono: "" },
-                    { numero: 3,  nombre: "Seguridad Planta",  direccion: "Avenida Rabanal 3120, CABA", telefono: "" },
-                    { numero: 4,  nombre: "Móvil",             direccion: "Avenida Rabanal 3120, CABA", telefono: "" },
-                    { numero: 5,  nombre: "Berón de Astrada",  direccion: "Avenida Rabanal 3120, CABA", telefono: "" },
-                    { numero: 6,  nombre: "Pergamino",         direccion: "Avenida Rabanal 3120, CABA", telefono: "" },
-                ],
-            },
-        ],
-    },
-    {
-        cliente:  { nombre: "Reginald Lee S.A.", codigo: "217/113" },
-        objetivos: [
-            {
-                nombre: "Ranelagh", zona: "Berazategui", provincia: "Buenos Aires",
-                puestos: [
-                    { numero: 1,  nombre: "CCTV",           direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 2,  nombre: "Encargados",     direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 3,  nombre: "Puesto 1",       direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 4,  nombre: "Puesto 2",       direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 5,  nombre: "Puesto 4",       direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 6,  nombre: "Puesto 7",       direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 7,  nombre: "Puesto 8",       direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 8,  nombre: "Encargados",     direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 9,  nombre: "Rondín",         direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 10, nombre: "Cust. Camión",   direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                    { numero: 11, nombre: "General",        direccion: "Camino Belgrano 3150, Berazategui", telefono: "" },
-                ],
-            },
-            {
-                nombre: "Lobos", zona: "Lobos", provincia: "Buenos Aires",
-                puestos: [
-                    { numero: 11, nombre: "Puesto Lobos",       direccion: "Ruta Nac 205 y Salgado, Lobos", telefono: "" },
-                ],
-            },
-            {
-                nombre: "La Plata", zona: "La Plata", provincia: "Buenos Aires",
-                puestos: [
-                    { numero: 12, nombre: "Puesto La Plata",    direccion: "Calle 12 N° 1599, Ringuelet, La Plata", telefono: "" },
-                ],
-            },
-            {
-                nombre: "Mar del Plata", zona: "Mar del Plata", provincia: "Buenos Aires",
-                puestos: [
-                    { numero: 13, nombre: "Puesto Mar del Plata", direccion: "Autovía 2 km 398, Mar del Plata", telefono: "" },
-                ],
-            },
-        ],
-    },
-    {
-        cliente:  { nombre: "Ovnisa", codigo: "217/117" },
-        objetivos: [
-            {
-                nombre: "Berazategui", zona: "Hudson", provincia: "Buenos Aires",
-                puestos: [
-                    { numero: 1,  nombre: "Berazategui", direccion: "Calle 51 N° 1757, Hudson, Berazategui", telefono: "" },
-                ],
-            },
-        ],
-    },
-    {
-        cliente:  { nombre: "Cerro Moro", codigo: "217/103" },
-        objetivos: [
-            {
-                nombre: "Cerro Moro", zona: "Santa Cruz", provincia: "Santa Cruz",
-                puestos: [
-                    { numero: 1,  nombre: "PAS Supervisor",      direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 2,  nombre: "PAS Administrativa",  direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 3,  nombre: "PAS Patrulla Chofer", direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 4,  nombre: "PAS Patrulla Vehiculo", direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 5,  nombre: "PAS Encargados",      direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 6,  nombre: "PAS CCTV Gral.",      direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 7,  nombre: "PAS CCTV Fundicion",  direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 8,  nombre: "PAS Puesto 1",        direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 9,  nombre: "PAS Puesto 2",        direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 10, nombre: "PAS Puesto 3",        direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 11, nombre: "PAS Puesto 4",        direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 12, nombre: "PAS Naty",            direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                    { numero: 13, nombre: "General",             direccion: "Cerro Moro, Santa Cruz", telefono: "" },
-                ],
-            },
-        ],
-    },
+export const SEED_CLIENTES = [
+    { id: "panamerican",  nombre: "Panamerican Silver" },
+    { id: "sofse",        nombre: "SOFSE" },
+    { id: "brinks-ar",   nombre: "Brinks Argentina S.A." },
+    { id: "santander",    nombre: "Banco Santander S.A." },
+    { id: "reginald-lee", nombre: "Reginald Lee S.A." },
+    { id: "ovnisa",       nombre: "Ovnisa S.A." },
+    { id: "farmatodo",    nombre: "Farmatodo Argentina" },
 ];
 
-// Helper: etiqueta completa para mostrar en pantallas y planillas
-// Formato: "220/139 / 4 · Móvil"
-export function labelPuesto(clienteCodigo, numero, nombrePuesto) {
-    if (!clienteCodigo && !numero) return nombrePuesto || "";
-    if (!numero) return `${clienteCodigo} · ${nombrePuesto}`;
-    return `${clienteCodigo} / ${numero} · ${nombrePuesto}`;
-}
+// Una fila del Excel = un objetivo
+// campos: codigo, proyecto, nombre, clienteId, domicilio, horas por día
+export const SEED_OBJETIVOS = [
+    { codigo:"217-1-1",   proyecto:"BSC",                     nombre:"Administracion CABA",      clienteId:"sofse",        domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"217-103-1", proyecto:"Cerro Moro",              nombre:"Gral.",                    clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"217-103-2", proyecto:"Cerro Moro",              nombre:"PAS Supervisor",           clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:12, horasMartes:12, horasMiercoles:12, horasJueves:12, horasViernes:12, horasSabado:12, horasDomingo:12, horasFeriados:12 },
+    { codigo:"217-103-3", proyecto:"Cerro Moro",              nombre:"PAS Administrativa",       clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:12, horasMartes:12, horasMiercoles:12, horasJueves:12, horasViernes:12, horasSabado:12, horasDomingo:12, horasFeriados:12 },
+    { codigo:"217-103-4", proyecto:"Cerro Moro",              nombre:"PAS Patrulla (Chofer)",    clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-103-5", proyecto:"Cerro Moro",              nombre:"PAS Patrulla (Vehiculos)", clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-103-6", proyecto:"Cerro Moro",              nombre:"PAS Encargado",            clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-103-7", proyecto:"Cerro Moro",              nombre:"PAS CCTV Gral",            clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-103-8", proyecto:"Cerro Moro",              nombre:"PAS CCTV Fundicion",       clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-103-9", proyecto:"Cerro Moro",              nombre:"PAS Puesto 1",             clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:60, horasMartes:60, horasMiercoles:60, horasJueves:60, horasViernes:60, horasSabado:60, horasDomingo:60, horasFeriados:60 },
+    { codigo:"217-103-10",proyecto:"Cerro Moro",              nombre:"PAS Puesto 2",             clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-103-11",proyecto:"Cerro Moro",              nombre:"PAS Puesto 3",             clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:48, horasMartes:48, horasMiercoles:48, horasJueves:48, horasViernes:48, horasSabado:48, horasDomingo:48, horasFeriados:48 },
+    { codigo:"217-103-12",proyecto:"Cerro Moro",              nombre:"PAS Puesto 4",             clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:48, horasMartes:48, horasMiercoles:48, horasJueves:48, horasViernes:48, horasSabado:48, horasDomingo:48, horasFeriados:48 },
+    { codigo:"217-103-13",proyecto:"Cerro Moro",              nombre:"PAS Naty",                 clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"238-106-1", proyecto:"SOFSE",                   nombre:"Tecnicos Instaladores",    clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:9,  horasMartes:9,  horasMiercoles:9,  horasJueves:9,  horasViernes:9,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"220-139-1", proyecto:"Brinks",                  nombre:"Recepcion",         clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:10, horasMartes:10, horasMiercoles:10, horasJueves:10, horasViernes:10, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"220-139-2", proyecto:"Brinks",                  nombre:"Go",                       clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:10, horasMartes:10, horasMiercoles:10, horasJueves:10, horasViernes:10, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"220-139-3", proyecto:"Brinks",                  nombre:"Monitoreo",                clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"220-139-4", proyecto:"Brinks",                  nombre:"FEMSA Mudanza",            clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"220-139-5", proyecto:"Brinks",                  nombre:"Seguridad Planta",         clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"220-139-6", proyecto:"Brinks",                  nombre:"Movil",                    clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:33, horasMartes:33, horasMiercoles:33, horasJueves:33, horasViernes:33, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"220-139-7", proyecto:"Brinks",                  nombre:"Beron Astrada",            clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:17, horasMartes:17, horasMiercoles:17, horasJueves:17, horasViernes:17, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"220-139-8", proyecto:"Brinks",                  nombre:"Pergamino",                clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:16, horasMartes:16, horasMiercoles:16, horasJueves:16, horasViernes:16, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"220-139-9", proyecto:"Brinks",                  nombre:"Recuento",                 clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"238-102-1", proyecto:"ATM Neutrales Santander", nombre:"Tecnico Instalador",       clienteId:"santander",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"238-102-2", proyecto:"ATM Neutrales Santander", nombre:"Operadores de Monitoreo",  clienteId:"santander",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"238-102-3", proyecto:"ATM Neutrales Santander", nombre:"Seguridad fisica",         clienteId:"reginald-lee", domicilio:"Varios - Física",                   horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"217-113-1", proyecto:"Reginald Lee",            nombre:"Ranelagh",                 clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"217-113-2", proyecto:"Reginald Lee",            nombre:"CCTV Ranelagh",            clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-113-3", proyecto:"Reginald Lee",            nombre:"Encargado",                clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-113-4", proyecto:"Reginald Lee",            nombre:"Rg Puesto 1",              clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:48, horasMartes:48, horasMiercoles:48, horasJueves:48, horasViernes:48, horasSabado:48, horasDomingo:48, horasFeriados:48 },
+    { codigo:"217-113-5", proyecto:"Reginald Lee",            nombre:"Rg Puesto 2",              clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-113-6", proyecto:"Reginald Lee",            nombre:"Rg Puesto 4",              clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:12, horasMartes:12, horasMiercoles:12, horasJueves:12, horasViernes:12, horasSabado:8,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"217-113-7", proyecto:"Reginald Lee",            nombre:"Rg Caja",                  clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:12, horasMartes:12, horasMiercoles:12, horasJueves:12, horasViernes:12, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"217-113-8", proyecto:"Reginald Lee",            nombre:"Rg Puesto 7",              clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:10, horasDomingo:9,  horasFeriados:0  },
+    { codigo:"217-113-9", proyecto:"Reginald Lee",            nombre:"Rg Rondón",                clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:12, horasMartes:12, horasMiercoles:12, horasJueves:12, horasViernes:12, horasSabado:24, horasDomingo:10, horasFeriados:24 },
+    { codigo:"217-113-10",proyecto:"Reginald Lee",            nombre:"Rg Puesto 8",              clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-113-11",proyecto:"Reginald Lee",            nombre:"Rg Elevada",               clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:10, horasMartes:10, horasMiercoles:10, horasJueves:10, horasViernes:10, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"217-113-12",proyecto:"Reginald Lee",            nombre:"Rg Custodios",             clienteId:"reginald-lee", domicilio:"Camino Belgrano 3150, Berazategui", horasLunes:16, horasMartes:18, horasMiercoles:16, horasJueves:8,  horasViernes:26, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"217-113-13",proyecto:"Reginald Lee",            nombre:"Lobos",                    clienteId:"reginald-lee", domicilio:"Ruta Nac 205 y Salgado, Lobos",     horasLunes:36, horasMartes:36, horasMiercoles:36, horasJueves:36, horasViernes:36, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-113-14",proyecto:"Reginald Lee",            nombre:"La Plata",                 clienteId:"reginald-lee", domicilio:"Calle 12 N° 1599, Ringuelet",       horasLunes:11, horasMartes:11, horasMiercoles:11, horasJueves:11, horasViernes:19, horasSabado:32, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-113-15",proyecto:"Reginald Lee",            nombre:"Mar del Plata",            clienteId:"reginald-lee", domicilio:"Autovía 2 km 398, Mar del Plata",   horasLunes:36, horasMartes:36, horasMiercoles:36, horasJueves:36, horasViernes:36, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-117-1", proyecto:"Ovnisa",                  nombre:"Berazategui",              clienteId:"ovnisa",       domicilio:"Calle 51 N° 1757, Hudson",          horasLunes:13, horasMartes:12, horasMiercoles:12, horasJueves:12, horasViernes:12, horasSabado:24, horasDomingo:24, horasFeriados:24 },
+    { codigo:"217-172-1", proyecto:"Seguridad Fisica Farmatodo",nombre:"Apoyo a tecnica",        clienteId:"farmatodo",    domicilio:"Varios - Física",                   horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+];

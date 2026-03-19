@@ -151,25 +151,42 @@
 }
 
 .rs-logo-ring {
-    width: 76px; height: 76px;
-    border-radius: var(--radius-xl);
-    background: none;
-    border: none;
-    box-shadow: none;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    overflow: hidden;
 }
 
-/* Bandera del país en el ring — proporción real */
+/* Card de bandera — igual estilo que LatamMapSplash */
+.rs-flag-card {
+    background: #fff;
+    border-radius: 5px;
+    padding: 5px 5px 4px;
+    box-shadow: 0 3px 10px rgba(0, 48, 135, 0.15);
+    border: 2px solid rgba(0, 45, 114, 0.15);
+    overflow: hidden;
+    width: 88px;
+}
+
 .rs-flag-main {
     width: 100%;
-    height: auto;
-    object-fit: contain;
-    border-radius: 4px;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
     display: block;
+    border-radius: 3px 3px 0 0;
+}
+
+.rs-flag-name {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #6c757d;
+    text-align: center;
+    padding: 4px 2px 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Bienvenido + país — centrado sobre la línea roja */
@@ -314,6 +331,18 @@
     transform: translateY(-2px);
 }
 
+.rs-role-card--administrativo {
+    border-color: rgba(234, 88, 12, 0.2);
+}
+
+.rs-role-card--administrativo:hover,
+.rs-role-card--administrativo:focus {
+    background: var(--color-orange-ghost);
+    border-color: var(--color-orange);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
 .rs-role-card--user:hover,
 .rs-role-card--user:focus {
     background: var(--color-primary-ghost);
@@ -355,6 +384,11 @@
     border: 1px solid rgba(40, 167, 69, 0.18);
 }
 
+.rs-role-icon--administrativo {
+    background: var(--color-orange-ghost);
+    border: 1px solid rgba(234, 88, 12, 0.18);
+}
+
 .rs-role-icon--user {
     background: var(--color-primary-ghost);
     border: 1px solid rgba(0, 45, 114, 0.18);
@@ -381,7 +415,8 @@
 
 .rs-role-card--user:hover .rs-role-arrow       { transform: translateX(4px); color: var(--color-primary); }
 .rs-role-card--admin:hover .rs-role-arrow      { transform: translateX(4px); color: var(--color-red); }
-.rs-role-card--supervisor:hover .rs-role-arrow { transform: translateX(4px); color: var(--color-success); }
+.rs-role-card--supervisor:hover .rs-role-arrow      { transform: translateX(4px); color: var(--color-success); }
+.rs-role-card--administrativo:hover .rs-role-arrow  { transform: translateX(4px); color: var(--color-orange); }
 
 /* ── Lista de módulos ── */
 .rs-modules {

@@ -3,43 +3,48 @@ import "../styles/RoleSelectScreen.css";
 
 const ROLES_UI = [
     {
-        key:     "admin_empresa",
-        icon:    "🏛️",
-        titulo:  "Administrador de Empresa",
-        variant: "empresa",
-        modulos: [
-            { icon: "🤝", label: "Clientes" },
-            { icon: "📊", label: "Dashboards" },
-            { icon: "📋", label: "Gestión de contratos" },
-            { icon: "👥", label: "Gestión de usuarios" },
-            { icon: "📄", label: "Informes" },
-        ],
-    },
-    {
         key:     "admin",
         icon:    "🏢",
-        titulo:  "Administrador de Contrato",
+        titulo:  "Gerencia de Operaciones",
         variant: "admin",
         modulos: [
-            { icon: "🗺️", label: "Control de rondas" },
-            { icon: "📋", label: "Plan de seguridad" },
+            { icon: "🔍", label: "Supervisión" },
+            { icon: "🗄️", label: "Gestión de datos" },
+            { icon: "📊", label: "Dashboards de gestión" },
+            { icon: "👥", label: "Dashboard de personal" },
+            { icon: "🛡️", label: "Plan de seguridad" },
             { icon: "🎓", label: "Plan de capacitación" },
             { icon: "⚠️", label: "Análisis de riesgos" },
-            { icon: "🕐", label: "Turnos de trabajo" },
-            { icon: "👥", label: "Gestión de personal" },
         ],
     },
     {
         key:     "supervisor",
         icon:    "🔍",
-        titulo:  "Supervisor",
+        titulo:  "Supervisor / Encargado",
         variant: "supervisor",
         modulos: [
             { icon: "🔍", label: "Supervisión" },
-            { icon: "🗺️", label: "Control de rondas" },
+            { icon: "🗺️", label: "Planificación y control de rondas" },
+            { icon: "🛡️", label: "Control de cobertura" },
+            { icon: "📊", label: "Planillas" },
+            { icon: "📄", label: "Informes" },
+            { icon: "📋", label: "Informes de gestión" },
+            { icon: "🕐", label: "Turnos de trabajo" },
+        ],
+    },
+    {
+        key:     "administrativo",
+        icon:    "🗂️",
+        titulo:  "Administrativo",
+        variant: "administrativo",
+        modulos: [
             { icon: "📊", label: "Planillas" },
             { icon: "📄", label: "Informes" },
             { icon: "🕐", label: "Turnos de trabajo" },
+            { icon: "📋", label: "Legajos" },
+            { icon: "💰", label: "Facturación" },
+            { icon: "⏱️", label: "Control de horas" },
+            { icon: "📉", label: "Ausentismo" },
         ],
     },
     {
@@ -50,9 +55,11 @@ const ROLES_UI = [
         modulos: [
             { icon: "📖", label: "Libro de actas digital" },
             { icon: "🗺️", label: "Realizar ronda" },
+            { icon: "🚗", label: "Control de vehículo" },
             { icon: "📊", label: "Planillas" },
             { icon: "📄", label: "Informes" },
-            { icon: "🕐", label: "Turnos de trabajo" },
+            { icon: "🕐", label: "Mis turnos" },
+            { icon: "📦", label: "Pedido de insumos" },
         ],
     },
 ];
@@ -78,10 +85,14 @@ export default function RoleSelectScreen({ onSelect, onBack, country }) {
                     <div className="rs-header-content">
                         <div className="rs-logo-row">
                             <div className="rs-logo-ring">
-                                {country
-                                    ? <img className="rs-flag-main" src={country.src} alt={country.name} />
-                                    : <span className="rs-flag-placeholder">🌎</span>
-                                }
+                                {country ? (
+                                    <div className="rs-flag-card">
+                                        <img className="rs-flag-main" src={country.src} alt={country.name} />
+                                        <div className="rs-flag-name">{country.name}</div>
+                                    </div>
+                                ) : (
+                                    <span className="rs-flag-placeholder">🌎</span>
+                                )}
                             </div>
                             <div className="rs-brand-block">
                                 <div className="rs-brand">CYRANO<span>APP</span></div>

@@ -213,7 +213,6 @@
     font-size: 17px;
     font-weight: 800;
     color: var(--color-text-primary);
-    text-transform: capitalize;
 }
 
 .gc-label {

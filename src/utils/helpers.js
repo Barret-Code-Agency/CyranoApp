@@ -22,6 +22,35 @@ export function useGeo() {
     return { get };
 }
 
+// Opciones de período para filtros de historial y capacitaciones
+export const PERIODOS_FILTRO = [
+    { k: "7",    l: "7 días"  },
+    { k: "30",   l: "30 días" },
+    { k: "90",   l: "3 meses" },
+    { k: "todo", l: "Todo"    },
+];
+
+// Formatea minutos a "2h 30m"
+export function fmtMin(m) {
+    if (!m || m <= 0) return "0m";
+    const h = Math.floor(m / 60), r = m % 60;
+    return h > 0 ? (r > 0 ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
+}
+
+// Convierte URL de imagen a base64
+export async function urlToBase64(url) {
+    try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch { return null; }
+}
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 // Roles: "admin" | "operator"
 // Escribir "administrador" como usuario → acceso al panel de administración.

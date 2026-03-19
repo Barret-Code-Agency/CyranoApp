@@ -1,0 +1,207 @@
+/* src/styles/GestionPersonalScreen.css
+   Clases específicas de GestionPersonalScreen (prefijo gp-).
+   Las clases gc- base se importan desde GestionClientesScreen.css */
+
+/* ── Tabs ── */
+.gp-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--color-border);
+    background: var(--color-surface);
+    padding: 0 var(--space-4);
+    position: sticky;
+    top: 53px;   /* justo debajo del gc-header */
+    z-index: 10;
+}
+
+.gp-tab {
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font-main);
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+.gp-tab:hover { color: var(--color-primary); }
+.gp-tab--active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
+/* ── Modal ampliado ── */
+.gp-modal {
+    max-height: 90vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ── Select dentro del modal ── */
+.gp-select {
+    appearance: auto;
+    cursor: pointer;
+}
+
+/* ── Info del puesto seleccionado ── */
+.gp-puesto-info {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    background: var(--color-surface2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 6px 10px;
+    margin-top: -8px;
+}
+
+/* ── Lista de checkboxes de objetivos ── */
+.gp-obj-list {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    background: var(--color-surface2);
+}
+
+.gp-obj-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.12s;
+    border: 1px solid transparent;
+    width: 100%;
+    box-sizing: border-box;
+}
+.gp-obj-check:hover    { background: var(--color-primary-ghost); }
+.gp-obj-check--sel     { background: var(--color-primary-ghost); border-color: var(--color-primary); }
+.gp-obj-check input[type="checkbox"] { flex-shrink: 0; width: 16px; height: 16px; max-width: 16px; accent-color: var(--color-primary); cursor: pointer; }
+
+.gp-obj-texto {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gp-obj-texto strong {
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.gp-obj-texto span {
+    color: var(--color-text-secondary);
+    font-size: 12px;
+}
+
+.gp-obj-id {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-primary, #4f6ef7);
+    margin-right: 6px;
+    letter-spacing: 0.3px;
+}
+
+/* ── Badge DNI (variante gris) ── */
+.gp-badge--dni {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+
+/* ── Tabla de legajos ── */
+.gp-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 0 16px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.gp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.gp-table thead tr {
+    background: var(--color-surface2);
+    border-bottom: 2px solid var(--color-border);
+}
+
+.gp-table th {
+    padding: 9px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.gp-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    vertical-align: middle;
+}
+
+.gp-table tbody tr:last-child td { border-bottom: none; }
+.gp-table tbody tr:hover { background: var(--color-primary-ghost); }
+
+.gp-td-leg    { font-weight: 700; color: var(--color-primary); }
+.gp-td-nombre { font-weight: 600; min-width: 180px; }
+.gp-td-actions { display: flex; gap: 4px; justify-content: flex-end; }
+
+/* ── Form grid de 2 columnas (modal legajo) ── */
+.gp-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+}
+
+.gp-form-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gp-form-grid .gc-label {
+    margin-bottom: 0;
+}
+
+.gp-form-full { grid-column: 1 / -1; }
+
+@media (max-width: 480px) {
+    .gp-form-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Badge de Tarea ── */
+.gp-tarea-badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    background: #e2e8f0;
+    color: #475569;
+}
+.gp-tarea--supervisor,
+.gp-tarea--supervisorfc,
+.gp-tarea--supervisor-fc { background: #dbeafe; color: #1d4ed8; }
+.gp-tarea--encargado       { background: #fef9c3; color: #a16207; }
+.gp-tarea--vigilador,
+.gp-tarea--vigilador-principal { background: #dcfce7; color: #15803d; }
+.gp-tarea--chofer          { background: #f3e8ff; color: #7e22ce; }

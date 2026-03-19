@@ -10,7 +10,84 @@ import MonitorRondasScreen   from "./MonitorRondasScreen";
 import VerInformesScreen     from "../forms/VerInformesScreen";
 import "../styles/SupervisorHome.css";
 
+// ── Calendario semanal ─────────────────────────────────────────────────────
+const DIAS_ES  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+function fmtKey(d) { return d.toISOString().slice(0, 10); }
+
+function CalendarioSemanal({ actividades = {} }) {
+    const hoy    = new Date();
+    const hoyKey = fmtKey(hoy);
+    const [selKey, setSelKey] = useState(hoyKey);
+
+    const dias = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(hoy);
+        d.setDate(hoy.getDate() + i);
+        return d;
+    });
+
+    const selDate = new Date(selKey + "T12:00:00");
+    const selActs = actividades[selKey] ?? [];
+
+    return (
+        <div className="sh-calendario">
+            <div className="sh-cal-title">📅 Actividades de la semana</div>
+            <div className="sh-cal-strip">
+                {dias.map(d => {
+                    const key  = fmtKey(d);
+                    const acts = actividades[key] ?? [];
+                    return (
+                        <button
+                            key={key}
+                            className={`sh-cal-dia ${key === hoyKey ? "sh-cal-dia--hoy" : ""} ${key === selKey ? "sh-cal-dia--sel" : ""}`}
+                            onClick={() => setSelKey(key)}
+                        >
+                            <span className="sh-cal-dayname">{DIAS_ES[d.getDay()]}</span>
+                            <span className="sh-cal-daynum">{d.getDate()}</span>
+                            <div className="sh-cal-dia-acts">
+                                {acts.length === 0
+                                    ? <span className="sh-cal-dia-empty">—</span>
+                                    : acts.map((a, i) => (
+                                        <span key={i} className={`sh-cal-dia-chip sh-cal-dia-chip--${a.tipo ?? "default"}`}>
+                                            {a.label}
+                                        </span>
+                                    ))
+                                }
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+            <div className="sh-cal-detail">
+                <div className="sh-cal-detail-fecha">
+                    {DIAS_ES[selDate.getDay()]} {selDate.getDate()} de {MESES_ES[selDate.getMonth()]}
+                    {selKey === hoyKey && <span className="sh-cal-hoy-badge">Hoy</span>}
+                </div>
+                {selActs.length === 0 ? (
+                    <div className="sh-cal-empty">Sin actividades programadas</div>
+                ) : (
+                    <div className="sh-cal-acts">
+                        {selActs.map((a, i) => (
+                            <div key={i} className={`sh-cal-act sh-cal-act--${a.tipo ?? "default"}`}>
+                                {a.hora && <span className="sh-cal-act-hora">{a.hora}</span>}
+                                <span className="sh-cal-act-label">{a.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 const MODULOS = [
+    {
+        id:    "muro_comunicacion",
+        icon:  "📢",
+        titulo: "Muro de Comunicación y Novedades",
+        desc:  "Novedades y comunicados de tu empresa",
+        color: "blue",
+    },
     {
         id:    "supervision",
         icon:  "🔍",
@@ -60,11 +137,39 @@ const MODULOS = [
         desc:  "Cargá y gestioná los turnos del personal",
         color: "blue",
     },
+    {
+        id:    "auditoria_puesto",
+        icon:  "🔎",
+        titulo: "Auditoría de Puesto",
+        desc:  "Realizá auditorías operativas del puesto asignado",
+        color: "blue",
+    },
+    {
+        id:    "felicitaciones_sanciones",
+        icon:  "📋",
+        titulo: "Registro de Felicitaciones y Sanciones",
+        desc:  "Registrá felicitaciones o sanciones del personal",
+        color: "blue",
+    },
+    {
+        id:    "informe_gestion",
+        icon:  "📊",
+        titulo: "Informe de Gestión",
+        desc:  "Generá el informe de gestión del período",
+        color: "blue",
+    },
+    {
+        id:    "informe_visita",
+        icon:  "🤝",
+        titulo: "Informe de Visita al Cliente",
+        desc:  "Registrá las novedades de la visita al cliente",
+        color: "blue",
+    },
 ];
 
 export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
     const { logout }        = useAuth();
-    const { empresaLogos, empresaNombre } = useAppData();
+    const { empresaLogos, empresaNombre, empresaModulos, data } = useAppData();
     const [seccion, setSeccion] = useState(null);
 
     const handleLogout = async () => { await logout(); onExit?.(); };
@@ -163,23 +268,29 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
                 <button className="sh-logout-btn" onClick={handleLogout}>🚪</button>
             </header>
 
-            <div className="sh-role-badge">🔍 Supervisor</div>
+            <div className="sh-role-badge">🔍 Supervisor / Encargado</div>
+
+            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} />
 
             <div className="sh-grid">
-                {MODULOS.map(m => (
+                {MODULOS.map(m => {
+                    const habilitado = empresaModulos == null || empresaModulos[m.id] !== false;
+                    return (
                     <button
                         key={m.id}
-                        className={`sh-modulo sh-modulo--${m.color}`}
-                        onClick={() => setSeccion(m.id)}
+                        className={`sh-modulo sh-modulo--${m.color} ${!habilitado ? "sh-modulo--disabled" : ""}`}
+                        disabled={!habilitado}
+                        onClick={() => habilitado && setSeccion(m.id)}
                     >
                         <span className="sh-modulo-icon">{m.icon}</span>
                         <div className="sh-modulo-info">
                             <strong>{m.titulo}</strong>
-                            <small>{m.desc}</small>
+                            <small>{habilitado ? m.desc : "Sin acceso"}</small>
                         </div>
-                        <span className="sh-modulo-arrow">›</span>
+                        {habilitado && <span className="sh-modulo-arrow">›</span>}
                     </button>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
