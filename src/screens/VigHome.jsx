@@ -11,7 +11,26 @@ import InformeSencilloScreen from "../forms/InformeSencilloScreen";
 import InformeNovedadScreen from "../forms/InformeNovedadScreen";
 import VerInformesScreen from "../forms/VerInformesScreen";
 import ControlVehicularScreen from "./ControlVehicularScreen";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../firebase";
+import { useClientesData } from "../hooks/useClientesData";
 import "../styles/VigHome.css";
+
+const TURNOS = [
+    "06:00 – 14:00",
+    "14:00 – 22:00",
+    "22:00 – 06:00",
+    "06:00 – 18:00",
+    "18:00 – 06:00",
+    "07:00 – 19:00",
+    "19:00 – 07:00",
+    "05:00 – 17:00",
+    "17:00 – 05:00",
+    "08:00 – 20:00",
+    "10:00 – 18:00",
+    "06:00 – 16:00",
+    "07:00 – 17:00",
+];
 
 // ── Selector de vehículo antes del checklist ──────────────────────────────────
 function SelectorVehiculo({ vehiculos = [], supervisor, onBack }) {
@@ -33,13 +52,12 @@ function SelectorVehiculo({ vehiculos = [], supervisor, onBack }) {
         <div className="vh-subpanel">
             <button className="vh-back" onClick={onBack}>← Volver al panel</button>
             <div className="vh-subpanel-title">🚗 Control de Vehículo</div>
-            <div className="vh-opciones" style={{ flexDirection: "column", gap: "12px", padding: "16px 0" }}>
+            <div className="vh-opciones vh-vehiculo-col">
                 <label style={{ fontWeight: 600, marginBottom: 4 }}>Seleccioná el vehículo a controlar:</label>
                 <select
-                    className="vig-select"
+                    className="vig-select vh-vehiculo-select"
                     value={vehiculoSeleccionado || ""}
                     onChange={e => setVehiculoSeleccionado(e.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 15 }}
                 >
                     <option value="">-- Seleccionar vehículo --</option>
                     {vehiculos.map(v => (
@@ -47,10 +65,9 @@ function SelectorVehiculo({ vehiculos = [], supervisor, onBack }) {
                     ))}
                 </select>
                 <button
-                    className="vh-opcion vh-opcion--blue"
+                    className={`vh-opcion vh-opcion--blue vh-btn-submit ${vehiculoSeleccionado ? "" : "vh-btn-submit--inactive"}`}
                     disabled={!vehiculoSeleccionado}
                     onClick={() => setIniciado(true)}
-                    style={{ marginTop: 8, opacity: vehiculoSeleccionado ? 1 : 0.5 }}
                 >
                     <span className="vh-opcion-icon">✅</span>
                     <div className="vh-opcion-info">
@@ -280,11 +297,83 @@ function PanelPlanillas({ onBack }) {
     );
 }
 
+// ── Modal de check-in de turno ─────────────────────────────────────────────────
+function ModalCheckin({ user, puestos, onConfirmar }) {
+    const [turno,   setTurno]   = useState("");
+    const [puesto,  setPuesto]  = useState("");
+    const [guardando, setGuardando] = useState(false);
+
+    const valido = turno && puesto;
+
+    const confirmar = async () => {
+        if (!valido) return;
+        setGuardando(true);
+        try {
+            await addDoc(collection(db, "ingresosTurno"), {
+                uid:       user?.uid  || null,
+                nombre:    user?.name || null,
+                turno,
+                puesto,
+                fecha:     serverTimestamp(),
+            });
+        } catch (e) {
+            console.warn("No se pudo registrar ingreso:", e);
+        }
+        onConfirmar({ turno, puesto });
+    };
+
+    return (
+        <div className="vh-checkin-overlay">
+            <div className="vh-checkin-modal">
+                <div className="vh-checkin-icon">👷</div>
+                <h2 className="vh-checkin-title">Bienvenido, {user?.name?.split(" ")[0]}</h2>
+                <p className="vh-checkin-sub">Completá los datos de tu turno para continuar</p>
+
+                <div className="vh-checkin-fields">
+                    <div className="vh-checkin-field">
+                        <label className="vh-checkin-label">Turno de trabajo</label>
+                        <select
+                            className="vh-checkin-select"
+                            value={turno}
+                            onChange={e => setTurno(e.target.value)}
+                        >
+                            <option value="">— Seleccioná tu turno —</option>
+                            {TURNOS.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="vh-checkin-field">
+                        <label className="vh-checkin-label">Puesto actual</label>
+                        <select
+                            className="vh-checkin-select"
+                            value={puesto}
+                            onChange={e => setPuesto(e.target.value)}
+                        >
+                            <option value="">— Seleccioná tu puesto —</option>
+                            {puestos.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                <button
+                    className={`vh-checkin-btn ${!valido ? "vh-checkin-btn--dis" : ""}`}
+                    disabled={!valido || guardando}
+                    onClick={confirmar}
+                >
+                    {guardando ? "Registrando..." : "Ingresar al sistema →"}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ── Pantalla principal ─────────────────────────────────────────────────────────
 export default function VigHome({ onLogout, user: propUser }) {
     const { user: authUser, logout } = useAuth();
-    const { empresaLogos, data, empresaModulos } = useAppData();
-    const [seccion, setSeccion] = useState(null);
+    const { empresaLogos, data, empresaModulos, empresaNombre } = useAppData();
+    const { objetivos } = useClientesData(empresaNombre);
+    const [seccion,  setSeccion]  = useState(null);
+    const [checkin,  setCheckin]  = useState(null); // null = pendiente, objeto = completado
 
     // authUser = Firebase Auth context (puede tardar en llegar)
     // propUser = user pasado desde App.jsx (disponible de inmediato tras login)
@@ -317,6 +406,24 @@ export default function VigHome({ onLogout, user: propUser }) {
             <button className="vh-logout" onClick={handleLogout}>🚪</button>
         </header>
     );
+
+    // ── Check-in obligatorio al iniciar sesión ──────────────────
+    const puestosDisponibles = objetivos
+        .map(o => [o.proyecto, o.nombre].filter(Boolean).join(" - "))
+        .filter(Boolean)
+        .sort();
+    if (!checkin) {
+        return (
+            <div className="vh-root">
+                {headerJSX}
+                <ModalCheckin
+                    user={user}
+                    puestos={puestosDisponibles}
+                    onConfirmar={datos => setCheckin(datos)}
+                />
+            </div>
+        );
+    }
 
     if (seccion === "informes")         return <div className="vh-root">{headerJSX}<PanelInformes  onBack={() => setSeccion(null)} /></div>;
     if (seccion === "planillas")        return <div className="vh-root">{headerJSX}<PanelPlanillas onBack={() => setSeccion(null)} /></div>;
@@ -361,11 +468,11 @@ export default function VigHome({ onLogout, user: propUser }) {
 
             <div className="vh-grid">
                 {MODULOS.map(m => {
-                    // VigHome solo es accesible a vigiladores — usamos PERMISOS_BASE directamente
-                    // para no depender del timing de resolución del objeto user.permisos
-                    const habilitado = PERMISOS_BASE.vigilador[m.permiso] === true
-                        && (empresaModulos == null || empresaModulos[m.permiso] !== false)
-                        && (user?.permisosModulos == null || user.permisosModulos[m.permiso] !== false);
+                    const modulosPermitidos = user?.permisosModulos != null
+                        ? user.permisosModulos
+                        : MODULOS.filter(x => x.id !== "control_vehicular").map(x => x.id);
+                    const habilitado = modulosPermitidos.includes(m.id)
+                        && (empresaModulos == null || empresaModulos[m.permiso] !== false);
                     return (
                         <button
                             key={m.id}

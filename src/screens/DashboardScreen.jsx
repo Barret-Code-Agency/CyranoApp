@@ -77,7 +77,7 @@ const TABS = [
     { key: "resumen", label: "Resumen", icon: "📊" },
     { key: "supervisores", label: "Supervisores", icon: "👤" },
     { key: "tiempos", label: "Tiempos", icon: "⏱" },
-    { key: "puestos", label: "Puestos", icon: "🎯" },
+    { key: "puestos", label: "Objetivos", icon: "📍" },
     { key: "km", label: "Km & Vehículos", icon: "🚗" },
     { key: "cumplimiento", label: "Cumplimiento", icon: "📋" },
 ];
@@ -228,7 +228,7 @@ export default function DashboardScreen() {
                     <div className="dash-card">
                         <div className="dash-card-title">Distribución de tiempos — Total</div>
                         <BarraTiempos {...tiemposGlobal} showLabels />
-                        <div style={{ textAlign: "right", fontSize: 11, color: "#8894ac", marginTop: 6 }}>
+                        <div className="ds-tiempos-total-note">
                             Total registrado: <strong>{fmtMin(tiemposGlobal.total)}</strong>
                         </div>
                     </div>
@@ -261,7 +261,7 @@ export default function DashboardScreen() {
                                     : cumplPlan.slice(0, 6).map((p, i) => (
                                         <div key={i} className="dash-plan-row">
                                             <span className="dash-plan-name" title={p.objetivo}>{(p.objetivo.split("—")[1] || p.objetivo).trim().split(" ").slice(0, 3).join(" ")}</span>
-                                            <div className="dash-plan-bar"><div className="dash-plan-fill" style={{ width: p.pct + "%", background: p.pct >= 80 ? "var(--color-success)" : p.pct >= 50 ? "#f59e0b" : "var(--color-danger)" }} /></div>
+                                            <div className="dash-plan-bar"><div className={"dash-plan-fill " + (p.pct >= 80 ? "ds-fill--good" : p.pct >= 50 ? "ds-fill--mid" : "ds-fill--bad")} style={{ "--ds-w": p.pct + "%" }} /></div>
                                             <span className="dash-plan-pct">{p.pct}%</span>
                                         </div>
                                     ))
@@ -338,20 +338,15 @@ export default function DashboardScreen() {
                                 <div className="dash-empty-small">Sin supervisores registrados.</div>
                             )}
                             {supData.map((s, i) => (
-                                <div key={i} style={{ marginBottom: 18, paddingBottom: 18, borderBottom: i < supData.length - 1 ? "1px solid var(--color-border)" : "none" }}>
+                                <div key={i} className={"ds-sup-item" + (i < supData.length - 1 ? " ds-sup-item--border" : "")}>
                                     {/* Header supervisor */}
-                                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                                        <div style={{
-                                            width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-                                            background: "var(--color-primary)", color: "#fff",
-                                            display: "flex", alignItems: "center", justifyContent: "center",
-                                            fontWeight: 800, fontSize: 15,
-                                        }}>{s.nombre[0]}</div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 700, fontSize: 14, color: "var(--color-text)" }}>
+                                    <div className="ds-sup-header">
+                                        <div className="ds-sup-avatar">{s.nombre[0]}</div>
+                                        <div className="ds-sup-info">
+                                            <div className="ds-sup-nombre">
                                                 {s.nombre.split(" ").slice(0, 3).join(" ")}
                                             </div>
-                                            <div style={{ fontSize: 11, color: "var(--color-muted)" }}>
+                                            <div className="ds-sup-sub">
                                                 {s.planSup
                                                     ? `${{ "diurno": "☀️ Diurno", "nocturno": "🌙 Nocturno", "mixto": "🔄 Mixto" }[s.planSup.turnoBase || "mixto"]} · ${s.planSup.objetivos?.length || 0} objetivos · ${s.reqMes} visitas req./mes`
                                                     : "Sin plan individual"}
@@ -359,26 +354,26 @@ export default function DashboardScreen() {
                                         </div>
                                         {/* % cumplimiento mes */}
                                         {s.pctMes !== null ? (
-                                            <div style={{ textAlign: "right" }}>
-                                                <div style={{ fontFamily: "var(--font-display,'Bebas Neue',sans-serif)", fontSize: "1.8rem", lineHeight: 1, color: s.pctColor }}>{s.pctMes}%</div>
-                                                <div style={{ fontSize: 10, color: "var(--color-muted)" }}>{s.realMes}/{s.reqMes} este mes</div>
+                                            <div className="ds-sup-pct-wrap">
+                                                <div className={"ds-sup-pct-val " + (s.pctMes >= 80 ? "ds-color--good" : s.pctMes >= 50 ? "ds-color--mid" : "ds-color--bad")}>{s.pctMes}%</div>
+                                                <div className="ds-sup-pct-sub">{s.realMes}/{s.reqMes} este mes</div>
                                             </div>
                                         ) : (
-                                            <div style={{ fontSize: 11, color: "var(--color-muted)" }}>Sin plan</div>
+                                            <div className="ds-sup-no-plan">Sin plan</div>
                                         )}
                                     </div>
 
                                     {/* Barra global */}
                                     {s.pctMes !== null && (
-                                        <div style={{ marginBottom: 10 }}>
-                                            <div className="sup-prog-bar" style={{ height: 6, marginBottom: 4 }}>
-                                                <div className="sup-prog-fill" style={{ width: s.pctMes + "%", background: s.pctColor }} />
+                                        <div className="ds-sup-bar-wrap">
+                                            <div className="sup-prog-bar">
+                                                <div className={"sup-prog-fill " + (s.pctMes >= 80 ? "ds-fill--good" : s.pctMes >= 50 ? "ds-fill--mid" : "ds-fill--bad")} style={{ "--ds-w": s.pctMes + "%" }} />
                                             </div>
                                         </div>
                                     )}
 
                                     {/* Mini stats */}
-                                    <div style={{ display: "flex", gap: 12, marginBottom: s.objCumpl.length > 0 ? 10 : 0, flexWrap: "wrap" }}>
+                                    <div className={"ds-sup-stats" + (s.objCumpl.length > 0 ? " ds-sup-stats--mb" : "")}>
                                         {[
                                             { l: "Controles", v: s.ctrlTotal, c: "var(--color-primary)" },
                                             { l: "🌙 Nocturnos", v: s.noc, c: "#6366f1" },
@@ -386,28 +381,27 @@ export default function DashboardScreen() {
                                             { l: "Jornadas", v: s.jornadas, c: "var(--color-muted)" },
                                             { l: "Km", v: s.km > 0 ? s.km + " km" : "—", c: "#10b981" },
                                         ].map((m, mi) => (
-                                            <div key={mi} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 48 }}>
-                                                <span style={{ fontWeight: 800, fontSize: 15, color: m.c }}>{m.v}</span>
-                                                <span style={{ fontSize: 9, color: "var(--color-muted)", textAlign: "center" }}>{m.l}</span>
+                                            <div key={mi} className="ds-stat-cell" style={{ "--ds-stat-color": m.c }}>
+                                                <span className="ds-stat-val">{m.v}</span>
+                                                <span className="ds-stat-lbl">{m.l}</span>
                                             </div>
                                         ))}
                                     </div>
 
                                     {/* Cumplimiento por objetivo */}
                                     {s.objCumpl.length > 0 && (
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                                        <div className="ds-obj-list">
                                             {s.objCumpl.map((o, oi) => {
-                                                const oc = o.pct >= 100 ? "var(--color-success)" : o.pct >= 50 ? "#f59e0b" : "var(--color-danger)";
+                                                const ocCls = o.pct >= 100 ? "ds-color--good" : o.pct >= 50 ? "ds-color--mid" : "ds-color--bad";
                                                 return (
-                                                    <div key={oi} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                        <div style={{ fontSize: 10, color: "var(--color-text)", width: 130, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                                                            title={o.objetivo}>
+                                                    <div key={oi} className="ds-obj-row">
+                                                        <div className="ds-obj-name" title={o.objetivo}>
                                                             {o.objetivo.split("—").pop().trim()}
                                                         </div>
-                                                        <div style={{ flex: 1, height: 5, background: "var(--color-border)", borderRadius: 3, overflow: "hidden" }}>
-                                                            <div style={{ height: "100%", width: Math.min(o.pct, 100) + "%", background: oc, borderRadius: 3, transition: "width .4s" }} />
+                                                        <div className="ds-obj-track">
+                                                            <div className={"ds-obj-fill " + ocCls} style={{ "--ds-w": Math.min(o.pct, 100) + "%" }} />
                                                         </div>
-                                                        <div style={{ fontSize: 10, fontWeight: 700, color: oc, width: 42, textAlign: "right", flexShrink: 0 }}>
+                                                        <div className={"ds-obj-score " + ocCls}>
                                                             {o.real}/{o.req}
                                                         </div>
                                                     </div>
@@ -441,18 +435,14 @@ export default function DashboardScreen() {
                                             const pc = s.pctMes;
                                             return (
                                                 <tr key={i}>
-                                                    <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{s.nombre.split(" ").slice(0, 2).join(" ")}</td>
+                                                    <td className="ds-td-nombre-xs">{s.nombre.split(" ").slice(0, 2).join(" ")}</td>
                                                     <td>
                                                         {pc !== null
-                                                            ? <span className="tag" style={{
-                                                                background: pc >= 80 ? "var(--color-success-ghost)" : pc >= 50 ? "#fef3c7" : "var(--color-danger-ghost)",
-                                                                color: pc >= 80 ? "var(--color-success)" : pc >= 50 ? "#92400e" : "var(--color-danger)",
-                                                                fontWeight: 800
-                                                            }}>{pc}%</span>
-                                                            : <span style={{ color: "var(--color-muted)", fontSize: 11 }}>Sin plan</span>
+                                                            ? <span className={"tag ds-tag-pct " + (pc >= 80 ? "ds-tag--good" : pc >= 50 ? "ds-tag--mid" : "ds-tag--bad")}>{pc}%</span>
+                                                            : <span className="ds-no-plan-sm">Sin plan</span>
                                                         }
                                                     </td>
-                                                    <td style={{ fontSize: "var(--text-xs)", color: "var(--color-muted)" }}>
+                                                    <td className="ds-td-muted-xs">
                                                         {pc !== null ? `${s.realMes}/${s.reqMes}` : "—"}
                                                     </td>
                                                     <td><span className="tag blue">{s.ctrlTotal}</span></td>
@@ -478,7 +468,7 @@ export default function DashboardScreen() {
                     <div className="dash-card">
                         <div className="dash-card-title">Distribución total de tiempos</div>
                         <BarraTiempos {...tiemposGlobal} showLabels />
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginTop: 16 }}>
+                        <div className="ds-tiempo-grid">
                             {[
                                 { key: "ctrl",     label: "Control",         icon: "🎯" },
                                 { key: "cap",      label: "Capacitación",    icon: "📚" },
@@ -491,18 +481,15 @@ export default function DashboardScreen() {
                                 { key: "gremial",  label: "Gremial",         icon: "🤝" },
                                 { key: "otras",    label: "Otras",           icon: "📌" },
                             ].filter(t => tiemposGlobal[t.key] > 0).map(t => (
-                                <div key={t.key} style={{
-                                    background: "#f8f9fc", borderRadius: 10, padding: "12px 8px",
-                                    textAlign: "center", borderTop: `3px solid ${TIPO_COLOR[t.key]}`
-                                }}>
-                                    <div style={{ fontSize: 18 }}>{t.icon}</div>
-                                    <div style={{ fontWeight: 800, fontSize: 16, color: TIPO_COLOR[t.key], marginTop: 4 }}>
+                                <div key={t.key} className="ds-tiempo-card" style={{ "--ds-tipo-color": TIPO_COLOR[t.key] }}>
+                                    <div className="ds-tiempo-icon">{t.icon}</div>
+                                    <div className="ds-tiempo-pct">
                                         {pct(tiemposGlobal[t.key], tiemposGlobal.total)}%
                                     </div>
-                                    <div style={{ fontWeight: 700, fontSize: 12, color: "#0d1b3e" }}>
+                                    <div className="ds-tiempo-val">
                                         {fmtMin(tiemposGlobal[t.key])}
                                     </div>
-                                    <div style={{ fontSize: 10, color: "#8894ac", marginTop: 2 }}>{t.label}</div>
+                                    <div className="ds-tiempo-label">{t.label}</div>
                                 </div>
                             ))}
                         </div>
@@ -514,20 +501,20 @@ export default function DashboardScreen() {
                         {porSup.map((s, i) => {
                             const t = s.tiempos;
                             return (
-                                <div key={i} style={{ marginBottom: 16 }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                                        <span style={{ fontWeight: 700, fontSize: 13, color: "#0d1b3e" }}>
+                                <div key={i} className="ds-sup-tiempo-row">
+                                    <div className="ds-sup-tiempo-header">
+                                        <span className="ds-sup-tiempo-nombre">
                                             {s.nombre.split(" ").slice(0, 2).join(" ")}
                                         </span>
-                                        <span style={{ fontSize: 11, color: "#8894ac" }}>
+                                        <span className="ds-sup-tiempo-sub">
                                             {s.jornadas.length} jornadas · {fmtMin(t.total)}
                                         </span>
                                     </div>
                                     <BarraTiempos {...t} />
-                                    <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 11, flexWrap: "wrap" }}>
+                                    <div className="ds-sup-tiempo-breakdown">
                                         {[["ctrl", "🎯"], ["cap", "📚"], ["otra", "🔧"], ["traslado", "🚗"]].map(([k, ic]) => (
-                                            <span key={k} style={{ color: TIPO_COLOR[k], fontWeight: 700 }}>
-                                                {ic} {pct(t[k], t.total)}% <span style={{ color: "#8894ac", fontWeight: 400 }}>({fmtMin(t[k])})</span>
+                                            <span key={k} className="ds-tiempo-breakdown-item" style={{ "--ds-tipo-color": TIPO_COLOR[k] }}>
+                                                {ic} {pct(t[k], t.total)}% <span className="ds-tiempo-breakdown-min">({fmtMin(t[k])})</span>
                                             </span>
                                         ))}
                                     </div>
@@ -543,10 +530,10 @@ export default function DashboardScreen() {
                             <table className="dash-table">
                                 <thead><tr>
                                     <th>Supervisor</th>
-                                    <th style={{ color: TIPO_COLOR.ctrl }}>🎯 Control</th>
-                                    <th style={{ color: TIPO_COLOR.cap }}>📚 Capac.</th>
-                                    <th style={{ color: TIPO_COLOR.otra }}>🔧 Otras</th>
-                                    <th style={{ color: TIPO_COLOR.traslado }}>🚗 Traslado</th>
+                                    <th className="ds-th-tipo" style={{ "--ds-tipo-color": TIPO_COLOR.ctrl }}>🎯 Control</th>
+                                    <th className="ds-th-tipo" style={{ "--ds-tipo-color": TIPO_COLOR.cap }}>📚 Capac.</th>
+                                    <th className="ds-th-tipo" style={{ "--ds-tipo-color": TIPO_COLOR.otra }}>🔧 Otras</th>
+                                    <th className="ds-th-tipo" style={{ "--ds-tipo-color": TIPO_COLOR.traslado }}>🚗 Traslado</th>
                                     <th>Total</th>
                                 </tr></thead>
                                 <tbody>
@@ -554,22 +541,22 @@ export default function DashboardScreen() {
                                         const t = s.tiempos;
                                         return (
                                             <tr key={i}>
-                                                <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{s.nombre.split(" ").slice(0, 2).join(" ")}</td>
-                                                <td><span style={{ color: TIPO_COLOR.ctrl, fontWeight: 700 }}>{fmtMin(t.ctrl)}</span> <small style={{ color: "#8894ac" }}>({pct(t.ctrl, t.total)}%)</small></td>
-                                                <td><span style={{ color: TIPO_COLOR.cap, fontWeight: 700 }}>{fmtMin(t.cap)}</span>  <small style={{ color: "#8894ac" }}>({pct(t.cap, t.total)}%)</small></td>
-                                                <td><span style={{ color: TIPO_COLOR.otra, fontWeight: 700 }}>{fmtMin(t.otra)}</span> <small style={{ color: "#8894ac" }}>({pct(t.otra, t.total)}%)</small></td>
-                                                <td><span style={{ color: TIPO_COLOR.traslado, fontWeight: 700 }}>{fmtMin(t.traslado)}</span> <small style={{ color: "#8894ac" }}>({pct(t.traslado, t.total)}%)</small></td>
+                                                <td className="ds-td-nombre-xs">{s.nombre.split(" ").slice(0, 2).join(" ")}</td>
+                                                <td><span className="ds-td-tipo-val" style={{ "--ds-tipo-color": TIPO_COLOR.ctrl }}>{fmtMin(t.ctrl)}</span> <small className="ds-td-tipo-pct">({pct(t.ctrl, t.total)}%)</small></td>
+                                                <td><span className="ds-td-tipo-val" style={{ "--ds-tipo-color": TIPO_COLOR.cap }}>{fmtMin(t.cap)}</span>  <small className="ds-td-tipo-pct">({pct(t.cap, t.total)}%)</small></td>
+                                                <td><span className="ds-td-tipo-val" style={{ "--ds-tipo-color": TIPO_COLOR.otra }}>{fmtMin(t.otra)}</span> <small className="ds-td-tipo-pct">({pct(t.otra, t.total)}%)</small></td>
+                                                <td><span className="ds-td-tipo-val" style={{ "--ds-tipo-color": TIPO_COLOR.traslado }}>{fmtMin(t.traslado)}</span> <small className="ds-td-tipo-pct">({pct(t.traslado, t.total)}%)</small></td>
                                                 <td><strong>{fmtMin(t.total)}</strong></td>
                                             </tr>
                                         );
                                     })}
                                     {/* Fila totales */}
-                                    <tr style={{ background: "#f0f2f7", fontWeight: 700 }}>
+                                    <tr className="ds-tr-totals">
                                         <td>TOTAL</td>
-                                        <td style={{ color: TIPO_COLOR.ctrl }}>{fmtMin(tiemposGlobal.ctrl)}</td>
-                                        <td style={{ color: TIPO_COLOR.cap }}>{fmtMin(tiemposGlobal.cap)}</td>
-                                        <td style={{ color: TIPO_COLOR.otra }}>{fmtMin(tiemposGlobal.otra)}</td>
-                                        <td style={{ color: TIPO_COLOR.traslado }}>{fmtMin(tiemposGlobal.traslado)}</td>
+                                        <td className="ds-td-tipo-val" style={{ "--ds-tipo-color": TIPO_COLOR.ctrl }}>{fmtMin(tiemposGlobal.ctrl)}</td>
+                                        <td className="ds-td-tipo-val" style={{ "--ds-tipo-color": TIPO_COLOR.cap }}>{fmtMin(tiemposGlobal.cap)}</td>
+                                        <td className="ds-td-tipo-val" style={{ "--ds-tipo-color": TIPO_COLOR.otra }}>{fmtMin(tiemposGlobal.otra)}</td>
+                                        <td className="ds-td-tipo-val" style={{ "--ds-tipo-color": TIPO_COLOR.traslado }}>{fmtMin(tiemposGlobal.traslado)}</td>
                                         <td>{fmtMin(tiemposGlobal.total)}</td>
                                     </tr>
                                 </tbody>
@@ -583,7 +570,7 @@ export default function DashboardScreen() {
             {tab === "puestos" && (
                 <>
                     <div className="dash-card">
-                        <div className="dash-card-title">Visitas por puesto</div>
+                        <div className="dash-card-title">Visitas por objetivo</div>
                         {(() => {
                             const map = {};
                             controles.forEach(c => { const k = c.objetivo || "Sin objetivo"; map[k] = (map[k] || 0) + 1; });
@@ -591,10 +578,10 @@ export default function DashboardScreen() {
                         })()}
                     </div>
                     <div className="dash-card">
-                        <div className="dash-card-title">Detalle por puesto</div>
+                        <div className="dash-card-title">Detalle por objetivo</div>
                         <div className="dash-table-wrap">
                             <table className="dash-table">
-                                <thead><tr><th>Puesto</th><th>Total</th><th>☀️Día</th><th>🌙Noc</th><th>📅FdS</th><th>Plan</th><th>Cumpl.</th></tr></thead>
+                                <thead><tr><th>Objetivo</th><th>Total</th><th>☀️Día</th><th>🌙Noc</th><th>📅FdS</th><th>Plan</th><th>Cumpl.</th></tr></thead>
                                 <tbody>
                                     {data.objetivos.map((obj, i) => {
                                         const vv = controles.filter(c => c.objetivo === obj);
@@ -605,11 +592,11 @@ export default function DashboardScreen() {
                                         const p2 = pe ? Math.min(Math.round((vv.length / pe.visitasPorSemana) * 100), 100) : null;
                                         return (
                                             <tr key={i}>
-                                                <td style={{ maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "var(--text-xs)" }}>{obj}</td>
+                                                <td className="ds-td-objetivo">{obj}</td>
                                                 <td><strong>{vv.length}</strong></td>
                                                 <td>{dia}</td><td>{noc}</td><td>{fds}</td>
                                                 <td>{pe?.visitasPorSemana || "—"}</td>
-                                                <td>{p2 !== null ? <span className="tag" style={{ background: p2 >= 80 ? "var(--color-success-ghost)" : p2 >= 50 ? "#fef3c7" : "var(--color-danger-ghost)", color: p2 >= 80 ? "var(--color-success)" : p2 >= 50 ? "#92400e" : "var(--color-danger)" }}>{p2}%</span> : "—"}</td>
+                                                <td>{p2 !== null ? <span className={"tag ds-tag-pct " + (p2 >= 80 ? "ds-tag--good" : p2 >= 50 ? "ds-tag--mid" : "ds-tag--bad")}>{p2}%</span> : "—"}</td>
                                             </tr>
                                         );
                                     })}
@@ -672,25 +659,25 @@ export default function DashboardScreen() {
                                         </tr></thead>
                                         <tbody>
                                             {rows.map(([veh, s], i) => (
-                                                <tr key={i} style={{ opacity: s.usos === 0 && !s.kmUltimo ? 0.45 : 1 }}>
-                                                    <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{veh}</td>
+                                                <tr key={i} className={s.usos === 0 && !s.kmUltimo ? "ds-tr-inactive" : ""}>
+                                                    <td className="ds-td-nombre-xs">{veh}</td>
                                                     <td>
                                                         {s.kmUltimo
-                                                            ? <span style={{ fontWeight: 700, color: "var(--color-primary)" }}>{s.kmUltimo.toLocaleString("es-AR")} km</span>
-                                                            : <span style={{ color: "#aaa" }}>—</span>}
+                                                            ? <span className="ds-km-val">{s.kmUltimo.toLocaleString("es-AR")} km</span>
+                                                            : <span className="ds-td-empty">—</span>}
                                                     </td>
                                                     <td>
                                                         {s.kmTotal > 0
                                                             ? <span className="tag blue">{s.kmTotal} km</span>
-                                                            : <span style={{ color: "#ccc" }}>0</span>}
+                                                            : <span className="ds-td-empty">0</span>}
                                                     </td>
                                                     <td>
                                                         {s.usos > 0
                                                             ? <span className="tag">{s.usos}x</span>
-                                                            : <span style={{ color: "#ccc" }}>—</span>}
+                                                            : <span className="ds-td-empty">—</span>}
                                                     </td>
-                                                    <td style={{ fontSize: "var(--text-xs)", color: "#6b7280" }}>{s.fechaUltimo || "—"}</td>
-                                                    <td style={{ fontSize: "var(--text-xs)", color: "#6b7280" }}>{s.supervisorUltimo || "—"}</td>
+                                                    <td className="ds-td-muted-xs">{s.fechaUltimo || "—"}</td>
+                                                    <td className="ds-td-muted-xs">{s.supervisorUltimo || "—"}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -719,14 +706,11 @@ export default function DashboardScreen() {
                                             const est = dias === null ? null : dias < 0 ? "vencido" : dias <= 7 ? "urgente" : dias <= 30 ? "proximo" : "ok";
                                             return (
                                                 <tr key={i}>
-                                                    <td style={{ fontWeight: 600, fontSize: "var(--text-xs)" }}>{m.vehiculo}</td>
-                                                    <td style={{ fontSize: "var(--text-xs)" }}>{m.tipo}</td>
-                                                    <td style={{ fontSize: "var(--text-xs)" }}>{m.ultimoService?.fecha || "—"}</td>
-                                                    <td style={{ fontSize: "var(--text-xs)" }}>{m.proximoService?.fecha || "—"}</td>
-                                                    <td>{est ? <span className="tag" style={{
-                                                        background: est === "ok" ? "var(--color-success-ghost)" : est === "vencido" ? "var(--color-danger-ghost)" : "#fef3c7",
-                                                        color: est === "ok" ? "var(--color-success)" : est === "vencido" ? "var(--color-danger)" : "#92400e"
-                                                    }}>{est === "ok" ? "✓ OK" : est === "vencido" ? `Vencido ${Math.abs(dias)}d` : est === "urgente" ? `${dias}d` : `${dias}d`}</span> : "—"}</td>
+                                                    <td className="ds-td-nombre-xs">{m.vehiculo}</td>
+                                                    <td className="ds-td-xs">{m.tipo}</td>
+                                                    <td className="ds-td-xs">{m.ultimoService?.fecha || "—"}</td>
+                                                    <td className="ds-td-xs">{m.proximoService?.fecha || "—"}</td>
+                                                    <td>{est ? <span className={"tag ds-tag-est " + (est === "ok" ? "ds-tag--good" : est === "vencido" ? "ds-tag--bad" : "ds-tag--mid")}>{est === "ok" ? "✓ OK" : est === "vencido" ? `Vencido ${Math.abs(dias)}d` : est === "urgente" ? `${dias}d` : `${dias}d`}</span> : "—"}</td>
                                                 </tr>
                                             );
                                         })}
@@ -746,9 +730,9 @@ export default function DashboardScreen() {
                                         const km = parseKm(j);
                                         return (
                                             <tr key={i}>
-                                                <td style={{ fontSize: "var(--text-xs)" }}>{j.fecha}</td>
-                                                <td style={{ fontSize: "var(--text-xs)" }}>{(j.nombre || "").split(" ").slice(0, 2).join(" ")}</td>
-                                                <td style={{ fontSize: "var(--text-xs)" }}>{(j.vehiculo || "").split("—")[0].trim()}</td>
+                                                <td className="ds-td-xs">{j.fecha}</td>
+                                                <td className="ds-td-xs">{(j.nombre || "").split(" ").slice(0, 2).join(" ")}</td>
+                                                <td className="ds-td-xs">{(j.vehiculo || "").split("—")[0].trim()}</td>
                                                 <td>{j.kmInicial}</td><td>{j.kmFinal || "—"}</td>
                                                 <td>{km > 0 ? <span className="tag blue">{km}km</span> : "—"}</td>
                                             </tr>
@@ -773,10 +757,10 @@ export default function DashboardScreen() {
                         <>
                             <div className="dash-card">
                                 <div className="dash-card-title">Cumplimiento general</div>
-                                <div style={{ display: "flex", justifyContent: "center", marginBottom: "var(--space-4)" }}>
+                                <div className="ds-gauge-center">
                                     <GaugeChart value={cumplTotal} max={100} label={cumplTotal + "% del plan cumplido"} />
                                 </div>
-                                <div className="dash-turno-grid" style={{ marginTop: "var(--space-2)" }}>
+                                <div className="dash-turno-grid ds-turno-grid--mt">
                                     <div className="dash-turno-item diurno"><span className="dash-turno-icon">☀️</span><span className="dash-turno-value">{ctrlDia.length}</span><span className="dash-turno-label">Diurnos</span></div>
                                     <div className="dash-turno-item nocturno"><span className="dash-turno-icon">🌙</span><span className="dash-turno-value">{ctrlNoc.length}</span><span className="dash-turno-label">Nocturnos</span></div>
                                     <div className="dash-turno-item fds"><span className="dash-turno-icon">📅</span><span className="dash-turno-value">{ctrlFdS.length}</span><span className="dash-turno-label">Fin de semana</span></div>
@@ -795,15 +779,15 @@ export default function DashboardScreen() {
                                         });
                                         const supTotal = supCumpl.length ? Math.round(supCumpl.reduce((a, b) => a + b.pct, 0) / supCumpl.length) : 0;
                                         return (
-                                            <div key={i} style={{ marginBottom: 16 }}>
-                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                                                    <span style={{ fontWeight: 700, fontSize: 13 }}>{s.nombre.split(" ").slice(0, 2).join(" ")}</span>
-                                                    <span style={{ fontWeight: 800, color: supTotal >= 80 ? "var(--color-success)" : supTotal >= 50 ? "#d97706" : "var(--color-danger)", fontSize: 14 }}>{supTotal}%</span>
+                                            <div key={i} className="ds-cumpl-sup-row">
+                                                <div className="ds-cumpl-sup-header">
+                                                    <span className="ds-cumpl-sup-nombre">{s.nombre.split(" ").slice(0, 2).join(" ")}</span>
+                                                    <span className={"ds-cumpl-sup-pct " + (supTotal >= 80 ? "ds-color--good" : supTotal >= 50 ? "ds-color--mid-dark" : "ds-color--bad")}>{supTotal}%</span>
                                                 </div>
-                                                <div style={{ height: 8, borderRadius: 4, background: "#e8eaf2", overflow: "hidden" }}>
-                                                    <div style={{ height: "100%", width: supTotal + "%", background: supTotal >= 80 ? "var(--color-success)" : supTotal >= 50 ? "#f59e0b" : "var(--color-danger)", borderRadius: 4, transition: "width 0.5s" }} />
+                                                <div className="ds-cumpl-bar-track">
+                                                    <div className={"ds-cumpl-bar-fill " + (supTotal >= 80 ? "ds-fill--good" : supTotal >= 50 ? "ds-fill--mid" : "ds-fill--bad")} style={{ "--ds-w": supTotal + "%" }} />
                                                 </div>
-                                                <div style={{ fontSize: 11, color: "#8894ac", marginTop: 3 }}>{s.controles} controles realizados</div>
+                                                <div className="ds-cumpl-sup-sub">{s.controles} controles realizados</div>
                                             </div>
                                         );
                                     })}
@@ -817,11 +801,11 @@ export default function DashboardScreen() {
                                         <div className="dash-cumpl-header">
                                             <span className="dash-cumpl-name" title={p.objetivo}>{p.objetivo}</span>
                                             <span className="dash-cumpl-nums">{p.visitas} vis · 🌙{p.nocturnas} · 📅{p.fds}</span>
-                                            <span className="dash-cumpl-pct" style={{ color: p.pct >= 80 ? "var(--color-success)" : p.pct >= 50 ? "#92400e" : "var(--color-danger)" }}>{p.pct}%</span>
+                                            <span className={"dash-cumpl-pct " + (p.pct >= 80 ? "ds-color--good" : p.pct >= 50 ? "ds-color--mid-dark" : "ds-color--bad")}>{p.pct}%</span>
                                         </div>
                                         {p.restriccion && <div className="dash-cumpl-restriccion">{p.restriccion}</div>}
-                                        <div className="dash-plan-bar" style={{ marginTop: 4 }}>
-                                            <div className="dash-plan-fill" style={{ width: p.pct + "%", background: p.pct >= 80 ? "var(--color-success)" : p.pct >= 50 ? "#f59e0b" : "var(--color-danger)" }} />
+                                        <div className="dash-plan-bar ds-plan-bar--mt">
+                                            <div className={"dash-plan-fill " + (p.pct >= 80 ? "ds-fill--good" : p.pct >= 50 ? "ds-fill--mid" : "ds-fill--bad")} style={{ "--ds-w": p.pct + "%" }} />
                                         </div>
                                     </div>
                                 ))}

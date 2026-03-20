@@ -4,10 +4,11 @@
 import { useState } from "react";
 import { useAuth }           from "../context/AuthContext";
 import { useAppData }        from "../context/AppDataContext";
-import SupervisorDashboard   from "./SupervisorDashboard";
-import PlantillasRondaScreen from "./PlantillasRondaScreen";
-import MonitorRondasScreen   from "./MonitorRondasScreen";
-import VerInformesScreen     from "../forms/VerInformesScreen";
+import SupervisorDashboard     from "./SupervisorDashboard";
+import PlantillasRondaScreen   from "./PlantillasRondaScreen";
+import MonitorRondasScreen     from "./MonitorRondasScreen";
+import VerInformesScreen       from "../forms/VerInformesScreen";
+import DashboardPersonalScreen from "./DashboardPersonalScreen";
 import "../styles/SupervisorHome.css";
 
 // ── Calendario semanal ─────────────────────────────────────────────────────
@@ -81,98 +82,99 @@ function CalendarioSemanal({ actividades = {} }) {
 }
 
 const MODULOS = [
-    {
-        id:    "muro_comunicacion",
-        icon:  "📢",
-        titulo: "Muro de Comunicación y Novedades",
-        desc:  "Novedades y comunicados de tu empresa",
-        color: "blue",
-    },
-    {
-        id:    "supervision",
-        icon:  "🔍",
-        titulo: "Supervisión",
-        desc:  "Accedé a tu panel de supervisión y control de objetivos",
-        color: "blue",
-    },
-    {
-        id:    "rondas_plantillas",
-        icon:  "🗺️",
-        titulo: "Cargar plantillas de ronda",
-        desc:  "Creá y configurá rondas con checkpoints y actividades GPS",
-        color: "blue",
-    },
-    {
-        id:    "rondas_monitor",
-        icon:  "📡",
-        titulo: "Monitor de rondas",
-        desc:  "Ver resultados, mapa y cumplimiento de rondas en tiempo real",
-        color: "blue",
-    },
-    {
-        id:    "planillas",
-        icon:  "📊",
-        titulo: "Ver planillas",
-        desc:  "Consultá las planillas operativas del puesto",
-        color: "blue",
-    },
-    {
-        id:    "ver_informes",
-        icon:  "📄",
-        titulo: "Ver informes",
-        desc:  "Consultá los informes redactados",
-        color: "blue",
-    },
-    {
-        id:    "redactar_informe",
-        icon:  "✏️",
-        titulo: "Redactar informe",
-        desc:  "Creá un informe de supervisión o novedad",
-        color: "green",
-    },
-    {
-        id:    "turnos",
-        icon:  "📅",
-        titulo: "Cargar turnos de trabajo",
-        desc:  "Cargá y gestioná los turnos del personal",
-        color: "blue",
-    },
-    {
-        id:    "auditoria_puesto",
-        icon:  "🔎",
-        titulo: "Auditoría de Puesto",
-        desc:  "Realizá auditorías operativas del puesto asignado",
-        color: "blue",
-    },
-    {
-        id:    "felicitaciones_sanciones",
-        icon:  "📋",
-        titulo: "Registro de Felicitaciones y Sanciones",
-        desc:  "Registrá felicitaciones o sanciones del personal",
-        color: "blue",
-    },
-    {
-        id:    "informe_gestion",
-        icon:  "📊",
-        titulo: "Informe de Gestión",
-        desc:  "Generá el informe de gestión del período",
-        color: "blue",
-    },
-    {
-        id:    "informe_visita",
-        icon:  "🤝",
-        titulo: "Informe de Visita al Cliente",
-        desc:  "Registrá las novedades de la visita al cliente",
-        color: "blue",
-    },
+    { id: "muro_comunicacion",          icon: "📢", titulo: "Muro de Comunicación y Novedades",  desc: "Novedades y comunicados de tu empresa",                          color: "blue"  },
+    { id: "supervision",                icon: "🔍", titulo: "Supervisión",                        desc: "Accedé a tu panel de supervisión y control de objetivos",         color: "blue"  },
+    { id: "rondas_plantillas",          icon: "🗺️", titulo: "Cargar plantillas de ronda",         desc: "Creá y configurá rondas con checkpoints y actividades GPS",       color: "blue"  },
+    { id: "control_actividades_vigilador", icon: "👁️", titulo: "Control de Actividades Vigilador", desc: "Monitor de rondas, planillas, actas, vehículos, insumos e informes", color: "blue" },
+    { id: "redactar_informe",           icon: "✏️", titulo: "Redactar informe",                   desc: "Creá un informe de supervisión o novedad",                        color: "green" },
+    { id: "turnos",                     icon: "📅", titulo: "Cargar turnos de trabajo",           desc: "Cargá y gestioná los turnos del personal",                       color: "blue"  },
+    { id: "auditoria_puesto",           icon: "🔎", titulo: "Auditoría de Puesto",                desc: "Realizá auditorías operativas del puesto asignado",               color: "blue"  },
+    { id: "dashboard_personal",         icon: "👥", titulo: "Dashboard de personal",              desc: "Estado y novedades del personal",                                 color: "blue"  },
+    { id: "felicitaciones_sanciones",   icon: "📋", titulo: "Registro de Felicitaciones y Sanciones", desc: "Registrá felicitaciones o sanciones del personal",           color: "blue"  },
+    { id: "informe_gestion",            icon: "📊", titulo: "Informe de Gestión",                 desc: "Generá el informe de gestión del período",                        color: "blue"  },
+    { id: "informe_visita",             icon: "🤝", titulo: "Informe de Visita al Cliente",       desc: "Registrá las novedades de la visita al cliente",                  color: "blue"  },
+    { id: "muro_procedimientos",        icon: "📌", titulo: "Muro de Procedimientos",             desc: "Consultá los procedimientos operativos vigentes",                  color: "blue"  },
+    { id: "capacitacion",               icon: "🎓", titulo: "Capacitación y Entrenamiento",       desc: "Accedé a los cursos y materiales de formación",                   color: "blue"  },
+];
+
+const SUB_MODULOS_ACTIVIDADES = [
+    { id: "rondas_monitor",        icon: "📡", titulo: "Monitor de Rondas",          desc: "Ver resultados y cumplimiento de rondas en tiempo real" },
+    { id: "planillas",             icon: "📊", titulo: "Ver Planillas",               desc: "Consultá las planillas operativas del puesto"           },
+    { id: "ver_libro_actas",       icon: "📖", titulo: "Ver Libro de Actas",          desc: "Consultá el libro de actas digital de los puestos"      },
+    { id: "ver_control_vehicular", icon: "🚗", titulo: "Ver Controles de Vehículos",  desc: "Consultá los controles vehiculares registrados"          },
+    { id: "ver_pedido_insumos",    icon: "📦", titulo: "Ver Pedido de Insumos",       desc: "Consultá los pedidos de insumos del puesto"             },
+    { id: "ver_inventarios",       icon: "🗃️", titulo: "Ver Inventarios",             desc: "Consultá el inventario de los puestos"                  },
+    { id: "ver_informes",          icon: "📄", titulo: "Ver Informes",                desc: "Consultá los informes redactados"                       },
 ];
 
 export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
     const { logout }        = useAuth();
     const { empresaLogos, empresaNombre, empresaModulos, data } = useAppData();
-    const [seccion, setSeccion] = useState(null);
+    const [seccion,    setSeccion]    = useState(null);
+    const [subSeccion, setSubSeccion] = useState(null);
 
     const handleLogout = async () => { await logout(); onExit?.(); };
+
+    const renderHeader = (onBack) => (
+        <header className="sh-header">
+            <div className="sh-header-left">
+                {empresaLogos?.panel && <img src={empresaLogos.panel} alt="Logo" className="sh-empresa-logo" />}
+                <div>
+                    <div className="sh-header-title">Mi Panel — {empresaNombre}</div>
+                    <div className="sh-header-sub">{user?.name}</div>
+                </div>
+            </div>
+            <button className="sh-back-btn sh-back-btn--header" onClick={onBack}>← Volver</button>
+        </header>
+    );
+
+    // ── Control de Actividades Vigilador (módulo contenedor) ──
+    if (seccion === "control_actividades_vigilador") {
+        if (subSeccion === "rondas_monitor") return (
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                <MonitorRondasScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+        if (subSeccion === "ver_informes") return (
+            <div className="sh-supervision-wrapper">
+                <VerInformesScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+        if (subSeccion) {
+            const sub = SUB_MODULOS_ACTIVIDADES.find(m => m.id === subSeccion);
+            return (
+                <div className="sh-root">
+                    {renderHeader(() => setSubSeccion(null))}
+                    <div className="sh-subpanel">
+                        <div className="sh-subpanel-title">{sub.icon} {sub.titulo}</div>
+                        <div className="sh-coming-soon">Próximamente</div>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div className="sh-root">
+                {renderHeader(() => setSeccion(null))}
+                <div className="sh-section-title-bar">👁️ Control de Actividades Vigilador</div>
+                <div className="sh-grid" style={{ padding: "var(--space-3)" }}>
+                    {SUB_MODULOS_ACTIVIDADES.map(m => (
+                        <button
+                            key={m.id}
+                            className="sh-modulo sh-modulo--blue"
+                            onClick={() => setSubSeccion(m.id)}
+                        >
+                            <span className="sh-modulo-icon">{m.icon}</span>
+                            <div className="sh-modulo-info">
+                                <strong>{m.titulo}</strong>
+                                <small>{m.desc}</small>
+                            </div>
+                            <span className="sh-modulo-arrow">›</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     // Sección Supervisión → usa el dashboard completo existente
     if (seccion === "supervision") {
@@ -209,19 +211,10 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
         );
     }
 
-    // Monitor de rondas
-    if (seccion === "rondas_monitor") {
-        return (
-            <div className="sh-supervision-wrapper" style={{ maxWidth:"100%" }}>
-                <MonitorRondasScreen onBack={() => setSeccion(null)} />
-            </div>
-        );
-    }
-
-    if (seccion === "ver_informes") {
+    if (seccion === "dashboard_personal") {
         return (
             <div className="sh-supervision-wrapper">
-                <VerInformesScreen onBack={() => setSeccion(null)} />
+                <DashboardPersonalScreen onBack={() => setSeccion(null)} />
             </div>
         );
     }
@@ -274,7 +267,8 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
 
             <div className="sh-grid">
                 {MODULOS.map(m => {
-                    const habilitado = empresaModulos == null || empresaModulos[m.id] !== false;
+                    const habilitado = (empresaModulos == null || empresaModulos[m.id] !== false)
+                        && (user?.permisosModulos == null || user.permisosModulos.includes(m.id));
                     return (
                     <button
                         key={m.id}

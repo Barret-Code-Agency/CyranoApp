@@ -1,0 +1,1108 @@
+// src/screens/ProgramacionServiciosScreen.jsx
+// Planilla de programación de servicios — Programado vs Real
+
+import { useState, useEffect, useRef } from "react";
+import { useAppData }       from "../context/AppDataContext";
+import { useClientesData }  from "../hooks/useClientesData";
+import {
+    doc, getDoc, setDoc, serverTimestamp,
+    collection, query, where, getDocs,
+} from "firebase/firestore";
+import { db } from "../firebase";
+import "../styles/ProgramacionServiciosScreen.css";
+
+// ── Constantes ──────────────────────────────────────────────────────────────────
+const DIAS_ES  = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+const MESES_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
+                  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+const OPCIONES = [
+    { val: "",              label: "—",     cls: ""    },
+    // Diurnos
+    { val: "06:00 – 14:00", label: "06-14", cls: "dia" },
+    { val: "06:00 – 16:00", label: "06-16", cls: "dia" },
+    { val: "06:00 – 19:00", label: "06-19", cls: "dia" },
+    { val: "06:00 – 18:00", label: "06-18", cls: "dia" },
+    { val: "07:00 – 17:00", label: "07-17", cls: "dia" },
+    { val: "07:00 – 19:00", label: "07-19", cls: "dia" },
+    { val: "08:00 – 20:00", label: "08-20", cls: "dia" },
+    { val: "09:00 – 17:00", label: "09-17", cls: "dia" },
+    { val: "10:00 – 18:00", label: "10-18", cls: "dia" },
+    { val: "05:00 – 13:00", label: "05-13", cls: "dia" },
+    { val: "05:00 – 13:30", label: "05-13½", cls: "dia" },
+    { val: "05:00 – 17:00", label: "05-17", cls: "dia" },
+    { val: "13:00 – 21:00", label: "13-21", cls: "tard"},
+    { val: "13:30 – 22:00", label: "13½-22", cls: "tard"},
+    // Tarde
+    { val: "14:00 – 22:00", label: "14-22", cls: "tard"},
+    // Noche
+    { val: "17:00 – 05:00", label: "17-05", cls: "noch"},
+    { val: "18:00 – 06:00", label: "18-06", cls: "noch"},
+    { val: "19:00 – 07:00", label: "19-07", cls: "noch"},
+    { val: "21:00 – 06:00", label: "21-06", cls: "noch"},
+    { val: "22:00 – 06:00", label: "22-06", cls: "noch"},
+    // Guardia 24hs
+    { val: "06:00 – 06:00", label: "06-06", cls: "g24" },
+    { val: "07:00 – 07:00", label: "07-07", cls: "g24" },
+    { val: "08:00 – 08:00", label: "08-08", cls: "g24" },
+    // Descanso / licencia
+    { val: "Fco",           label: "Fco",   cls: "fco" },
+    { val: "Com",           label: "Com",   cls: "com" },
+    { val: "FER",           label: "FER",   cls: "fer" },
+    { val: "Lic",           label: "Lic",   cls: "lic" },
+    // Ausentismo / licencias
+    { val: "Vac",           label: "Vac",   cls: "vac" },
+    { val: "Enf",           label: "Enf",   cls: "enf" },
+    { val: "Art",           label: "ART",   cls: "art" },
+    { val: "Asa",           label: "ASA",   cls: "asa" },
+    { val: "Aca",           label: "ACA",   cls: "aca" },
+    { val: "Sus",           label: "Sus",   cls: "sus" },
+];
+
+const AUS_CODES = ["Vac","Enf","Art","Asa","Aca","Sus","Lic"];
+
+// ── Feriados nacionales Argentina 2025-2027 ──────────────────────────────────────
+const FERIADOS_ARG = {
+    // 2025
+    "2025-01-01": "Año Nuevo",
+    "2025-03-03": "Carnaval",
+    "2025-03-04": "Carnaval",
+    "2025-03-24": "Día de la Memoria",
+    "2025-04-02": "Día del Veterano de Malvinas",
+    "2025-04-18": "Viernes Santo",
+    "2025-05-01": "Día del Trabajador",
+    "2025-05-25": "Revolución de Mayo",
+    "2025-06-16": "Paso a la Inmortalidad del Gral. Güemes",
+    "2025-06-20": "Paso a la Inmortalidad del Gral. Belgrano",
+    "2025-07-09": "Día de la Independencia",
+    "2025-08-18": "Paso a la Inmortalidad del Gral. San Martín",
+    "2025-10-13": "Día del Respeto a la Diversidad Cultural",
+    "2025-11-21": "Día de la Soberanía Nacional",
+    "2025-12-08": "Inmaculada Concepción de María",
+    "2025-12-25": "Navidad",
+    // 2026
+    "2026-01-01": "Año Nuevo",
+    "2026-02-16": "Carnaval",
+    "2026-02-17": "Carnaval",
+    "2026-03-24": "Día de la Memoria",
+    "2026-04-02": "Día del Veterano de Malvinas",
+    "2026-04-03": "Viernes Santo",
+    "2026-05-01": "Día del Trabajador",
+    "2026-05-25": "Revolución de Mayo",
+    "2026-06-15": "Paso a la Inmortalidad del Gral. Güemes",
+    "2026-06-20": "Paso a la Inmortalidad del Gral. Belgrano",
+    "2026-07-09": "Día de la Independencia",
+    "2026-08-17": "Paso a la Inmortalidad del Gral. San Martín",
+    "2026-10-12": "Día del Respeto a la Diversidad Cultural",
+    "2026-11-20": "Día de la Soberanía Nacional",
+    "2026-12-08": "Inmaculada Concepción de María",
+    "2026-12-25": "Navidad",
+    // 2027
+    "2027-01-01": "Año Nuevo",
+    "2027-02-08": "Carnaval",
+    "2027-02-09": "Carnaval",
+    "2027-03-24": "Día de la Memoria",
+    "2027-04-02": "Día del Veterano de Malvinas",
+    "2027-03-26": "Viernes Santo",
+    "2027-05-01": "Día del Trabajador",
+    "2027-05-25": "Revolución de Mayo",
+    "2027-06-17": "Paso a la Inmortalidad del Gral. Güemes",
+    "2027-06-21": "Paso a la Inmortalidad del Gral. Belgrano",
+    "2027-07-09": "Día de la Independencia",
+    "2027-08-16": "Paso a la Inmortalidad del Gral. San Martín",
+    "2027-10-11": "Día del Respeto a la Diversidad Cultural",
+    "2027-11-22": "Día de la Soberanía Nacional",
+    "2027-12-08": "Inmaculada Concepción de María",
+    "2027-12-25": "Navidad",
+};
+
+// Índice 0=Dom, 1=Lun … 6=Sáb — igual que Date.getDay()
+const HORAS_KEYS = [
+    "horasDomingo","horasLunes","horasMartes","horasMiercoles",
+    "horasJueves","horasViernes","horasSabado",
+];
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────
+function getDias(año, mes) {
+    // Período: del 24 del mes anterior al 23 del mes indicado
+    const dias = [];
+    let cur = new Date(año, mes - 2, 24); // 0-indexed month
+    const end = new Date(año, mes - 1, 23);
+    while (cur <= end) {
+        dias.push(new Date(cur));
+        cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+    }
+    return dias;
+}
+
+function fmtKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function esLaboral(val) {
+    return val && val !== "Fco" && val !== "Com" && val !== "FER" && val !== "Lic";
+}
+
+// Renderiza el contenido de una celda: turnos horarios → dos líneas (entrada / salida)
+function CeldaContenido({ val, op }) {
+    if (!val) return <span className="ps-celda-vacio">—</span>;
+    const partes = val.split(/\s*[–\u2013\u2014-]\s*/);
+    if (partes.length === 2 && partes[0].includes(":")) {
+        return (
+            <>
+                <span className="ps-celda-t1">{partes[0]}</span>
+                <span className="ps-celda-t2">{partes[1]}</span>
+            </>
+        );
+    }
+    return <>{op?.label ?? val}</>;
+}
+
+function horasDeValor(val) {
+    if (!esLaboral(val)) return 0;
+    // Separa por cualquier variante de guion (-, –, —) con espacios opcionales
+    const partes = val.split(/\s*[-\u2013\u2014]\s*/);
+    if (partes.length !== 2) return 0;
+    const [h1, m1] = partes[0].split(":").map(Number);
+    const [h2, m2] = partes[1].split(":").map(Number);
+    if (isNaN(h1) || isNaN(h2)) return 0;
+    const ini = h1 * 60 + (m1 || 0);
+    const fin = h2 * 60 + (m2 || 0);
+    return (fin > ini ? fin - ini : fin + 1440 - ini) / 60;
+}
+
+// ── Popup editor de celda ────────────────────────────────────────────────────────
+function CeldaPopup({ top, left, onSelect, onClose }) {
+    const ref = useRef();
+    useEffect(() => {
+        const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+        document.addEventListener("mousedown", h);
+        return () => document.removeEventListener("mousedown", h);
+    }, [onClose]);
+    return (
+        <div className="ps-popup" style={{ top, left }} ref={ref}>
+            {OPCIONES.map(op => (
+                <button
+                    key={op.val}
+                    className={`ps-popup-opt ${op.cls ? `ps-popup-opt--${op.cls}` : "ps-popup-opt--vacio"}`}
+                    onClick={() => onSelect(op.val)}
+                >
+                    {op.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+// ── Selector de servicio ─────────────────────────────────────────────────────────
+function SelectorServicio({ onSelect }) {
+    const { empresaNombre } = useAppData();
+    const { clientes, objetivos, cargando } = useClientesData(empresaNombre);
+    const hoy = new Date();
+    const [año,        setAño]        = useState(hoy.getFullYear());
+    const [mes,        setMes]        = useState(hoy.getMonth() + 1);
+    const [clienteId,  setClienteId]  = useState("");
+    const [objetivoId, setObjetivoId] = useState("");
+
+    const clienteSel = clientes.find(c => c.id === clienteId);
+    const objFiltrados = objetivos.filter(o =>
+        o.clienteId === clienteId ||
+        (clienteSel?.nombre && o.clienteNombre === clienteSel.nombre)
+    );
+    const objSel = objetivos.find(o => o.id === objetivoId);
+    const valido = clienteId && objetivoId;
+
+    const mesAnterior = mes === 1 ? 12 : mes - 1;
+    const añoAnterior = mes === 1 ? año - 1 : año;
+
+    return (
+        <div className="ps-selector">
+            <div className="ps-selector-icon">📋</div>
+            <h2 className="ps-selector-title">Programación de Servicios</h2>
+            <p className="ps-selector-sub">Seleccioná el servicio y el período para abrir o crear la planilla</p>
+
+            <div className="ps-selector-fields">
+
+                <div className="ps-field">
+                    <label className="ps-label">Período</label>
+                    <div className="ps-periodo-row">
+                        <select className="ps-select" value={mes} onChange={e => setMes(Number(e.target.value))}>
+                            {MESES_ES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                        </select>
+                        <select className="ps-select ps-select--año" value={año} onChange={e => setAño(Number(e.target.value))}>
+                            {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                    </div>
+                    <div className="ps-periodo-hint">
+                        Del 24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior} al 23/{String(mes).padStart(2,"0")}/{año}
+                    </div>
+                </div>
+
+                <div className="ps-field">
+                    <label className="ps-label">Cliente</label>
+                    <select
+                        className="ps-select"
+                        value={clienteId}
+                        onChange={e => { setClienteId(e.target.value); setObjetivoId(""); }}
+                        disabled={cargando}
+                    >
+                        <option value="">— Seleccionar cliente —</option>
+                        {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </select>
+                </div>
+
+                <div className="ps-field">
+                    <label className="ps-label">Objetivo / Servicio</label>
+                    <select
+                        className="ps-select"
+                        value={objetivoId}
+                        onChange={e => setObjetivoId(e.target.value)}
+                        disabled={!clienteId || cargando}
+                    >
+                        <option value="">— Seleccionar objetivo —</option>
+                        {objFiltrados.map(o => (
+                            <option key={o.id} value={o.id}>
+                                {[o.codigo, o.proyecto, o.nombre].filter(Boolean).join("  ")}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            <button className="ps-btn-abrir" disabled={!valido} onClick={() =>
+                onSelect({
+                    clienteId,
+                    clienteNombre: clienteSel?.nombre || "",
+                    objetivoId,
+                    objetivoNombre: objSel?.nombre || "",
+                    proyectoNombre: objSel?.proyecto || "",
+                    horasLunes:     objSel?.horasLunes     ?? null,
+                    horasMartes:    objSel?.horasMartes    ?? null,
+                    horasMiercoles: objSel?.horasMiercoles ?? null,
+                    horasJueves:    objSel?.horasJueves    ?? null,
+                    horasViernes:   objSel?.horasViernes   ?? null,
+                    horasSabado:    objSel?.horasSabado    ?? null,
+                    horasDomingo:   objSel?.horasDomingo   ?? null,
+                    horasFeriados:  objSel?.horasFeriados  ?? null,
+                    año, mes,
+                })
+            }>
+                Abrir planilla →
+            </button>
+        </div>
+    );
+}
+
+// ── Modal días no laborables ─────────────────────────────────────────────────────
+function ModalNoLaborables({ dias, onChange, onClose }) {
+    const [sel, setSel] = useState(() =>
+        Object.fromEntries(dias.map(d => [fmtKey(d), false]))
+    );
+
+    const toggleAll = (val) => setSel(Object.fromEntries(dias.map(d => [fmtKey(d), val])));
+
+    return (
+        <div className="ps-overlay" onClick={onClose}>
+            <div className="ps-nolab-modal" onClick={e => e.stopPropagation()}>
+                <div className="ps-modal-title">📅 Días no laborables</div>
+                <p className="ps-nolab-sub">
+                    Los siguientes días figuran como <strong>no laborables</strong> según el objetivo
+                    pero <strong>no son feriado nacional</strong>.
+                    ¿Se trabaja en alguno de ellos?
+                </p>
+
+                <div className="ps-nolab-acciones">
+                    <button className="ps-nolab-bulk" onClick={() => toggleAll(true)}>Marcar todos ✓</button>
+                    <button className="ps-nolab-bulk" onClick={() => toggleAll(false)}>Desmarcar todos</button>
+                </div>
+
+                <div className="ps-nolab-lista">
+                    {dias.map(d => {
+                        const key = fmtKey(d);
+                        return (
+                            <label key={key} className={`ps-nolab-item ${sel[key] ? "ps-nolab-item--on" : ""}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={sel[key]}
+                                    onChange={e => setSel(p => ({ ...p, [key]: e.target.checked }))}
+                                />
+                                <span className="ps-nolab-fecha">
+                                    {DIAS_ES[d.getDay()]} {d.getDate()}/{String(d.getMonth()+1).padStart(2,"0")}
+                                </span>
+                                <span className="ps-nolab-turno">{sel[key] ? "Se trabaja" : "No se trabaja"}</span>
+                            </label>
+                        );
+                    })}
+                </div>
+
+                <div className="ps-patron-actions">
+                    <button className="ps-modal-cerrar" onClick={onClose}>Cancelar</button>
+                    <button className="ps-btn-aplicar" onClick={() => {
+                        onChange(sel); // { dateKey: true/false }
+                        onClose();
+                    }}>
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Modal de patrón masivo ───────────────────────────────────────────────────────
+const DIAS_SEM_LABELS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+const TURNOS_OPT = OPCIONES.filter(o => o.cls === "dia" || o.cls === "noch" || o.cls === "tard");
+
+function PatronModal({ persona, dias, vista, onAplicar, onClose }) {
+    const [tipo,     setTipo]     = useState("semanal");
+    // Semanal
+    const [selDias,  setSelDias]  = useState([1,2,3,4,5]);
+    const [turnoSem, setTurnoSem] = useState(TURNOS_OPT[0]?.val || "");
+    const [offSem,   setOffSem]   = useState("Fco");
+    // Rotativo
+    const [ntrabajo,  setNtrabajo]  = useState(4);
+    const [nfranco,   setNfranco]   = useState(2);
+    const defTurno = TURNOS_OPT[0]?.val || "";
+    // Un turno por cada posición de trabajo (array de length ntrabajo)
+    const [turnosRot, setTurnosRot] = useState(() => Array(4).fill(defTurno));
+    const [offRot,    setOffRot]    = useState("Fco");
+    const [fase,      setFase]      = useState(0);
+
+    const toggleDia = d => setSelDias(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d]);
+
+    const nTrab = Number(ntrabajo);
+    const nFran = Number(nfranco);
+    const ciclo = nTrab + nFran;
+
+    // Ajusta el array de turnos cuando cambia ntrabajo
+    const handleNtrabajo = (val) => {
+        const n = Number(val);
+        setNtrabajo(val);
+        setTurnosRot(prev => {
+            if (n > prev.length) return [...prev, ...Array(n - prev.length).fill(defTurno)];
+            return prev.slice(0, n);
+        });
+    };
+
+    const setTurnoRot = (idx, val) =>
+        setTurnosRot(prev => prev.map((t, i) => i === idx ? val : t));
+
+    const faseOpts = [
+        ...Array.from({ length: nTrab }, (_, i) => ({ val: i,          label: `Día de trabajo ${i + 1}` })),
+        ...Array.from({ length: nFran }, (_, i) => ({ val: nTrab + i,  label: `Día de franco ${i + 1}` })),
+    ];
+
+    const calcPatron = () => {
+        const r = {};
+        if (tipo === "semanal") {
+            dias.forEach(d => { r[fmtKey(d)] = selDias.includes(d.getDay()) ? turnoSem : offSem; });
+        } else {
+            dias.forEach((d, i) => {
+                const pos = (i + Number(fase)) % ciclo;
+                r[fmtKey(d)] = pos < nTrab ? (turnosRot[pos] || defTurno) : offRot;
+            });
+        }
+        return r;
+    };
+
+    const patron = calcPatron();
+    const preview = dias.slice(0, 14);
+
+    return (
+        <div className="ps-overlay" onClick={onClose}>
+            <div className="ps-patron-modal" onClick={e => e.stopPropagation()}>
+                <div className="ps-modal-title">🗓 Asignar patrón — {persona.nombre}</div>
+
+                <div className="ps-patron-tipo-tabs">
+                    <button className={`ps-ptab ${tipo === "semanal"  ? "ps-ptab--on" : ""}`} onClick={() => setTipo("semanal")}>Por días de semana</button>
+                    <button className={`ps-ptab ${tipo === "rotativo" ? "ps-ptab--on" : ""}`} onClick={() => setTipo("rotativo")}>Rotativo</button>
+                </div>
+
+                {tipo === "semanal" && (
+                    <div className="ps-patron-form">
+                        <div className="ps-patron-field">
+                            <label className="ps-label">Días de trabajo</label>
+                            <div className="ps-dias-row">
+                                {[0,1,2,3,4,5,6].map(d => (
+                                    <button key={d} className={`ps-dia-btn ${selDias.includes(d) ? "ps-dia-btn--on" : ""}`} onClick={() => toggleDia(d)}>
+                                        {DIAS_SEM_LABELS[d]}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="ps-patron-row">
+                            <div className="ps-patron-field">
+                                <label className="ps-label">Turno días laborables</label>
+                                <select className="ps-select" value={turnoSem} onChange={e => setTurnoSem(e.target.value)}>
+                                    {TURNOS_OPT.map(o => <option key={o.val} value={o.val}>{o.val}</option>)}
+                                </select>
+                            </div>
+                            <div className="ps-patron-field">
+                                <label className="ps-label">Días libres como</label>
+                                <select className="ps-select" value={offSem} onChange={e => setOffSem(e.target.value)}>
+                                    <option value="">— (sin asignar)</option>
+                                    <option value="Fco">Fco</option>
+                                    <option value="Com">Com</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {tipo === "rotativo" && (
+                    <div className="ps-patron-form">
+                        <div className="ps-patron-row">
+                            <div className="ps-patron-field">
+                                <label className="ps-label">Días de trabajo</label>
+                                <input type="number" min={1} max={14} className="ps-input-num" value={ntrabajo} onChange={e => handleNtrabajo(e.target.value)} />
+                            </div>
+                            <div className="ps-patron-field">
+                                <label className="ps-label">Días de franco</label>
+                                <input type="number" min={1} max={14} className="ps-input-num" value={nfranco} onChange={e => setNfranco(e.target.value)} />
+                            </div>
+                            <div className="ps-patron-field">
+                                <label className="ps-label">Franco como</label>
+                                <select className="ps-select" value={offRot} onChange={e => setOffRot(e.target.value)}>
+                                    <option value="Fco">Fco</option>
+                                    <option value="Com">Com</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="ps-patron-field">
+                            <label className="ps-label">Turno por día de trabajo</label>
+                            <div className="ps-turnos-rot-grid">
+                                {turnosRot.map((t, idx) => (
+                                    <div key={idx} className="ps-turno-rot-row">
+                                        <span className="ps-turno-rot-label">Día {idx + 1}</span>
+                                        <select
+                                            className="ps-select ps-select--rot"
+                                            value={t}
+                                            onChange={e => setTurnoRot(idx, e.target.value)}
+                                        >
+                                            {TURNOS_OPT.map(o => <option key={o.val} value={o.val}>{o.val}</option>)}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="ps-patron-field">
+                            <label className="ps-label">El período empieza en</label>
+                            <select className="ps-select" value={fase} onChange={e => setFase(Number(e.target.value))}>
+                                {faseOpts.map(f => <option key={f.val} value={f.val}>{f.label}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                <div className="ps-patron-preview-title">Vista previa (primeros 14 días)</div>
+                <div className="ps-patron-preview">
+                    {preview.map(d => {
+                        const val = patron[fmtKey(d)] || "";
+                        const op  = OPCIONES.find(o => o.val === val);
+                        return (
+                            <div key={fmtKey(d)} className={`ps-prev-cell ${op?.cls ? `ps-celda--${op.cls}` : "ps-prev-cell--vacio"}`}>
+                                <span className="ps-prev-num">{d.getDate()}</span>
+                                <span className="ps-prev-val"><CeldaContenido val={val} op={op} /></span>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div className="ps-patron-actions">
+                    <button className="ps-modal-cerrar" onClick={onClose}>Cancelar</button>
+                    <button className="ps-btn-aplicar" onClick={() => { onAplicar(patron); onClose(); }}>
+                        Aplicar al período completo
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Selector de reemplazo (inline en AusentismoModal) ───────────────────────────
+function ReemplazoPicker({ dia, todoElPersonal, reemplazoActual, onConfirm, onCancel }) {
+    const [legajo, setLegajo] = useState(reemplazoActual?.legajo || "");
+    const [turno,  setTurno]  = useState(reemplazoActual?.turno  || TURNOS_OPT[0]?.val || "");
+
+    const personaSel = todoElPersonal.find(p => String(p.legajo) === String(legajo) || p.id === legajo);
+
+    return (
+        <div className="ps-reempl-picker">
+            <div className="ps-reempl-picker-title">
+                🔄 Reemplazo — {DIAS_ES[dia.getDay()]} {dia.getDate()}/{String(dia.getMonth()+1).padStart(2,"0")}
+            </div>
+            <div className="ps-patron-field">
+                <label className="ps-label">Persona de reemplazo</label>
+                <select className="ps-select" value={legajo} onChange={e => setLegajo(e.target.value)}>
+                    <option value="">— Seleccionar —</option>
+                    {todoElPersonal.map(p => (
+                        <option key={p.id} value={p.legajo || p.id}>
+                            {p.nombre}{p.legajo ? ` (${p.legajo})` : ""}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <div className="ps-patron-field">
+                <label className="ps-label">Turno que cubre</label>
+                <select className="ps-select" value={turno} onChange={e => setTurno(e.target.value)}>
+                    {TURNOS_OPT.map(o => <option key={o.val} value={o.val}>{o.val}</option>)}
+                </select>
+            </div>
+            <div className="ps-patron-actions">
+                <button className="ps-modal-cerrar" onClick={onCancel}>Cancelar</button>
+                <button
+                    className="ps-btn-aplicar"
+                    disabled={!legajo}
+                    onClick={() => onConfirm({ legajo: legajo || "", nombre: personaSel?.nombre || "", turno })}
+                >
+                    Confirmar reemplazo
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ── Modal de ausentismo ──────────────────────────────────────────────────────────
+function AusentismoModal({ persona, dias, vista, todoElPersonal, onAplicar, onClose }) {
+    const primerDia = fmtKey(dias[0]);
+    const ultimoDia = fmtKey(dias[dias.length - 1]);
+
+    const [desde,     setDesde]     = useState(primerDia);
+    const [hasta,     setHasta]     = useState(ultimoDia);
+    const [codigo,    setCodigo]    = useState(null);
+    const [reemplazos, setReemplazos] = useState(() => ({ ...(persona.reemplazos || {}) }));
+    const [reemplDia,  setReemplDia]  = useState(null); // dateKey del día a reemplazar
+
+    // Días existentes con ausentismo ya cargado (para mostrar historial)
+    const ausExistentes = dias.filter(d => AUS_CODES.includes(persona[vista]?.[fmtKey(d)] || ""));
+
+    // Rango seleccionado
+    const diasRango = dias.filter(d => {
+        const k = fmtKey(d);
+        return k >= desde && k <= hasta;
+    });
+
+    const fmtFecha = (key) => {
+        const d = dias.find(x => fmtKey(x) === key);
+        if (!d) return key;
+        return `${DIAS_ES[d.getDay()]} ${d.getDate()}/${String(d.getMonth()+1).padStart(2,"0")}`;
+    };
+
+    const aplicar = () => {
+        const edits = {};
+        diasRango.forEach(d => { edits[fmtKey(d)] = codigo; });
+        onAplicar(edits, reemplazos);
+        onClose();
+    };
+
+    const quitarAus = (key) => {
+        onAplicar({ [key]: "" }, reemplazos);
+    };
+
+    const setReemplazo = (key, remp) => {
+        setReemplazos(p => ({ ...p, [key]: remp }));
+        setReemplDia(null);
+    };
+
+    const reemplDiaObj = reemplDia ? dias.find(d => fmtKey(d) === reemplDia) : null;
+
+    return (
+        <div className="ps-overlay" onClick={reemplDia ? undefined : onClose}>
+            <div className="ps-aus-modal" onClick={e => e.stopPropagation()}>
+                <div className="ps-modal-title">🏥 Ausentismo — {persona.nombre}</div>
+
+                {reemplDiaObj ? (
+                    <ReemplazoPicker
+                        dia={reemplDiaObj}
+                        todoElPersonal={todoElPersonal}
+                        reemplazoActual={reemplazos[reemplDia]}
+                        onConfirm={(remp) => setReemplazo(reemplDia, remp)}
+                        onCancel={() => setReemplDia(null)}
+                    />
+                ) : (
+                    <>
+                        {/* ── Rango de fechas ── */}
+                        <div className="ps-aus-rango">
+                            <div className="ps-patron-field">
+                                <label className="ps-label">Desde</label>
+                                <select className="ps-select" value={desde} onChange={e => setDesde(e.target.value)}>
+                                    {dias.map(d => {
+                                        const k = fmtKey(d);
+                                        return <option key={k} value={k}>{fmtFecha(k)}</option>;
+                                    })}
+                                </select>
+                            </div>
+                            <div className="ps-patron-field">
+                                <label className="ps-label">Hasta</label>
+                                <select className="ps-select" value={hasta} onChange={e => setHasta(e.target.value)}>
+                                    {dias.filter(d => fmtKey(d) >= desde).map(d => {
+                                        const k = fmtKey(d);
+                                        return <option key={k} value={k}>{fmtFecha(k)}</option>;
+                                    })}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="ps-aus-rango-info">
+                            {diasRango.length} día{diasRango.length !== 1 ? "s" : ""}
+                        </div>
+
+                        {/* ── Tipo de ausentismo ── */}
+                        <div className="ps-patron-field">
+                            <label className="ps-label">Motivo</label>
+                            <div className="ps-aus-codes ps-aus-codes--grande">
+                                {AUS_CODES.map(c => (
+                                    <button
+                                        key={c}
+                                        className={`ps-aus-code ps-aus-code--lg ${codigo === c ? "ps-aus-code--on" : ""}`}
+                                        onClick={() => setCodigo(p => p === c ? null : c)}
+                                    >
+                                        {c}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* ── Historial de ausentismos en el período ── */}
+                        {ausExistentes.length > 0 && (
+                            <div className="ps-aus-historial">
+                                <div className="ps-patron-preview-title">Ausentismos cargados</div>
+                                <div className="ps-aus-lista">
+                                    {ausExistentes.map(d => {
+                                        const key  = fmtKey(d);
+                                        const val  = persona[vista]?.[key] || "";
+                                        const remp = reemplazos[key];
+                                        return (
+                                            <div key={key} className="ps-aus-item ps-aus-item--aus">
+                                                <span className="ps-aus-fecha">{fmtFecha(key)}</span>
+                                                <span className="ps-aus-badge">{val}</span>
+                                                <button
+                                                    className={`ps-aus-remp-btn ${remp ? "ps-aus-remp-btn--set" : ""}`}
+                                                    onClick={() => setReemplDia(key)}
+                                                >
+                                                    {remp ? `🔄 ${remp.nombre.split(" ")[0]}` : "🔄 Reemplazo"}
+                                                </button>
+                                                <button className="ps-aus-clear" onClick={() => quitarAus(key)} title="Quitar">×</button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="ps-patron-actions">
+                            <button className="ps-modal-cerrar" onClick={onClose}>Cancelar</button>
+                            <button
+                                className="ps-btn-aplicar"
+                                disabled={!codigo || diasRango.length === 0}
+                                onClick={aplicar}
+                            >
+                                Aplicar {codigo ? `"${codigo}"` : ""} a {diasRango.length} día{diasRango.length !== 1 ? "s" : ""}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ── Grilla de servicio ───────────────────────────────────────────────────────────
+function GrillaServicio({ config, onBack }) {
+    const { empresaNombre } = useAppData();
+    const [todoElPersonal, setTodoElPersonal] = useState([]);
+
+    useEffect(() => {
+        if (!empresaNombre) return;
+        getDocs(query(collection(db, "legajos"), where("empresa", "==", empresaNombre)))
+            .then(snap => {
+                const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                docs.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+                setTodoElPersonal(docs);
+            })
+            .catch(console.error);
+    }, [empresaNombre]);
+
+    const [personal,   setPersonal]   = useState([]);
+    const [vista,      setVista]      = useState("programado");
+    const [popup,      setPopup]      = useState(null);
+    const [cargando,   setCargando]   = useState(true);
+    const [guardando,  setGuardando]  = useState(false);
+    const [guardado,   setGuardado]   = useState(false);
+    const [modalAdd,     setModalAdd]     = useState(false);
+    const [patronModal,  setPatronModal]  = useState(null); // { rowIdx }
+    const [ausModal,     setAusModal]     = useState(null); // { rowIdx }
+    const [diasEsp,      setDiasEsp]      = useState({}); // dateKey → true(trabaja)/false(no)
+    const [modalNoLab,   setModalNoLab]   = useState(false);
+    const [busq,         setBusq]         = useState("");
+
+    const dias = getDias(config.año, config.mes);
+    const docId = `${empresaNombre}_${config.clienteId}_${config.objetivoId}_${config.año}-${String(config.mes).padStart(2,"0")}`;
+
+    const mesAnterior = config.mes === 1 ? 12 : config.mes - 1;
+    const añoAnterior = config.mes === 1 ? config.año - 1 : config.año;
+
+    // ── Carga ────────────────────────────────────────────────
+    useEffect(() => {
+        (async () => {
+            try {
+                const snap = await getDoc(doc(db, "programacionServicios", docId));
+                if (snap.exists()) {
+                    setPersonal(snap.data().personal || []);
+                    setDiasEsp(snap.data().diasEspeciales || {});
+                }
+            } catch (e) { console.error(e); }
+            finally { setCargando(false); }
+        })();
+    }, [docId]);
+
+
+    // ── Días no laborables del período (sin feriado nacional) ────
+    const diasNoLabNonHoliday = dias.filter(d => {
+        const key = fmtKey(d);
+        if (FERIADOS_ARG[key]) return false;
+        const hs = config[HORAS_KEYS[d.getDay()]];
+        return hs !== null && hs !== undefined && Number(hs) === 0;
+    });
+
+    // Mostrar modal si hay días sin responder
+    useEffect(() => {
+        if (!cargando && diasNoLabNonHoliday.some(d => diasEsp[fmtKey(d)] === undefined)) {
+            setModalNoLab(true);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cargando]);
+
+    // ── Guardar ──────────────────────────────────────────────
+    const guardar = async () => {
+        setGuardando(true);
+        try {
+            await setDoc(doc(db, "programacionServicios", docId), {
+                empresa: empresaNombre,
+                clienteId: config.clienteId,
+                clienteNombre: config.clienteNombre,
+                objetivoId: config.objetivoId,
+                objetivoNombre: config.objetivoNombre,
+                proyectoNombre: config.proyectoNombre,
+                año: config.año, mes: config.mes,
+                personal,
+                diasEspeciales: diasEsp,
+                actualizadoEn: serverTimestamp(),
+            });
+            setGuardado(true);
+            setTimeout(() => setGuardado(false), 2500);
+        } catch (e) { alert("Error al guardar: " + e.message); }
+        finally { setGuardando(false); }
+    };
+
+    // ── Edición ──────────────────────────────────────────────
+    const setCelda = (rowIdx, diaKey, val) => {
+        setPersonal(prev => prev.map((p, i) =>
+            i !== rowIdx ? p : { ...p, [vista]: { ...(p[vista] || {}), [diaKey]: val } }
+        ));
+        setPopup(null);
+    };
+
+    const agregarPersona = (v) => {
+        if (personal.find(p => p.legajo === v.legajo)) return;
+        setPersonal(prev => [...prev, { legajo: v.legajo || "", nombre: v.nombre || "", programado: {}, real: {}, reemplazos: {} }]);
+        setModalAdd(false); setBusq("");
+    };
+
+    const aplicarPatron = (rowIdx, patron) => {
+        setPersonal(prev => prev.map((p, i) =>
+            i !== rowIdx ? p : { ...p, [vista]: { ...(p[vista] || {}), ...patron } }
+        ));
+    };
+
+    const aplicarAusentismo = (rowIdx, edits, reemplazos) => {
+        setPersonal(prev => prev.map((p, i) => {
+            if (i !== rowIdx) return p;
+            const newVista = { ...(p[vista] || {}) };
+            Object.entries(edits).forEach(([key, val]) => { newVista[key] = val; });
+            return { ...p, [vista]: newVista, reemplazos: { ...(p.reemplazos || {}), ...reemplazos } };
+        }));
+    };
+
+    const quitarPersona = (idx) => {
+        if (!window.confirm("¿Quitar esta persona de la planilla?")) return;
+        setPersonal(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const HORAS_POR_DOW = [
+        config.horasDomingo,
+        config.horasLunes,
+        config.horasMartes,
+        config.horasMiercoles,
+        config.horasJueves,
+        config.horasViernes,
+        config.horasSabado,
+    ];
+
+    const horasFila = (p) =>
+        Object.values(p[vista] || {}).reduce((s, v) => s + horasDeValor(v), 0);
+
+    const horasDia = (d) => {
+        const key = fmtKey(d);
+        if (FERIADOS_ARG[key]) return config.horasFeriados != null ? Number(config.horasFeriados) : null;
+        if (diasEsp[key] === false) return 0;
+        return HORAS_POR_DOW[d.getDay()] != null ? Number(HORAS_POR_DOW[d.getDay()]) : null;
+    };
+
+    const vigFiltrados = todoElPersonal
+        .filter(v => !personal.find(p => p.legajo === v.legajo))
+        .filter(v => !busq || v.nombre?.toLowerCase().includes(busq.toLowerCase()) || String(v.legajo).includes(busq));
+
+    if (cargando) return <div className="ps-loading">Cargando planilla...</div>;
+
+    return (
+        <div className="ps-grilla-root">
+
+            {/* ── Header ── */}
+            <header className="ps-header">
+                <div className="ps-header-left">
+                    <button className="ps-back" onClick={onBack}>← Volver</button>
+                    <div>
+                        <div className="ps-header-title">
+                            {config.clienteNombre}
+                            {config.proyectoNombre && <span className="ps-header-sep"> · {config.proyectoNombre}</span>}
+                            {config.objetivoNombre && <span className="ps-header-sep"> · {config.objetivoNombre}</span>}
+                        </div>
+                        <div className="ps-header-sub">
+                            Período 24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior} — 23/{String(config.mes).padStart(2,"0")}/{config.año}
+                            &nbsp;·&nbsp;{dias.length} días
+                        </div>
+                    </div>
+                </div>
+                <div className="ps-header-right">
+                    <div className="ps-tabs">
+                        <button className={`ps-tab ${vista === "programado" ? "ps-tab--on" : ""}`} onClick={() => setVista("programado")}>Programado</button>
+                        <button className={`ps-tab ${vista === "real"       ? "ps-tab--on" : ""}`} onClick={() => setVista("real")}>Real</button>
+                    </div>
+                    {diasNoLabNonHoliday.length > 0 && (
+                        <button className="ps-btn-nolab" onClick={() => setModalNoLab(true)} title="Días no laborables">
+                            📅 No laborables
+                        </button>
+                    )}
+                    <button className="ps-btn-add" onClick={() => setModalAdd(true)}>+ Personal</button>
+                    <button className="ps-btn-guardar" onClick={guardar} disabled={guardando}>
+                        {guardado ? "✓ Guardado" : guardando ? "..." : "💾 Guardar"}
+                    </button>
+                </div>
+            </header>
+
+            {/* ── Tabla ── */}
+            <div className="ps-table-wrap">
+                <table className="ps-table">
+                    <thead>
+                        <tr>
+                            <th className="ps-th-sticky ps-th-legajo">Leg.</th>
+                            <th className="ps-th-sticky ps-th-nombre">Nombre y Apellido</th>
+                            <th className="ps-th-sticky ps-th-acciones" />
+                            {dias.map(d => {
+                                const key       = fmtKey(d);
+                                const fin       = d.getDay() === 0 || d.getDay() === 6;
+                                const ferNombre = FERIADOS_ARG[key];
+                                const hs        = config[HORAS_KEYS[d.getDay()]];
+                                const esNoLab   = !ferNombre && hs !== null && hs !== undefined && Number(hs) === 0;
+                                const trabaja   = diasEsp[key]; // true/false/undefined
+                                return (
+                                    <th
+                                        key={key}
+                                        title={ferNombre || (esNoLab ? "Día no laborable según objetivo" : undefined)}
+                                        className={[
+                                            "ps-th-dia",
+                                            fin && !ferNombre && trabaja !== false ? "ps-th-dia--fin" : "",
+                                            ferNombre ? "ps-th-dia--fer" : "",
+                                            esNoLab && trabaja === false     ? "ps-th-dia--nolab"   : "",
+                                            esNoLab && trabaja === undefined ? "ps-th-dia--nolab-q" : "",
+                                        ].join(" ")}
+                                    >
+                                        <div className="ps-th-mes-label">{MESES_ES[d.getMonth()].slice(0,3)}</div>
+                                        <div className="ps-th-num">{d.getDate()}</div>
+                                        <div className="ps-th-dow">{DIAS_ES[d.getDay()].slice(0,2)}</div>
+                                        {ferNombre && <div className="ps-th-badge ps-th-badge--fer">FER</div>}
+                                        {esNoLab && !ferNombre && trabaja !== true && (
+                                            <div
+                                                className="ps-th-badge ps-th-badge--nolab"
+                                                onClick={e => { e.stopPropagation(); setModalNoLab(true); }}
+                                                title="Click para revisar días no laborables"
+                                            >
+                                                {trabaja === false ? "✗" : "?"}
+                                            </div>
+                                        )}
+                                    </th>
+                                );
+                            })}
+                            <th className="ps-th-hs">Hs</th>
+                            <th className="ps-th-del" />
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {personal.length === 0 && (
+                            <tr>
+                                <td colSpan={dias.length + 5} className="ps-empty">
+                                    Sin personal asignado. Usá "+ Personal" para agregar.
+                                </td>
+                            </tr>
+                        )}
+                        {personal.map((p, rowIdx) => {
+                            const data = p[vista] || {};
+                            return (
+                                <tr key={p.legajo + rowIdx} className="ps-row">
+                                    <td className="ps-td-sticky ps-td-legajo">{p.legajo}</td>
+                                    <td className="ps-td-sticky ps-td-nombre">{p.nombre}</td>
+                                    <td className="ps-td-sticky ps-td-acciones">
+                                        <button
+                                            className="ps-btn-accion ps-btn-accion--patron"
+                                            title="Asignar patrón"
+                                            onClick={() => setPatronModal({ rowIdx })}
+                                        >🗓</button><button
+                                            className="ps-btn-accion ps-btn-accion--aus"
+                                            title="Registrar ausentismo"
+                                            onClick={() => setAusModal({ rowIdx })}
+                                        >🏥</button>
+                                    </td>
+                                    {dias.map(d => {
+                                        const key   = fmtKey(d);
+                                        const val   = data[key] || "";
+                                        const op    = OPCIONES.find(o => o.val === val);
+                                        const fin   = d.getDay() === 0 || d.getDay() === 6;
+                                        const hasRemp = AUS_CODES.includes(val) && p.reemplazos?.[key];
+                                        return (
+                                            <td
+                                                key={key}
+                                                className={`ps-celda ${op?.cls ? `ps-celda--${op.cls}` : ""} ${fin ? "ps-celda--fin" : ""}`}
+                                                onClick={e => {
+                                                    const r = e.currentTarget.getBoundingClientRect();
+                                                    setPopup({ rowIdx, diaKey: key, top: r.bottom + 4, left: r.left });
+                                                }}
+                                            >
+                                                <CeldaContenido val={val} op={op} />
+                                                {hasRemp && <span className="ps-remp-badge">R</span>}
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="ps-td-hs">{horasFila(p) || "—"}</td>
+                                    <td className="ps-td-del">
+                                        <button className="ps-btn-del" onClick={() => quitarPersona(rowIdx)}>×</button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+
+                    <tfoot>
+                        <tr className="ps-tfoot">
+                            <td colSpan={3} className="ps-tfoot-label">Hs. a cubrir</td>
+                            {dias.map(d => {
+                                const hs = horasDia(d);
+                                return (
+                                    <td key={fmtKey(d)} className={`ps-tfoot-cel ${hs == null ? "ps-tfoot-cel--sin" : ""}`}>
+                                        {hs != null ? hs : "—"}
+                                    </td>
+                                );
+                            })}
+                            <td className="ps-tfoot-total" colSpan={2}>
+                                {dias.reduce((s, d) => s + (horasDia(d) ?? 0), 0)} hs
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            {/* ── Leyenda ── */}
+            <div className="ps-leyenda">
+                {OPCIONES.filter(o => o.cls).map(o => (
+                    <span key={o.val} className={`ps-ley-chip ps-celda--${o.cls}`}>{o.label}</span>
+                ))}
+                <span className="ps-ley-note">· Click en una celda para asignar turno</span>
+            </div>
+
+            {/* ── Popup celda ── */}
+            {popup && (
+                <CeldaPopup
+                    top={popup.top} left={popup.left}
+                    onSelect={val => setCelda(popup.rowIdx, popup.diaKey, val)}
+                    onClose={() => setPopup(null)}
+                />
+            )}
+
+            {/* ── Modal días no laborables ── */}
+            {modalNoLab && diasNoLabNonHoliday.length > 0 && (
+                <ModalNoLaborables
+                    dias={diasNoLabNonHoliday}
+                    onChange={sel => setDiasEsp(prev => ({ ...prev, ...sel }))}
+                    onClose={() => setModalNoLab(false)}
+                />
+            )}
+
+            {/* ── Modal patrón ── */}
+            {patronModal && (
+                <PatronModal
+                    persona={personal[patronModal.rowIdx]}
+                    dias={dias}
+                    vista={vista}
+                    onAplicar={patron => aplicarPatron(patronModal.rowIdx, patron)}
+                    onClose={() => setPatronModal(null)}
+                />
+            )}
+
+            {/* ── Modal ausentismo ── */}
+            {ausModal && (
+                <AusentismoModal
+                    persona={personal[ausModal.rowIdx]}
+                    dias={dias}
+                    vista={vista}
+                    todoElPersonal={todoElPersonal}
+                    onAplicar={(edits, reemplazos) => aplicarAusentismo(ausModal.rowIdx, edits, reemplazos)}
+                    onClose={() => setAusModal(null)}
+                />
+            )}
+
+            {/* ── Modal agregar personal ── */}
+            {modalAdd && (
+                <div className="ps-overlay" onClick={() => { setModalAdd(false); setBusq(""); }}>
+                    <div className="ps-modal" onClick={e => e.stopPropagation()}>
+                        <div className="ps-modal-title">Agregar personal</div>
+                        <input
+                            className="ps-modal-busq"
+                            placeholder="Buscar por nombre o legajo..."
+                            value={busq}
+                            onChange={e => setBusq(e.target.value)}
+                            autoFocus
+                        />
+                        <div className="ps-modal-lista">
+                            {vigFiltrados.length === 0 && (
+                                <div className="ps-modal-empty">No hay más personal disponible</div>
+                            )}
+                            {vigFiltrados.map(v => (
+                                <button key={v.id} className="ps-modal-item" onClick={() => agregarPersona(v)}>
+                                    <span className="ps-modal-legajo">{v.legajo}</span>
+                                    <span className="ps-modal-nombre">{v.nombre}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <button className="ps-modal-cerrar" onClick={() => { setModalAdd(false); setBusq(""); }}>Cerrar</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Export principal ─────────────────────────────────────────────────────────────
+export default function ProgramacionServiciosScreen({ onBack }) {
+    const [config, setConfig] = useState(null);
+
+    if (config) return <GrillaServicio config={config} onBack={() => setConfig(null)} />;
+
+    return (
+        <div className="ps-root">
+            <button className="ps-back ps-back--panel" onClick={onBack}>← Panel</button>
+            <SelectorServicio onSelect={setConfig} />
+        </div>
+    );
+}

@@ -8,6 +8,7 @@ import { useAppData } from "../context/AppDataContext";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db }         from "../firebase";
 import { generarPDFInformeNovedad } from "../utils/generarPDFInforme";
+import { fmtObjetivo } from "../utils/formatters";
 import { useClientesData } from "../hooks/useClientesData";
 import "./InformeNovedadScreen.css";
 
@@ -82,7 +83,6 @@ export default function InformeNovedadScreen({ onBack }) {
 
     const [selCliente,  setSelCliente]  = useState("");
     const [selObjetivo, setSelObjetivo] = useState("");
-    const [selPuesto,   setSelPuesto]   = useState("");
 
     const [hechoDenunciado, setHechoDenunciado] = useState("");
     const [cronologia, setCronologia] = useState([rowCrono()]);
@@ -110,11 +110,9 @@ export default function InformeNovedadScreen({ onBack }) {
     const [guardadoCodigo, setGuardadoCodigo] = useState(null);
     const [error,          setError]          = useState(null);
 
-    const { clientes, objetivos, puestos } = useClientesData(empresaNombre);
+    const { clientes, objetivos } = useClientesData(empresaNombre);
 
     const objetivosFiltrados = objetivos.filter(o => o.clienteId === selCliente);
-    const puestosFiltrados   = puestos.filter(p => p.objetivoId === selObjetivo);
-    const puestoObj          = puestos.find(p => p.id === selPuesto);
     const clienteObj         = clientes.find(c => c.id === selCliente);
     const objetivoObj        = objetivos.find(o => o.id === selObjetivo);
 
@@ -187,7 +185,7 @@ export default function InformeNovedadScreen({ onBack }) {
     const removePersona = (idx) => setPersonal(p => p.filter((_, i) => i !== idx));
 
     // ── Guardar ───────────────────────────────────────────────
-    const canSubmit = selCliente && selObjetivo && selPuesto && datos.fecha && hechoDenunciado && firmado;
+    const canSubmit = selCliente && selObjetivo && datos.fecha && hechoDenunciado && firmado;
 
     const handleGuardar = async () => {
         if (!canSubmit) return;
@@ -201,10 +199,10 @@ export default function InformeNovedadScreen({ onBack }) {
                 clienteNombre:      clienteObj?.nombre      || "",
                 objetivoId:         selObjetivo,
                 objetivoNombre:     objetivoObj?.nombre     || "",
-                puestoId:           selPuesto,
-                puestoNombre:       puestoObj?.nombre       || "",
-                direccion:          puestoObj?.direccion    || "",
-                telefono:           puestoObj?.telefono     || "",
+                puestoId:           selObjetivo,
+                puestoNombre:       objetivoObj?.nombre     || "",
+                direccion:          objetivoObj?.domicilio  || "",
+                telefono:           objetivoObj?.telefono   || "",
                 fechaConfeccion:    fechaConfeccionIN,
                 horaConfeccion:     horaConfeccionIN,
                 datos,              // contains fecha (hecho), referente, cargo
@@ -242,9 +240,9 @@ export default function InformeNovedadScreen({ onBack }) {
                 ...datos,
                 cliente:   clienteObj?.nombre   || "",
                 servicio:  objetivoObj?.nombre  || "",
-                puesto:    puestoObj?.nombre    || "",
-                direccion: puestoObj?.direccion || "",
-                telefono:  puestoObj?.telefono  || "",
+                puesto:    objetivoObj?.nombre    || "",
+                direccion: objetivoObj?.domicilio || "",
+                telefono:  objetivoObj?.telefono  || "",
             },
             hechoDenunciado, cronologia, quienDetecta,
             acciones, personal: personal.filter(p => p.nombre),
@@ -278,9 +276,9 @@ export default function InformeNovedadScreen({ onBack }) {
     // ── Formulario ────────────────────────────────────────────
     const inp = (label, val, onChange, opts = {}) => (
         <Field label={label} small={opts.small}>
-            <input className="in-input" value={val} onChange={e => onChange(e.target.value)}
+            <input className={`in-input${opts.readOnly ? " in-input--readonly" : ""}`} value={val} onChange={e => onChange(e.target.value)}
                 placeholder={opts.placeholder || ""} type={opts.type || "text"}
-                readOnly={opts.readOnly} style={opts.readOnly ? { background: "var(--color-surface2)", color: "var(--color-text-secondary)" } : {}} />
+                readOnly={opts.readOnly} />
         </Field>
     );
 
@@ -327,10 +325,10 @@ export default function InformeNovedadScreen({ onBack }) {
                         <Field label="Servicio / Objetivo">
                             <select className="in-input in-select"
                                 value={selObjetivo}
-                                onChange={e => { setSelObjetivo(e.target.value); setSelPuesto(""); }}
+                                onChange={e => setSelObjetivo(e.target.value)}
                                 disabled={!selCliente}>
                                 <option value="">— Seleccioná objetivo —</option>
-                                {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+                                {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{fmtObjetivo(o)}</option>)}
                             </select>
                         </Field>
                         <Field label="Fecha del hecho" small>
@@ -339,25 +337,13 @@ export default function InformeNovedadScreen({ onBack }) {
                         </Field>
                     </div>
 
-                    <Field label="Puesto">
-                        <select className="in-input in-select"
-                            value={selPuesto}
-                            onChange={e => setSelPuesto(e.target.value)}
-                            disabled={!selObjetivo}>
-                            <option value="">— Seleccioná puesto —</option>
-                            {puestosFiltrados.sort((a,b) => (a.numero??999)-(b.numero??999)).map(p => <option key={p.id} value={p.id}>{clienteObj?.codigo ? `${clienteObj.codigo}/${p.numero ?? "?"} · ` : ""}{p.nombre}</option>)}
-                        </select>
-                    </Field>
-
-                    {puestoObj && (
+                    {objetivoObj && (
                         <div className="in-row2">
                             <Field label="Dirección">
-                                <input className="in-input" value={puestoObj.direccion || "—"} readOnly
-                                    style={{ background: "var(--color-surface2)", color: "var(--color-text-secondary)" }} />
+                                <input className="in-input in-input--readonly" value={objetivoObj.domicilio || "—"} readOnly />
                             </Field>
                             <Field label="Teléfono" small>
-                                <input className="in-input" value={puestoObj.telefono || "—"} readOnly
-                                    style={{ background: "var(--color-surface2)", color: "var(--color-text-secondary)" }} />
+                                <input className="in-input in-input--readonly" value={objetivoObj.telefono || "—"} readOnly />
                             </Field>
                         </div>
                     )}

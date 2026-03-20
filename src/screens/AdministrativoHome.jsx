@@ -1,9 +1,11 @@
 // src/screens/AdministrativoHome.jsx
 import { useState } from "react";
-import { useAuth }           from "../context/AuthContext";
-import { useAppData }        from "../context/AppDataContext";
-import EditarPersonalScreen  from "./EditarPersonalScreen";
+import { useAuth }                from "../context/AuthContext";
+import { useAppData }             from "../context/AppDataContext";
+import GestionDatosAdminScreen   from "./GestionDatosAdminScreen";
+import DashboardPersonalScreen   from "./DashboardPersonalScreen";
 import "../styles/VigHome.css";
+import "../styles/GestionDatosAdminScreen.css";
 
 // ── Calendario semanal (idéntico al de VigHome) ────────────────────────────
 const DIAS_ES  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -77,14 +79,15 @@ function CalendarioSemanal({ actividades = {} }) {
 
 // ── Módulos del Administrativo ─────────────────────────────────────────────
 const MODULOS = [
-    { id: "muro_comunicacion", icon: "📢", titulo: "Muro de Comunicación y Novedades", desc: "Novedades y comunicados de tu empresa"          },
-    { id: "planillas",         icon: "📊", titulo: "Planillas",                         desc: "Consultá las planillas operativas"              },
-    { id: "informes",          icon: "📄", titulo: "Informes",                          desc: "Creá o consultá informes"                       },
-    { id: "turnos",            icon: "🕐", titulo: "Turnos de trabajo",                 desc: "Gestioná los turnos del personal"               },
-    { id: "legajos",           icon: "📋", titulo: "Legajos",                           desc: "Legajos del personal del contrato"              },
-    { id: "facturacion",       icon: "💰", titulo: "Facturación",                       desc: "Gestión de facturación"                         },
-    { id: "control_horas",     icon: "⏱️", titulo: "Control de horas",                  desc: "Control de horas trabajadas"                    },
-    { id: "ausentismo",        icon: "📉", titulo: "Ausentismo",                        desc: "Registro y seguimiento de ausentismo"           },
+    { id: "muro_comunicacion", icon: "📢", titulo: "Muro de Comunicación y Novedades", desc: "Novedades y comunicados de tu empresa"                     },
+    { id: "planillas",         icon: "📊", titulo: "Planillas",                         desc: "Consultá las planillas operativas"                         },
+    { id: "informes",          icon: "📄", titulo: "Informes",                          desc: "Creá o consultá informes"                                  },
+    { id: "turnos",            icon: "🕐", titulo: "Turnos de trabajo",                 desc: "Gestioná los turnos del personal"                          },
+    { id: "actualizacion_datos", icon: "🗂️", titulo: "Actualización de Datos",         desc: "Editá legajos, clientes, objetivos, vehículos y más"       },
+    { id: "dashboard_personal",  icon: "👥", titulo: "Dashboard de personal",          desc: "Estado y novedades del personal"                            },
+    { id: "facturacion",       icon: "💰", titulo: "Facturación",                       desc: "Gestión de facturación"                                    },
+    { id: "control_horas",     icon: "⏱️", titulo: "Control de horas",                  desc: "Control de horas trabajadas"                               },
+    { id: "ausentismo",        icon: "📉", titulo: "Ausentismo",                        desc: "Registro y seguimiento de ausentismo"                      },
 ];
 
 export default function AdministrativoHome({ user: propUser, onLogout }) {
@@ -110,11 +113,20 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
         </header>
     );
 
-    if (seccion === "legajos") {
+    if (seccion === "actualizacion_datos") {
+        return (
+            <div className="gd-page">
+                {header}
+                <GestionDatosAdminScreen onBack={() => setSeccion(null)} />
+            </div>
+        );
+    }
+
+    if (seccion === "dashboard_personal") {
         return (
             <div className="vh-root">
                 {header}
-                <EditarPersonalScreen onBack={() => setSeccion(null)} />
+                <DashboardPersonalScreen onBack={() => setSeccion(null)} />
             </div>
         );
     }
@@ -143,7 +155,10 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
             <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} />
 
             <div className="vh-grid">
-                {MODULOS.map(m => (
+                {(user?.permisosModulos != null
+                    ? MODULOS.filter(m => user.permisosModulos.includes(m.id))
+                    : MODULOS
+                ).map(m => (
                     <button
                         key={m.id}
                         className="vh-modulo"

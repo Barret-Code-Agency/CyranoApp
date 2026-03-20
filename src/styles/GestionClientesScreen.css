@@ -268,3 +268,7 @@
     border-radius: var(--radius-md);
     padding: 8px 12px; font-size: 13px;
 }
+
+/* ── Seed / import actions ── */
+.gc-seed-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.gc-btn--success { background: var(--color-success, #22c55e); }

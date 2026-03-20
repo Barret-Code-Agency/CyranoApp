@@ -1,0 +1,227 @@
+/* src/styles/JornadaDetalle.css */
+
+/* ── Per-category color tokens ── */
+.jd-cat--ctrl     { --jd-color:#003087; --jd-bg:#eef2ff; --jd-border:#003087; }
+.jd-cat--cap      { --jd-color:#7c3aed; --jd-bg:#f5f3ff; --jd-border:#7c3aed; }
+.jd-cat--traslado { --jd-color:#0369a1; --jd-bg:#f0f9ff; --jd-border:#0ea5e9; }
+.jd-cat--admin    { --jd-color:#374151; --jd-bg:#f3f4f6; --jd-border:#6b7280; }
+.jd-cat--vulnerab { --jd-color:#b45309; --jd-bg:#fffbeb; --jd-border:#d97706; }
+.jd-cat--reclamos { --jd-color:#dc2626; --jd-bg:#fef2f2; --jd-border:#dc2626; }
+.jd-cat--almuerzo { --jd-color:#15803d; --jd-bg:#f0fdf4; --jd-border:#16a34a; }
+.jd-cat--taller   { --jd-color:#6b7280; --jd-bg:#f9fafb; --jd-border:#9ca3af; }
+.jd-cat--gremial  { --jd-color:#6d28d9; --jd-bg:#faf5ff; --jd-border:#a78bfa; }
+.jd-cat--otras    { --jd-color:#6b7280; --jd-bg:#f3f4f6; --jd-border:#d1d5db; }
+
+/* ── Overlay ── */
+.jd-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+/* ── Modal ── */
+.jd-modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 700px;
+    margin: 8px 0;
+    box-shadow: 0 20px 60px rgba(0,45,114,0.3);
+}
+
+/* ── Header ── */
+.jd-header {
+    background: linear-gradient(135deg, #002d72, #003f9a);
+    border-radius: 16px 16px 0 0;
+    padding: 16px 20px;
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+.jd-header-label {
+    font-size: 11px;
+    opacity: 0.7;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+.jd-header-id {
+    font-size: 20px;
+    font-weight: 800;
+    margin-top: 2px;
+}
+.jd-header-sub {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 4px;
+}
+.jd-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.jd-btn-pdf {
+    background: #c9a227;
+    border: none;
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 1;
+}
+.jd-btn-pdf--loading { opacity: 0.7; }
+.jd-btn-close {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* ── Metrics grid ── */
+.jd-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: #e8eaf2;
+}
+.jd-metric-cell {
+    background: #f8f9fc;
+    padding: 12px 8px;
+    text-align: center;
+}
+.jd-metric-icon { font-size: 18px; }
+.jd-metric-val  { font-weight: 800; font-size: 14px; color: #0d1b3e; margin-top: 2px; }
+.jd-metric-lbl  { font-size: 10px; color: #8894ac; font-weight: 600; }
+
+/* ── Km bar ── */
+.jd-km-bar {
+    padding: 10px 20px;
+    border-bottom: 1px solid #f0f2f7;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: #555;
+    align-items: center;
+}
+.jd-km-netos { color: #003087; font-weight: 700; }
+
+/* ── Category summary ── */
+.jd-resumen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    background: #e8eaf2;
+    border-bottom: 1px solid #e8eaf2;
+}
+.jd-resumen-cell {
+    background: var(--jd-bg);
+    padding: 10px 8px;
+    text-align: center;
+    flex: 1 1 80px;
+    min-width: 80px;
+}
+.jd-resumen-icon  { font-size: 15px; }
+.jd-resumen-count { font-weight: 800; font-size: 13px; color: var(--jd-color); margin-top: 1px; }
+.jd-resumen-time  { font-weight: 700; font-size: 11px; color: var(--jd-color); }
+.jd-resumen-label { font-size: 9px; color: #8894ac; font-weight: 600; margin-top: 1px; }
+
+/* ── Activities section ── */
+.jd-acts { padding: 16px 20px; }
+.jd-cat-group { margin-bottom: 14px; }
+.jd-cat-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--jd-color);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.jd-cat-badge {
+    background: var(--jd-bg);
+    padding: 2px 8px;
+    border-radius: 99px;
+}
+
+/* ── Activity cards ── */
+.jd-card {
+    background: #f8f9fc;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border-left: 3px solid var(--jd-border);
+    font-size: 12px;
+}
+.jd-card--anomalia { border-left-color: #dc2626; }
+.jd-card-title { font-weight: 700; color: #0d1b3e; }
+.jd-card-title--mb { font-weight: 700; color: #0d1b3e; margin-bottom: 2px; }
+.jd-card-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: #8894ac;
+    margin-top: 4px;
+}
+.jd-card-anomaly-tag { color: #dc2626; font-weight: 700; }
+.jd-card-obs { margin-top: 4px; font-size: 11px; color: #555; font-style: italic; }
+.jd-card-detail { color: #555; margin-bottom: 2px; }
+
+/* ── Empty state ── */
+.jd-empty { text-align: center; color: #aaa; padding: 16px; font-size: 13px; }
+
+/* ── Anomalies block ── */
+.jd-anomalias { margin-top: 14px; }
+.jd-anomalias-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: #dc2626;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+.jd-anomalias-badge { background: #fef2f2; padding: 2px 8px; border-radius: 99px; }
+.jd-anomalia-card {
+    background: #fef2f2;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    border-left: 3px solid #dc2626;
+    font-size: 12px;
+}
+.jd-anomalia-nombre { font-weight: 700; color: #991b1b; }
+.jd-anomalia-obs    { color: #8894ac; margin-top: 2px; }
+
+/* ── Novedades block ── */
+.jd-novedades { margin-top: 14px; }
+.jd-novedades-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: #92400e;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+.jd-novedades-badge { background: #fffbeb; padding: 2px 8px; border-radius: 99px; }
+.jd-novedades-text {
+    background: #fffbeb;
+    border-radius: 8px;
+    padding: 10px 12px;
+    border-left: 3px solid #f59e0b;
+    font-size: 12px;
+    color: #1c1917;
+    line-height: 1.5;
+}

@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useClientesData } from "../hooks/useClientesData";
+import { fmtObjetivo }    from "../utils/formatters";
 import "../styles/GestionClientesScreen.css";
 
 export default function GestionClientesScreen({ onBack }) {
@@ -198,7 +199,7 @@ export default function GestionClientesScreen({ onBack }) {
                                 <div className="gc-item-main">
                                     <div className="gc-item-nombre-row">
                                         {o.codigo && <span className="gc-item-badge">{o.codigo}</span>}
-                                        <strong>{o.proyecto} — {o.nombre}</strong>
+                                        <strong>{o.proyecto} - {o.nombre}</strong>
                                     </div>
                                     {o.domicilio && <span className="gc-item-sub">📍 {o.domicilio}</span>}
                                 </div>
@@ -231,8 +232,8 @@ export default function GestionClientesScreen({ onBack }) {
             <div className="gc-body">
                 <div className="gc-section-bar">
                     <span>Clientes</span>
-                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        <button className="gc-add-btn" style={{ background: "var(--color-success, #22c55e)" }}
+                    <div className="gc-seed-actions">
+                        <button className="gc-add-btn gc-btn--success"
                             onClick={handleSeed} disabled={seedeando}>
                             {seedeando ? "Importando..." : "📥 Importar / actualizar datos"}
                         </button>

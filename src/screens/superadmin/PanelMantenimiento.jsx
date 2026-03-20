@@ -24,14 +24,7 @@ const COLECCIONES = [
         label: "Objetivos / Servicios",
         icon:  "📍",
         keyFn: d => d.nombre || d.direccion || null,
-        desc:  "Objetivos y puestos de servicio",
-    },
-    {
-        id:    "puestos",
-        label: "Puestos",
-        icon:  "🚪",
-        keyFn: d => d.nombre || d.codigo || null,
-        desc:  "Puestos físicos dentro de los objetivos",
+        desc:  "Objetivos de servicio",
     },
     {
         id:    "supervisores",
@@ -132,8 +125,6 @@ function CardLimpiador({ col }) {
         }
     };
 
-    const colorLog = { ok: "var(--color-success)", warn: "var(--color-warn)", err: "#ef4444", info: "var(--color-muted)" };
-
     return (
         <div className={`sa-mant-card sa-mant-card--col ${abierto ? "sa-mant-card--open" : ""}`}>
             {/* Header colapsable */}
@@ -171,19 +162,19 @@ function CardLimpiador({ col }) {
                                 <span className="sa-mant-res-lbl">Total</span>
                             </div>
                             <div className="sa-mant-res-item">
-                                <span className="sa-mant-res-val" style={{ color: analisis.duplicados.length ? "var(--color-warn)" : "var(--color-success)" }}>
+                                <span className={`sa-mant-res-val ${analisis.duplicados.length ? "pm-status--warn" : "pm-status--ok"}`}>
                                     {analisis.duplicados.length}
                                 </span>
                                 <span className="sa-mant-res-lbl">Duplicados</span>
                             </div>
                             <div className="sa-mant-res-item">
-                                <span className="sa-mant-res-val" style={{ color: analisis.totalSobrantes ? "#ef4444" : "var(--color-success)" }}>
+                                <span className={`sa-mant-res-val ${analisis.totalSobrantes ? "pm-status--err" : "pm-status--ok"}`}>
                                     {analisis.totalSobrantes}
                                 </span>
                                 <span className="sa-mant-res-lbl">Sobrantes</span>
                             </div>
                             <div className="sa-mant-res-item">
-                                <span className="sa-mant-res-val" style={{ color: "var(--color-success)" }}>
+                                <span className="sa-mant-res-val pm-status--ok">
                                     {analisis.total - analisis.totalSobrantes}
                                 </span>
                                 <span className="sa-mant-res-lbl">Quedarán</span>
@@ -194,7 +185,7 @@ function CardLimpiador({ col }) {
                     {log.length > 0 && (
                         <div className="sa-mant-log">
                             {log.map((l, i) => (
-                                <div key={i} className="sa-mant-log-line" style={{ color: colorLog[l.tipo] }}>
+                                <div key={i} className={`sa-mant-log-line pm-log--${l.tipo}`}>
                                     <span className="sa-mant-log-ts">{l.ts}</span>{l.msg}
                                 </div>
                             ))}

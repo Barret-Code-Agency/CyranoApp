@@ -8,6 +8,7 @@ import { useAppData } from "../context/AppDataContext";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db }         from "../firebase";
 import { generarPDFInformeSencillo } from "../utils/generarPDFInforme";
+import { fmtObjetivo } from "../utils/formatters";
 import { useClientesData } from "../hooks/useClientesData";
 import "./InformeSencilloScreen.css";
 
@@ -37,7 +38,6 @@ export default function InformeSencilloScreen({ onBack }) {
 
     const [selCliente,  setSelCliente]  = useState("");
     const [selObjetivo, setSelObjetivo] = useState("");
-    const [selPuesto,   setSelPuesto]   = useState("");
 
     const [firmado,       setFirmado]       = useState(false);
     const [firmaDataUrl,  setFirmaDataUrl]  = useState(null);
@@ -46,11 +46,9 @@ export default function InformeSencilloScreen({ onBack }) {
     const [guardadoCodigo,setGuardadoCodigo]= useState(null);
     const [error,         setError]         = useState(null);
 
-    const { clientes, objetivos, puestos } = useClientesData(empresaNombre);
+    const { clientes, objetivos } = useClientesData(empresaNombre);
 
     const objetivosFiltrados = objetivos.filter(o => o.clienteId === selCliente);
-    const puestosFiltrados   = puestos.filter(p => p.objetivoId === selObjetivo);
-    const puestoObj          = puestos.find(p => p.id === selPuesto);
     const clienteObj         = clientes.find(c => c.id === selCliente);
     const objetivoObj        = objetivos.find(o => o.id === selObjetivo);
 
@@ -120,7 +118,7 @@ export default function InformeSencilloScreen({ onBack }) {
 
     const set = (field, val) => setForm(p => ({ ...p, [field]: val }));
 
-    const canSubmit = selCliente && selObjetivo && selPuesto && form.fechaHecho && form.ref && form.cuerpo && firmado;
+    const canSubmit = selCliente && selObjetivo && form.fechaHecho && form.ref && form.cuerpo && firmado;
 
     const handleGuardar = async () => {
         if (!canSubmit) return;
@@ -135,10 +133,10 @@ export default function InformeSencilloScreen({ onBack }) {
                 clienteNombre:      clienteObj?.nombre      || "",
                 objetivoId:         selObjetivo,
                 objetivoNombre:     objetivoObj?.nombre     || "",
-                puestoId:           selPuesto,
-                puestoNombre:       puestoObj?.nombre       || "",
-                direccion:          puestoObj?.direccion    || "",
-                telefono:           puestoObj?.telefono     || "",
+                puestoId:           selObjetivo,
+                puestoNombre:       objetivoObj?.nombre     || "",
+                direccion:          objetivoObj?.domicilio  || "",
+                telefono:           objetivoObj?.telefono   || "",
                 fecha:              form.fechaHecho,
                 fechaConfeccion,
                 horaConfeccion,
@@ -165,9 +163,9 @@ export default function InformeSencilloScreen({ onBack }) {
         generarPDFInformeSencillo({
             objetivo:           objetivoObj?.nombre     || "",
             cliente:            clienteObj?.nombre      || "",
-            puesto:             puestoObj?.nombre       || "",
-            direccion:          puestoObj?.direccion    || "",
-            telefono:           puestoObj?.telefono     || "",
+            puesto:             objetivoObj?.nombre     || "",
+            direccion:          objetivoObj?.domicilio  || "",
+            telefono:           objetivoObj?.telefono   || "",
             fecha:              form.fechaHecho,
             fechaConfeccion,
             horaConfeccion,
@@ -252,10 +250,10 @@ export default function InformeSencilloScreen({ onBack }) {
                         <label className="is-label">Objetivo / Servicio</label>
                         <select className="is-input is-select"
                             value={selObjetivo}
-                            onChange={e => { setSelObjetivo(e.target.value); setSelPuesto(""); }}
+                            onChange={e => setSelObjetivo(e.target.value)}
                             disabled={!selCliente}>
                             <option value="">— Seleccioná objetivo —</option>
-                            {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+                            {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{fmtObjetivo(o)}</option>)}
                         </select>
                     </div>
                     <div className="is-field is-field--date">
@@ -265,28 +263,16 @@ export default function InformeSencilloScreen({ onBack }) {
                     </div>
                 </div>
 
-                {/* Puesto */}
-                <div className="is-field">
-                    <label className="is-label">Puesto</label>
-                    <select className="is-input is-select"
-                        value={selPuesto}
-                        onChange={e => setSelPuesto(e.target.value)}
-                        disabled={!selObjetivo}>
-                        <option value="">— Seleccioná puesto —</option>
-                        {puestosFiltrados.sort((a,b) => (a.numero??999)-(b.numero??999)).map(p => <option key={p.id} value={p.id}>{clienteObj?.codigo ? `${clienteObj.codigo}/${p.numero ?? "?"} · ` : ""}{p.nombre}</option>)}
-                    </select>
-                </div>
-
-                {/* Dirección y teléfono (auto, readonly) */}
-                {puestoObj && (
+                {/* Dirección y teléfono (auto desde objetivo, readonly) */}
+                {objetivoObj && (
                     <div className="is-row2">
                         <div className="is-field is-field--grow">
                             <label className="is-label">Dirección</label>
-                            <input className="is-input is-input--readonly" value={puestoObj.direccion || "—"} readOnly />
+                            <input className="is-input is-input--readonly" value={objetivoObj.domicilio || "—"} readOnly />
                         </div>
                         <div className="is-field is-field--date">
                             <label className="is-label">Teléfono</label>
-                            <input className="is-input is-input--readonly" value={puestoObj.telefono || "—"} readOnly />
+                            <input className="is-input is-input--readonly" value={objetivoObj.telefono || "—"} readOnly />
                         </div>
                     </div>
                 )}

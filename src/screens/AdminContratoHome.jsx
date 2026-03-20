@@ -10,7 +10,11 @@ import MonitorRondasScreen     from "./MonitorRondasScreen";
 import VerInformesScreen       from "../forms/VerInformesScreen";
 import GestionClientesScreen   from "./GestionClientesScreen";
 import GestionPersonalScreen   from "./GestionPersonalScreen";
-import DashboardPersonalScreen from "./DashboardPersonalScreen";
+import DashboardPersonalScreen  from "./DashboardPersonalScreen";
+import GestionDatosAdminScreen    from "./GestionDatosAdminScreen";
+import PlanCapacitacionScreen          from "./PlanCapacitacionScreen";
+import ProgramacionServiciosScreen    from "./ProgramacionServiciosScreen";
+import ConsolidadoScreen             from "./ConsolidadoScreen";
 import "../styles/SupervisorHome.css";
 
 const MODULOS = [
@@ -45,7 +49,7 @@ const MODULOS = [
     {
         id:     "turnos",
         icon:   "📅",
-        titulo: "Turnos de trabajo",
+        titulo: "Gestión de horas",
         desc:   "Cargá y gestioná los turnos del personal del contrato",
         color:  "blue",
     },
@@ -104,6 +108,7 @@ export default function AdminContratoHome({ onExit }) {
     const { user, logout }                              = useAuth();
     const { empresaLogos, empresaNombre, empresaModulos } = useAppData();
     const [seccion, setSeccion]           = useState(null);
+    const [subSeccion, setSubSeccion]     = useState(null);
 
     const handleLogout = async () => { await logout(); onExit?.(); };
 
@@ -119,7 +124,7 @@ export default function AdminContratoHome({ onExit }) {
                 </div>
             </div>
             {conVolver
-                ? <button className="sh-back-btn sh-back-btn--header" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                ? <button className="sh-back-btn sh-back-btn--header" onClick={() => { setSeccion(null); setSubSeccion(null); }}>← Volver al panel</button>
                 : <button className="sh-logout-btn" onClick={handleLogout}>🚪</button>
             }
         </header>
@@ -137,7 +142,7 @@ export default function AdminContratoHome({ onExit }) {
     // Monitor de rondas
     if (seccion === "rondas_monitor") {
         return (
-            <div className="sh-supervision-wrapper" style={{ maxWidth:"100%" }}>
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 <MonitorRondasScreen onBack={() => setSeccion(null)} />
             </div>
         );
@@ -167,7 +172,7 @@ export default function AdminContratoHome({ onExit }) {
                 <div className="sh-section-title-bar">
                     🔍 Supervisión — Plan, cumplimiento y carga
                 </div>
-                <div style={{ padding: "var(--space-4) var(--space-3)" }}>
+                <div className="sh-admin-content">
                     <AdminScreen embedded onExit={() => setSeccion(null)} />
                 </div>
             </div>
@@ -182,16 +187,127 @@ export default function AdminContratoHome({ onExit }) {
         );
     }
 
+    if (seccion === "gestion_datos") {
+        return (
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                <GestionDatosAdminScreen onBack={() => setSeccion(null)} canCreate={true} />
+            </div>
+        );
+    }
+
     if (seccion === "dashboard_personal") {
         return (
-            <div className="sh-supervision-wrapper" style={{ maxWidth: "100%" }}>
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 <DashboardPersonalScreen onBack={() => setSeccion(null)} />
+            </div>
+        );
+    }
+
+    if (seccion === "plan_capacitacion") {
+        if (subSeccion === "santa_cruz") {
+            return (
+                <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                    <PlanCapacitacionScreen onBack={() => setSubSeccion(null)} />
+                </div>
+            );
+        }
+        if (subSeccion === "bs_as") {
+            return (
+                <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                    <div className="sh-proximamente">
+                        <div className="sh-proximamente-icon">🚧</div>
+                        <div className="sh-proximamente-titulo">Plan Bs As — Próximamente</div>
+                        <button className="sh-back-btn sh-back-btn--mt" onClick={() => setSubSeccion(null)}>← Volver</button>
+                    </div>
+                </div>
+            );
+        }
+        // Menú de zonas
+        const ZONAS = [
+            { id: "santa_cruz", icon: "🏔️", titulo: "Plan Santa Cruz",   desc: "Plan anual de capacitación zona Patagonia", color: "blue" },
+            { id: "bs_as",      icon: "🏙️", titulo: "Plan Buenos Aires", desc: "Plan anual de capacitación zona Buenos Aires", color: "green" },
+        ];
+        return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader(true)}
+                <div className="sh-grid">
+                    {ZONAS.map(z => (
+                        <button
+                            key={z.id}
+                            className={`sh-modulo sh-modulo--${z.color}`}
+                            onClick={() => setSubSeccion(z.id)}
+                        >
+                            <span className="sh-modulo-icon">{z.icon}</span>
+                            <div className="sh-modulo-info">
+                                <strong>{z.titulo}</strong>
+                                <small>{z.desc}</small>
+                            </div>
+                            <span className="sh-modulo-arrow">›</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    // Turnos → submenú: Programación / Vista
+    if (seccion === "turnos") {
+        if (subSeccion === "programacion") {
+            return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    <ProgramacionServiciosScreen onBack={() => setSubSeccion(null)} />
+                </div>
+            );
+        }
+        if (subSeccion === "vista") {
+            return (
+                <div className="sh-supervision-wrapper">
+                    <div className="sh-proximamente">
+                        <div className="sh-proximamente-icon">🚧</div>
+                        <div className="sh-proximamente-titulo">Vista de turnos — Próximamente</div>
+                        <button className="sh-back-btn sh-back-btn--mt" onClick={() => setSubSeccion(null)}>← Volver</button>
+                    </div>
+                </div>
+            );
+        }
+        if (subSeccion === "consolidado") {
+            return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    <ConsolidadoScreen onBack={() => setSubSeccion(null)} />
+                </div>
+            );
+        }
+        const TURNOS_MENUS = [
+            { id: "programacion", icon: "📋", titulo: "Programación", desc: "Cargá y editá la planilla de servicios del personal", color: "blue" },
+            { id: "vista",        icon: "📊", titulo: "Vista",        desc: "Visualizá el estado de la programación mensual",  color: "blue" },
+            { id: "consolidado",  icon: "📑", titulo: "Consolidado",  desc: "Resumen consolidado de horas por período",         color: "blue" },
+        ];
+        return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader(true)}
+                <div className="sh-grid">
+                    {TURNOS_MENUS.map(z => (
+                        <button
+                            key={z.id}
+                            className={`sh-modulo sh-modulo--${z.color}`}
+                            onClick={() => setSubSeccion(z.id)}
+                        >
+                            <span className="sh-modulo-icon">{z.icon}</span>
+                            <div className="sh-modulo-info">
+                                <strong>{z.titulo}</strong>
+                                <small>{z.desc}</small>
+                            </div>
+                            <span className="sh-modulo-arrow">›</span>
+                        </button>
+                    ))}
+                </div>
             </div>
         );
     }
 
     // Resto de secciones — placeholder
     if (seccion) {
+
         const mod = MODULOS.find(m => m.id === seccion);
         return (
             <div className="sh-root">
@@ -217,7 +333,7 @@ export default function AdminContratoHome({ onExit }) {
                             key={m.id}
                             className={`sh-modulo sh-modulo--${m.color} ${!habilitado ? "sh-modulo--disabled" : ""}`}
                             disabled={!habilitado}
-                            onClick={() => habilitado && setSeccion(m.id)}
+                            onClick={() => { if (habilitado) { setSubSeccion(null); setSeccion(m.id); } }}
                         >
                             <span className="sh-modulo-icon">{m.icon}</span>
                             <div className="sh-modulo-info">

@@ -116,6 +116,115 @@
     border: 1px dashed var(--color-border2);
 }
 
+/* ── Calendario cumpleaños ── */
+.dp-cumple-wrap {
+    background: var(--color-surface);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-3) var(--space-4);
+    box-shadow: var(--shadow-sm);
+}
+
+.dp-cumple-titulo {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: var(--space-3);
+}
+
+.dp-cumple-strip {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--space-2);
+}
+
+.dp-cumple-dia {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: var(--space-2) var(--space-1);
+    border-radius: var(--radius-lg);
+    border: 1.5px solid var(--color-border);
+    background: var(--color-surface2);
+    min-height: 90px;
+    transition: border-color 0.15s;
+}
+
+.dp-cumple-dia--hoy {
+    border-color: var(--color-primary);
+    background: var(--color-primary-ghost, #f0f2ff);
+}
+
+.dp-cumple-dia--tiene {
+    border-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.dp-cumple-dia--hoy.dp-cumple-dia--tiene {
+    border-color: #f59e0b;
+    background: #fef3c7;
+}
+
+.dp-cumple-dayname {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.dp-cumple-daynum {
+    font-size: var(--text-xl, 1.25rem);
+    font-weight: 900;
+    color: var(--color-text);
+    line-height: 1;
+}
+
+.dp-cumple-dia--hoy .dp-cumple-daynum { color: var(--color-primary); }
+
+.dp-cumple-mes {
+    font-size: 0.6rem;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.dp-cumple-lista {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    margin-top: var(--space-1);
+    width: 100%;
+}
+
+.dp-cumple-vacio {
+    font-size: var(--text-xs);
+    color: var(--color-border2);
+}
+
+.dp-cumple-nombre {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: #92400e;
+    background: #fde68a;
+    border-radius: 999px;
+    padding: 0.1rem 0.4rem;
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+
+@media (max-width: 600px) {
+    .dp-cumple-strip { grid-template-columns: repeat(7, 1fr); gap: var(--space-1); }
+    .dp-cumple-daynum { font-size: var(--text-base); }
+    .dp-cumple-nombre { font-size: 0.55rem; }
+}
+
 /* ── KPIs ── */
 .dp-kpis {
     display: grid;
@@ -220,6 +329,8 @@
     height: 100%;
     border-radius: var(--radius-full);
     transition: width 0.6s ease;
+    width: var(--dp-bar-w);
+    background: var(--dp-bar-color);
 }
 .dp-bar-val {
     font-size: var(--text-xs);
@@ -243,6 +354,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    background: conic-gradient(var(--dp-color-fem, #ec4899) 0deg var(--dp-deg), var(--color-primary) var(--dp-deg) 360deg);
 }
 .dp-donut-inner {
     width: 68px; height: 68px;
@@ -282,6 +394,8 @@
     border-radius: 50%;
     flex-shrink: 0;
 }
+.dp-donut-dot--primary { background: var(--color-primary); }
+.dp-donut-dot--fem { background: var(--dp-color-fem, #ec4899); }
 
 /* ── Tabla ── */
 .dp-tabla-filtros {
@@ -363,6 +477,26 @@
 .dp-td-nombre { font-weight: 600; }
 .dp-td-muted  { color: var(--color-muted); }
 .dp-td-num    { text-align: right; font-variant-numeric: tabular-nums; }
+.dp-td-alert  { color: #dc2626; font-weight: 700; }
+
+.dp-jubilacion-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #dc2626;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    margin-left: var(--space-2);
+}
+
+.dp-empty-inline {
+    padding: var(--space-3) 0;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+}
 
 /* Tags función */
 .dp-tag {

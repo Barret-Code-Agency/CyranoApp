@@ -704,6 +704,17 @@
     color: var(--color-border2);
 }
 
+/* ── PanelMantenimiento status colors ── */
+.pm-status--ok   { color: var(--color-success); }
+.pm-status--warn { color: var(--color-warn); }
+.pm-status--err  { color: #ef4444; }
+
+/* ── PanelMantenimiento log line colors ── */
+.pm-log--ok   { color: var(--color-success); }
+.pm-log--warn { color: var(--color-warn); }
+.pm-log--err  { color: #ef4444; }
+.pm-log--info { color: var(--color-muted); }
+
 .sa-mant-form {}
 .sa-mant-form-header {
     display: flex;

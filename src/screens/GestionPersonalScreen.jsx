@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useAppData }       from "../context/AppDataContext";
 import { usePersonalData }  from "../hooks/usePersonalData";
 import { useClientesData }  from "../hooks/useClientesData";
+import { fmtObjetivo }      from "../utils/formatters";
 import {
     collection, addDoc, updateDoc, deleteDoc,
     doc, serverTimestamp, getDocs, query, where, deleteField,
@@ -14,10 +15,67 @@ import { LEGAJOS_SEED } from "../data/legajosSeed";
 import "../styles/GestionClientesScreen.css";   // reutiliza gc- base
 import "../styles/GestionPersonalScreen.css";    // clases gp- específicas
 
+// ── Módulos habilitables (todos los perfiles, sin iconos) ─────────────────────
+const MODULOS_POR_PERFIL = [
+    {
+        perfil: "Administrativo",
+        modulos: [
+            { id: "muro_comunicacion",  label: "Muro de Comunicación y Novedades" },
+            { id: "planillas",          label: "Planillas"                         },
+            { id: "informes",           label: "Informes"                          },
+            { id: "turnos",             label: "Turnos de trabajo"                 },
+            { id: "actualizacion_datos",label: "Actualización de Datos"            },
+            { id: "dashboard_personal", label: "Dashboard de Personal"             },
+            { id: "facturacion",        label: "Facturación"                       },
+            { id: "control_horas",      label: "Control de horas"                  },
+            { id: "ausentismo",         label: "Ausentismo"                        },
+        ],
+    },
+    {
+        perfil: "Supervisor",
+        modulos: [
+            { id: "muro_comunicacion",             label: "Muro de Comunicación y Novedades"       },
+            { id: "supervision",                   label: "Supervisión"                            },
+            { id: "rondas_plantillas",             label: "Cargar plantillas de ronda"             },
+            { id: "control_actividades_vigilador", label: "Control de Actividades Vigilador"       },
+            { id: "redactar_informe",              label: "Redactar informe"                       },
+            { id: "turnos",                        label: "Turnos de trabajo"                      },
+            { id: "auditoria_puesto",              label: "Auditoría de Puesto"                    },
+            { id: "felicitaciones_sanciones",      label: "Registro de Felicitaciones y Sanciones" },
+            { id: "informe_gestion",               label: "Informe de Gestión"                     },
+            { id: "informe_visita",                label: "Informe de Visita al Cliente"           },
+            { id: "dashboard_personal",            label: "Dashboard de Personal"                  },
+            { id: "muro_procedimientos",           label: "Muro de Procedimientos"                 },
+            { id: "capacitacion",                  label: "Capacitación y Entrenamiento"           },
+        ],
+    },
+    {
+        perfil: "Vigilador",
+        modulos: [
+            { id: "muro_comunicacion",   label: "Muro de Comunicación y Novedades" },
+            { id: "libro_actas",         label: "Libro de Actas Digital"           },
+            { id: "realizar_ronda",      label: "Realizar Ronda"                   },
+            { id: "control_vehicular",   label: "Control de Vehículo"              },
+            { id: "planillas",           label: "Planillas"                        },
+            { id: "informes",            label: "Informes"                         },
+            { id: "turnos_ver",          label: "Mis Turnos"                       },
+            { id: "pedido_insumos",      label: "Pedido de Insumos"               },
+            { id: "inventarios",         label: "Inventarios"                      },
+            { id: "muro_procedimientos", label: "Muro de Procedimientos"           },
+            { id: "capacitacion",        label: "Capacitación y Entrenamiento"     },
+        ],
+    },
+];
+
 // ── Blancos por tipo ──────────────────────────────────────────────────────────
-const BLANK_SUPERVISOR = { nombre: "", legajo: "", email: "", telefono: "", objetivosAsignados: [] };
-const BLANK_VIGILADOR  = { nombre: "", legajo: "", dni: "", email: "", telefono: "", objetivoId: "", supervisorId: "" };
-const BLANK_ENCARGADO  = { nombre: "", legajo: "", dni: "", email: "", telefono: "", objetivoId: "", supervisorId: "" };
+const BLANK_SUPERVISOR = { nombre: "", legajo: "", modulosAcceso: [] };
+const BLANK_CONDUCTOR  = { nombre: "", legajo: "", modulosAcceso: [
+    "muro_comunicacion", "libro_actas", "realizar_ronda", "control_vehicular",
+    "planillas", "informes", "turnos_ver", "pedido_insumos",
+    "inventarios", "muro_procedimientos", "capacitacion",
+] }; // todos los módulos de vigilador
+const BLANK_ENCARGADO  = { nombre: "", legajo: "", modulosAcceso: [] };
+const BLANK_ADMIN      = { nombre: "", legajo: "", modulosAcceso: [] };
 
 const BLANK_LEGAJO     = {
     legajo: "", nombre: "", cargo: "", tarea: "", sexo: "",
@@ -48,10 +106,10 @@ function calcEdad(fecha) {
 export default function GestionPersonalScreen({ onBack }) {
     const { empresaNombre } = useAppData();
 
-    const { supervisores, vigiladores, encargados, cargando, recargar } = usePersonalData(empresaNombre);
-    const { clientes, objetivos, puestos } = useClientesData(empresaNombre);
+    const { supervisores, conductores, encargados, admins, cargando, recargar } = usePersonalData(empresaNombre);
+    const { clientes, objetivos } = useClientesData(empresaNombre);
 
-    const [tab,       setTab]      = useState("supervisores"); // "supervisores" | "vigiladores" | "encargados" | "legajos"
+    const [tab,       setTab]      = useState("supervisores"); // "supervisores" | "encargados" | "admin" | "conductores" | "legajos"
     const [editando,  setEditando] = useState(null);           // { tipo, id, campos }
     const [guardando, setGuardando] = useState(false);
     const [error,     setError]    = useState(null);
@@ -81,8 +139,9 @@ export default function GestionPersonalScreen({ onBack }) {
         try {
             const { tipo, id, campos } = editando;
             const coleccion = tipo === "supervisor" ? "supervisores"
-                            : tipo === "vigilador"  ? "vigiladores"
+                            : tipo === "conductor"  ? "conductores"
                             : tipo === "legajo"     ? "legajos"
+                            : tipo === "admin"      ? "admins"
                             :                         "encargados";
             let data;
 
@@ -107,57 +166,41 @@ export default function GestionPersonalScreen({ onBack }) {
                     foto:         campos.foto          || "",
                     empresa:      empresaNombre,
                 };
-            } else if (tipo === "encargado") {
-                const obj = objetivos.find(o => o.id === campos.objetivoId) || null;
-                const sup = supervisores.find(s => s.id === campos.supervisorId) || null;
-                data = {
-                    nombre:           campos.nombre.trim(),
-                    legajo:           campos.legajo   || "",
-                    dni:              campos.dni      || "",
-                    email:            campos.email    || "",
-                    telefono:         campos.telefono || "",
-                    empresa:          empresaNombre,
-                    objetivoId:       campos.objetivoId   || "",
-                    objetivoNombre:   obj?.nombre          || "",
-                    clienteId:        obj?.clienteId       || "",
-                    clienteNombre:    obj?.clienteNombre   || "",
-                    supervisorId:     campos.supervisorId  || "",
-                    supervisorNombre: sup?.nombre          || "",
-                    activo:           true,
-                };
-            } else if (tipo === "supervisor") {
-                data = {
-                    nombre:             campos.nombre.trim(),
-                    legajo:             campos.legajo    || "",
-                    email:              campos.email     || "",
-                    telefono:           campos.telefono  || "",
-                    empresa:            empresaNombre,
-                    objetivosAsignados: campos.objetivosAsignados || [],
-                    activo:             true,
-                };
             } else {
-                // Vigilador — asignación directa a objetivo (sin puesto)
-                const obj = objetivos.find(o => o.id === campos.objetivoId) || null;
-                const sup = supervisores.find(s => s.id === campos.supervisorId) || null;
                 data = {
-                    nombre:           campos.nombre.trim(),
-                    legajo:           campos.legajo   || "",
-                    dni:              campos.dni      || "",
-                    email:            campos.email    || "",
-                    telefono:         campos.telefono || "",
-                    empresa:          empresaNombre,
-                    objetivoId:       campos.objetivoId  || "",
-                    objetivoNombre:   obj?.nombre         || "",
-                    clienteId:        obj?.clienteId      || "",
-                    clienteNombre:    obj?.clienteNombre  || "",
-                    supervisorId:     campos.supervisorId  || "",
-                    supervisorNombre: sup?.nombre          || "",
-                    activo:           true,
+                    nombre:        campos.nombre.trim(),
+                    legajo:        campos.legajo || "",
+                    modulosAcceso: campos.modulosAcceso || [],
+                    empresa:       empresaNombre,
+                    activo:        true,
+                    ...(campos._uid ? { uid: campos._uid } : {}),
                 };
             }
 
             if (id) await updateDoc(doc(db, coleccion, id), data);
             else    await addDoc(collection(db, coleccion), { ...data, creadoEn: serverTimestamp() });
+
+            // Sincronizar permisosModulos en el doc de usuarios (para control de acceso real)
+            if (tipo !== "legajo") {
+                const targetUid = campos._uid || null;
+                if (targetUid) {
+                    await updateDoc(doc(db, "usuarios", targetUid), {
+                        permisosModulos: campos.modulosAcceso || [],
+                    });
+                } else {
+                    // Fallback: buscar por nombre (menos confiable)
+                    const uSnap = await getDocs(
+                        query(collection(db, "usuarios"), where("nombre", "==", campos.nombre.trim()))
+                    );
+                    if (uSnap.docs.length === 1) {
+                        await updateDoc(doc(db, "usuarios", uSnap.docs[0].id), {
+                            permisosModulos: campos.modulosAcceso || [],
+                        });
+                    } else if (uSnap.docs.length === 0) {
+                        console.warn("No se encontró usuario en 'usuarios' para:", campos.nombre);
+                    }
+                }
+            }
 
             if (tipo === "legajo") await cargarLegajos();
             else                   await recargar();
@@ -185,26 +228,22 @@ export default function GestionPersonalScreen({ onBack }) {
         tipo: "supervisor",
         id:   s?.id || null,
         campos: s ? {
-            nombre:             s.nombre,
-            legajo:             s.legajo    || "",
-            email:              s.email     || "",
-            telefono:           s.telefono  || "",
-            objetivosAsignados: s.objetivosAsignados || s.puestosAsignados || [],
+            nombre:        s.nombre,
+            legajo:        s.legajo        || "",
+            modulosAcceso: s.modulosAcceso || [],
+            _uid:          s.uid           || null,
         } : { ...BLANK_SUPERVISOR },
     });
 
-    const abrirVigilador = (v = null) => setEditando({
-        tipo: "vigilador",
+    const abrirConductor = (v = null) => setEditando({
+        tipo: "conductor",
         id:   v?.id || null,
         campos: v ? {
-            nombre:       v.nombre,
-            legajo:       v.legajo       || "",
-            dni:          v.dni          || "",
-            email:        v.email        || "",
-            telefono:     v.telefono     || "",
-            objetivoId:   v.objetivoId   || "",
-            supervisorId: v.supervisorId || "",
-        } : { ...BLANK_VIGILADOR },
+            nombre:        v.nombre,
+            legajo:        v.legajo        || "",
+            modulosAcceso: v.modulosAcceso || [],
+            _uid:          v.uid           || null,
+        } : { ...BLANK_CONDUCTOR },
     });
 
     const abrirLegajo = (l = null) => setEditando({
@@ -221,17 +260,25 @@ export default function GestionPersonalScreen({ onBack }) {
         } : { ...BLANK_LEGAJO },
     });
 
+    const abrirAdmin = (a = null) => setEditando({
+        tipo: "admin",
+        id:   a?.id || null,
+        campos: a ? {
+            nombre:        a.nombre,
+            legajo:        a.legajo        || "",
+            modulosAcceso: a.modulosAcceso || [],
+            _uid:          a.uid           || null,
+        } : { ...BLANK_ADMIN },
+    });
+
     const abrirEncargado = (e = null) => setEditando({
         tipo: "encargado",
         id:   e?.id || null,
         campos: e ? {
-            nombre:      e.nombre,
-            legajo:      e.legajo      || "",
-            dni:         e.dni         || "",
-            email:       e.email       || "",
-            telefono:    e.telefono    || "",
-            objetivoId:  e.objetivoId  || "",
-            supervisorId:e.supervisorId|| "",
+            nombre:        e.nombre,
+            legajo:        e.legajo        || "",
+            modulosAcceso: e.modulosAcceso || [],
+            _uid:          e.uid           || null,
         } : { ...BLANK_ENCARGADO },
     });
 
@@ -241,6 +288,40 @@ export default function GestionPersonalScreen({ onBack }) {
         const { tipo, id, campos } = editando;
         const setC = (k, v) => setEditando(e => ({ ...e, campos: { ...e.campos, [k]: v } }));
         const titulo = `${id ? "Editar" : "Nuevo/a"} ${tipo}`;
+
+        const [busquedaSup, setBusquedaSup] = useState("");
+
+        const seleccionarDeLegajo = async (l) => {
+            // Buscar el uid en la colección usuarios por nombre exacto
+            let foundUid = null;
+            try {
+                const uSnap = await getDocs(
+                    query(collection(db, "usuarios"), where("nombre", "==", l.nombre || ""))
+                );
+                if (uSnap.docs.length === 1) foundUid = uSnap.docs[0].id;
+            } catch (e) { console.warn("No se pudo buscar uid:", e); }
+
+            setEditando(e => ({
+                ...e,
+                campos: {
+                    ...e.campos,
+                    nombre:    l.nombre || "",
+                    legajo:    l.legajo || "",
+                    _legajoId: l.id,
+                    _uid:      foundUid,
+                },
+            }));
+            setBusquedaSup("");
+        };
+
+        const legajosFiltradosSup = busquedaSup.trim().length >= 1
+            ? legajos.filter(l => {
+                const q = busquedaSup.toLowerCase();
+                return (l.nombre  || "").toLowerCase().includes(q)
+                    || (l.legajo  || "").toLowerCase().includes(q)
+                    || (l.tarea   || "").toLowerCase().includes(q);
+              }).slice(0, 8)
+            : [];
 
         const toggleObjetivo = (o) => {
             const actual = campos.objetivosAsignados || [];
@@ -357,137 +438,95 @@ export default function GestionPersonalScreen({ onBack }) {
                         </div>
                     )}
 
-                    {/* ── Campos comunes (no legajo) ── */}
-                    {tipo !== "legajo" && (<>
-                    <label className="gc-label">Nombre completo *</label>
-                    <input className="gc-input" autoFocus
-                        value={campos.nombre || ""}
-                        onChange={e => setC("nombre", e.target.value)}
-                        placeholder="Apellido, Nombre..." />
-
-                    <label className="gc-label">Legajo / N° empleado</label>
-                    <input className="gc-input"
-                        value={campos.legajo || ""}
-                        onChange={e => setC("legajo", e.target.value)}
-                        placeholder="Ej: 12345" />
-
-                    {(tipo === "vigilador" || tipo === "encargado") && (
-                        <>
-                            <label className="gc-label">DNI</label>
-                            <input className="gc-input"
-                                value={campos.dni || ""}
-                                onChange={e => setC("dni", e.target.value)}
-                                placeholder="Ej: 30123456" />
-                        </>
-                    )}
-
-                    <label className="gc-label">Email</label>
-                    <input className="gc-input" type="email"
-                        value={campos.email || ""}
-                        onChange={e => setC("email", e.target.value)}
-                        placeholder="email@empresa.com" />
-
-                    <label className="gc-label">Teléfono</label>
-                    <input className="gc-input"
-                        value={campos.telefono || ""}
-                        onChange={e => setC("telefono", e.target.value)}
-                        placeholder="Ej: 11 1234-5678" />
-                    </>)}
-
-                    {/* Supervisor: asignar objetivos (checkboxes) */}
-                    {tipo === "supervisor" && objetivos.length > 0 && (
-                        <>
-                            <label className="gc-label">Objetivos asignados</label>
-                            <div className="gp-obj-list">
-                                {[...objetivos]
-                                    .sort((a, b) => (a.codigo || "").localeCompare(b.codigo || ""))
-                                    .map(o => {
-                                        const sel = (campos.objetivosAsignados || []).some(x => x.id === o.id);
-                                        const cli = clientes.find(c => c.id === o.clienteId);
-                                        const partes = [];
-                                        if (cli?.nombre) partes.push(cli.nombre);
-                                        if (o.nombre !== cli?.nombre) partes.push(o.nombre);
-                                        const etiqueta = partes.join(" — ");
-                                        return (
-                                            <label key={o.id} className={`gp-obj-check ${sel ? "gp-obj-check--sel" : ""}`}>
-                                                <input type="checkbox" checked={sel}
-                                                    onChange={() => toggleObjetivo(o)} />
-                                                <div className="gp-obj-texto">
-                                                    {o.codigo && <span className="gp-obj-id">{o.codigo}</span>}
-                                                    <strong>{etiqueta}</strong>
-                                                </div>
-                                            </label>
-                                        );
-                                    })
-                                }
+                    {/* ── Buscar en legajos (nuevo) ── */}
+                    {tipo !== "legajo" && !id && (
+                        campos.nombre ? (
+                            <div className="gp-sup-seleccionado">
+                                <div className="gp-sup-sel-info">
+                                    <span className="gp-sup-sel-nombre">{campos.nombre}</span>
+                                    {campos.legajo && <span className="gc-item-badge">Leg. {campos.legajo}</span>}
+                                </div>
+                                <button
+                                    className="gp-sup-cambiar"
+                                    onClick={() => setEditando(e => ({ ...e, campos: tipo === "encargado" ? { ...BLANK_ENCARGADO } : tipo === "admin" ? { ...BLANK_ADMIN } : tipo === "conductor" ? { ...BLANK_CONDUCTOR } : { ...BLANK_SUPERVISOR } }))}
+                                >
+                                    ✕ Cambiar
+                                </button>
                             </div>
-                        </>
+                        ) : (
+                            <div className="gp-sup-buscar">
+                                <input
+                                    className="gc-input"
+                                    autoFocus
+                                    placeholder="Buscar por nombre, legajo o función…"
+                                    value={busquedaSup}
+                                    onChange={e => setBusquedaSup(e.target.value)}
+                                />
+                                {legajosFiltradosSup.length > 0 && (
+                                    <div className="gp-sup-resultados">
+                                        {legajosFiltradosSup.map(l => (
+                                            <button
+                                                key={l.id}
+                                                className="gp-sup-resultado-item"
+                                                onClick={() => seleccionarDeLegajo(l)}
+                                            >
+                                                <span className="gp-sup-res-nombre">{l.nombre}</span>
+                                                <span className="gp-sup-res-meta">
+                                                    {l.legajo && `Leg. ${l.legajo}`}
+                                                    {l.legajo && l.tarea && " · "}
+                                                    {l.tarea}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {busquedaSup.trim().length >= 1 && legajosFiltradosSup.length === 0 && (
+                                    <div className="gp-sup-sin-resultados">Sin coincidencias en legajos.</div>
+                                )}
+                            </div>
+                        )
                     )}
 
-                    {/* Encargado: asignar objetivo y supervisor */}
-                    {tipo === "encargado" && (
-                        <>
-                            <label className="gc-label">Objetivo a cargo</label>
-                            <select className="gc-input gp-select"
-                                value={campos.objetivoId || ""}
-                                onChange={e => setC("objetivoId", e.target.value)}>
-                                <option value="">-- Sin objetivo asignado --</option>
-                                {[...objetivos]
-                                    .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                                    .map(o => (
-                                        <option key={o.id} value={o.id}>
-                                            {o.nombre}{o.clienteNombre ? ` · ${o.clienteNombre}` : ""}
-                                        </option>
-                                    ))
-                                }
-                            </select>
-
-                            <label className="gc-label">Supervisor a cargo</label>
-                            <select className="gc-input gp-select"
-                                value={campos.supervisorId || ""}
-                                onChange={e => setC("supervisorId", e.target.value)}>
-                                <option value="">-- Sin supervisor asignado --</option>
-                                {[...supervisores]
-                                    .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                                    .map(s => (
-                                        <option key={s.id} value={s.id}>{s.nombre}</option>
-                                    ))
-                                }
-                            </select>
-                        </>
+                    {/* ── Edición: mostrar nombre y legajo (solo lectura) ── */}
+                    {tipo !== "legajo" && id && (
+                        <div className="gp-sup-seleccionado">
+                            <div className="gp-sup-sel-info">
+                                <span className="gp-sup-sel-nombre">{campos.nombre}</span>
+                                {campos.legajo && <span className="gc-item-badge">Leg. {campos.legajo}</span>}
+                            </div>
+                        </div>
                     )}
 
-                    {/* Vigilador: asignar objetivo y supervisor */}
-                    {tipo === "vigilador" && (
-                        <>
-                            <label className="gc-label">Objetivo (cliente) asignado</label>
-                            <select className="gc-input gp-select"
-                                value={campos.objetivoId || ""}
-                                onChange={e => setC("objetivoId", e.target.value)}>
-                                <option value="">-- Sin objetivo asignado --</option>
-                                {[...objetivos]
-                                    .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                                    .map(o => (
-                                        <option key={o.id} value={o.id}>
-                                            {o.nombre}{o.clienteNombre ? ` · ${o.clienteNombre}` : ""}
-                                        </option>
-                                    ))
-                                }
-                            </select>
-
-                            <label className="gc-label">Supervisor a cargo</label>
-                            <select className="gc-input gp-select"
-                                value={campos.supervisorId || ""}
-                                onChange={e => setC("supervisorId", e.target.value)}>
-                                <option value="">-- Sin supervisor asignado --</option>
-                                {[...supervisores]
-                                    .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                                    .map(s => (
-                                        <option key={s.id} value={s.id}>{s.nombre}</option>
-                                    ))
-                                }
-                            </select>
-                        </>
+                    {/* ── Módulos habilitados (para todos excepto legajo, cuando hay persona) ── */}
+                    {tipo !== "legajo" && campos.nombre && (
+                        <div className="gp-modulos-wrap">
+                            {MODULOS_POR_PERFIL.map(grupo => (
+                                <div key={grupo.perfil} className="gp-modulos-grupo">
+                                    <div className="gp-modulos-grupo-titulo">{grupo.perfil}</div>
+                                    <div className="gp-modulos-lista">
+                                        {grupo.modulos.map(m => {
+                                            const activo = (campos.modulosAcceso || []).includes(m.id);
+                                            return (
+                                                <label key={m.id} className={`gp-modulo-check ${activo ? "gp-modulo-check--on" : ""}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={activo}
+                                                        onChange={() => {
+                                                            const prev = campos.modulosAcceso || [];
+                                                            setC("modulosAcceso", activo
+                                                                ? prev.filter(x => x !== m.id)
+                                                                : [...prev, m.id]
+                                                            );
+                                                        }}
+                                                    />
+                                                    <span>{m.label}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     )}
 
                     {error && <div className="gc-error">{error}</div>}
@@ -543,6 +582,65 @@ export default function GestionPersonalScreen({ onBack }) {
         migrar().catch(console.error);
     }, [legajos.length]); // eslint-disable-line
 
+    // ── Aplicar módulos nuevos a supervisores ─────────────────
+    const [aplicandoSup, setAplicandoSup] = useState(false);
+    const MODULOS_NUEVOS_SUPERVISOR = ["control_actividades_vigilador"];
+    const aplicarModulosNuevosSupervisores = async () => {
+        const necesitan = supervisores.filter(s =>
+            MODULOS_NUEVOS_SUPERVISOR.some(m => !(s.modulosAcceso || []).includes(m))
+        );
+        if (necesitan.length === 0) { alert("Todos los supervisores ya tienen los nuevos módulos."); return; }
+        if (!window.confirm(`¿Agregar los nuevos módulos a ${necesitan.length} supervisor${necesitan.length > 1 ? "es" : ""}?`)) return;
+        setAplicandoSup(true);
+        try {
+            for (const s of necesitan) {
+                const merged = [...new Set([...(s.modulosAcceso || []), ...MODULOS_NUEVOS_SUPERVISOR])];
+                await updateDoc(doc(db, "supervisores", s.id), { modulosAcceso: merged });
+                const targetUid = s.uid || null;
+                if (targetUid) {
+                    await updateDoc(doc(db, "usuarios", targetUid), { permisosModulos: merged });
+                } else {
+                    const uSnap = await getDocs(query(collection(db, "usuarios"), where("nombre", "==", s.nombre)));
+                    if (uSnap.docs.length === 1)
+                        await updateDoc(doc(db, "usuarios", uSnap.docs[0].id), { permisosModulos: merged });
+                }
+            }
+            await recargar();
+        } catch (e) {
+            alert("Error: " + e.message);
+        } finally {
+            setAplicandoSup(false);
+        }
+    };
+
+    // ── Aplicar módulos por defecto a conductores sin módulos ─
+    const [aplicando, setAplicando] = useState(false);
+    const MODULOS_CONDUCTOR = [
+        "muro_comunicacion", "libro_actas", "realizar_ronda", "control_vehicular",
+        "planillas", "informes", "turnos_ver", "pedido_insumos",
+        "inventarios", "muro_procedimientos", "capacitacion",
+    ];
+    const aplicarModulosConductores = async () => {
+        const sinModulos = conductores.filter(v => !(v.modulosAcceso || []).length);
+        if (sinModulos.length === 0) { alert("Todos los conductores ya tienen módulos asignados."); return; }
+        if (!window.confirm(`¿Aplicar módulos por defecto a ${sinModulos.length} conductor${sinModulos.length > 1 ? "es" : ""} sin módulos?`)) return;
+        setAplicando(true);
+        try {
+            for (const v of sinModulos) {
+                await updateDoc(doc(db, "conductores", v.id), { modulosAcceso: MODULOS_CONDUCTOR });
+                const uSnap = await getDocs(query(collection(db, "usuarios"), where("nombre", "==", v.nombre)));
+                for (const uDoc of uSnap.docs) {
+                    await updateDoc(doc(db, "usuarios", uDoc.id), { permisosModulos: MODULOS_CONDUCTOR });
+                }
+            }
+            await recargar();
+        } catch (e) {
+            alert("Error: " + e.message);
+        } finally {
+            setAplicando(false);
+        }
+    };
+
     // ── Importar seed ─────────────────────────────────────────
     const [importando, setImportando] = useState(false);
     const handleImportarSeed = async () => {
@@ -566,9 +664,9 @@ export default function GestionPersonalScreen({ onBack }) {
         <div className="gc-body">
             <div className="gc-section-bar">
                 <span>Legajos ({legajos.length})</span>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div className="gc-section-bar-actions">
                     {legajos.length === 0 && (
-                        <button className="gc-add-btn" style={{ background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}
+                        <button className="gc-add-btn gp-btn--seed"
                             onClick={handleImportarSeed} disabled={importando}>
                             {importando ? "Importando..." : "⬇ Importar datos"}
                         </button>
@@ -638,9 +736,16 @@ export default function GestionPersonalScreen({ onBack }) {
         <div className="gc-body">
             <div className="gc-section-bar">
                 <span>Supervisores ({supervisores.length})</span>
-                <button className="gc-add-btn" onClick={() => abrirSupervisor()}>
-                    + Nuevo supervisor
-                </button>
+                <div className="gc-section-bar-actions">
+                    {supervisores.some(s => MODULOS_NUEVOS_SUPERVISOR.some(m => !(s.modulosAcceso || []).includes(m))) && (
+                        <button className="gc-add-btn gp-btn--seed" onClick={aplicarModulosNuevosSupervisores} disabled={aplicandoSup}>
+                            {aplicandoSup ? "Aplicando..." : "⚡ Aplicar módulos nuevos"}
+                        </button>
+                    )}
+                    <button className="gc-add-btn" onClick={() => abrirSupervisor()}>
+                        + Nuevo supervisor
+                    </button>
+                </div>
             </div>
 
             {cargando
@@ -649,57 +754,52 @@ export default function GestionPersonalScreen({ onBack }) {
                     ? <div className="gc-empty">No hay supervisores cargados. Agregá el primero.</div>
                     : [...supervisores]
                         .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                        .map(s => {
-                            const nPuestos = (s.puestosAsignados || s.objetivosAsignados || []).length;
-                            const listaPuestos = (s.puestosAsignados || s.objetivosAsignados || []).map(p => p.nombre).join(", ");
-                            return (
-                                <div key={s.id} className="gc-item">
-                                    <div className="gc-item-main">
-                                        <div className="gc-item-nombre-row">
-                                            <strong>{s.nombre}</strong>
-                                            {s.legajo && <span className="gc-item-badge">Leg. {s.legajo}</span>}
-                                        </div>
-                                        <span className="gc-item-sub">
-                                            🎯{" "}
-                                            {nPuestos > 0
-                                                ? `${nPuestos} puesto${nPuestos > 1 ? "s" : ""}: ${listaPuestos}`
-                                                : "Sin puestos asignados"}
-                                        </span>
-                                        {(s.telefono || s.email) && (
-                                            <span className="gc-item-sub">
-                                                {s.telefono && `📞 ${s.telefono}`}
-                                                {s.telefono && s.email && " · "}
-                                                {s.email && `✉️ ${s.email}`}
-                                            </span>
-                                        )}
+                        .map(s => (
+                            <div key={s.id} className="gc-item">
+                                <div className="gc-item-main">
+                                    <div className="gc-item-nombre-row">
+                                        <strong>{s.nombre}</strong>
+                                        {s.legajo && <span className="gc-item-badge">Leg. {s.legajo}</span>}
                                     </div>
-                                    <div className="gc-item-actions">
-                                        <button className="gc-icon-btn" onClick={() => abrirSupervisor(s)}>✏️</button>
-                                        <button className="gc-icon-btn gc-icon-btn--del"
-                                            onClick={() => handleEliminar("supervisores", s.id, s.nombre)}>🗑</button>
-                                    </div>
+                                    <span className="gc-item-sub">
+                                        🗂️ {(s.modulosAcceso || []).length > 0
+                                            ? `${(s.modulosAcceso || []).length} módulo${(s.modulosAcceso || []).length > 1 ? "s" : ""} habilitado${(s.modulosAcceso || []).length > 1 ? "s" : ""}`
+                                            : "Sin módulos habilitados"}
+                                    </span>
                                 </div>
-                            );
-                        })
+                                <div className="gc-item-actions">
+                                    <button className="gc-icon-btn" onClick={() => abrirSupervisor(s)}>✏️</button>
+                                    <button className="gc-icon-btn gc-icon-btn--del"
+                                        onClick={() => handleEliminar("supervisores", s.id, s.nombre)}>🗑</button>
+                                </div>
+                            </div>
+                        ))
             }
         </div>
     );
 
-    // ── Panel vigiladores ─────────────────────────────────────
-    const renderVigiladores = () => (
+    // ── Panel conductores ─────────────────────────────────────
+    const renderConductores = () => (
         <div className="gc-body">
             <div className="gc-section-bar">
-                <span>Vigiladores ({vigiladores.length})</span>
-                <button className="gc-add-btn" onClick={() => abrirVigilador()}>
-                    + Nuevo vigilador
-                </button>
+                <span>Conductores ({conductores.length})</span>
+                <div className="gc-section-bar-actions">
+                    {conductores.some(v => !(v.modulosAcceso || []).length) && (
+                        <button className="gc-add-btn gp-btn--seed" onClick={aplicarModulosConductores} disabled={aplicando}>
+                            {aplicando ? "Aplicando..." : "⚡ Aplicar módulos por defecto"}
+                        </button>
+                    )}
+                    <button className="gc-add-btn" onClick={() => abrirConductor()}>
+                        + Nuevo conductor
+                    </button>
+                </div>
             </div>
 
             {cargando
                 ? <div className="gc-empty">Cargando...</div>
-                : vigiladores.length === 0
-                    ? <div className="gc-empty">No hay vigiladores cargados. Agregá el primero.</div>
-                    : [...vigiladores]
+                : conductores.length === 0
+                    ? <div className="gc-empty">No hay conductores cargados. Agregá el primero.</div>
+                    : [...conductores]
                         .sort((a, b) => a.nombre.localeCompare(b.nombre))
                         .map(v => (
                             <div key={v.id} className="gc-item">
@@ -707,28 +807,57 @@ export default function GestionPersonalScreen({ onBack }) {
                                     <div className="gc-item-nombre-row">
                                         <strong>{v.nombre}</strong>
                                         {v.legajo && <span className="gc-item-badge">Leg. {v.legajo}</span>}
-                                        {v.dni    && <span className="gc-item-badge gp-badge--dni">DNI {v.dni}</span>}
                                     </div>
-                                    {(v.objetivoNombre || v.clienteNombre) && (
-                                        <span className="gc-item-sub">
-                                            📍 {[v.objetivoNombre, v.clienteNombre].filter(Boolean).join(" · ")}
-                                        </span>
-                                    )}
-                                    {v.supervisorNombre && (
-                                        <span className="gc-item-sub">🔍 Sup: {v.supervisorNombre}</span>
-                                    )}
-                                    {(v.telefono || v.email) && (
-                                        <span className="gc-item-sub">
-                                            {v.telefono && `📞 ${v.telefono}`}
-                                            {v.telefono && v.email && " · "}
-                                            {v.email && `✉️ ${v.email}`}
-                                        </span>
-                                    )}
+                                    <span className="gc-item-sub">
+                                        🗂️ {(v.modulosAcceso || []).length > 0
+                                            ? `${(v.modulosAcceso || []).length} módulo${(v.modulosAcceso || []).length > 1 ? "s" : ""} habilitado${(v.modulosAcceso || []).length > 1 ? "s" : ""}`
+                                            : "Sin módulos habilitados"}
+                                    </span>
                                 </div>
                                 <div className="gc-item-actions">
-                                    <button className="gc-icon-btn" onClick={() => abrirVigilador(v)}>✏️</button>
+                                    <button className="gc-icon-btn" onClick={() => abrirConductor(v)}>✏️</button>
                                     <button className="gc-icon-btn gc-icon-btn--del"
-                                        onClick={() => handleEliminar("vigiladores", v.id, v.nombre)}>🗑</button>
+                                        onClick={() => handleEliminar("conductores", v.id, v.nombre)}>🗑</button>
+                                </div>
+                            </div>
+                        ))
+            }
+        </div>
+    );
+
+    // ── Panel admin ───────────────────────────────────────────
+    const renderAdmin = () => (
+        <div className="gc-body">
+            <div className="gc-section-bar">
+                <span>Administrativos ({admins.length})</span>
+                <button className="gc-add-btn" onClick={() => abrirAdmin()}>
+                    + Nuevo admin
+                </button>
+            </div>
+
+            {cargando
+                ? <div className="gc-empty">Cargando...</div>
+                : admins.length === 0
+                    ? <div className="gc-empty">No hay personal administrativo asignado. Agregá el primero.</div>
+                    : [...admins]
+                        .sort((a, b) => a.nombre.localeCompare(b.nombre))
+                        .map(a => (
+                            <div key={a.id} className="gc-item">
+                                <div className="gc-item-main">
+                                    <div className="gc-item-nombre-row">
+                                        <strong>{a.nombre}</strong>
+                                        {a.legajo && <span className="gc-item-badge">Leg. {a.legajo}</span>}
+                                    </div>
+                                    <span className="gc-item-sub">
+                                        🗂️ {(a.modulosAcceso || []).length > 0
+                                            ? `${(a.modulosAcceso || []).length} módulo${(a.modulosAcceso || []).length > 1 ? "s" : ""} habilitado${(a.modulosAcceso || []).length > 1 ? "s" : ""}`
+                                            : "Sin módulos habilitados"}
+                                    </span>
+                                </div>
+                                <div className="gc-item-actions">
+                                    <button className="gc-icon-btn" onClick={() => abrirAdmin(a)}>✏️</button>
+                                    <button className="gc-icon-btn gc-icon-btn--del"
+                                        onClick={() => handleEliminar("admins", a.id, a.nombre)}>🗑</button>
                                 </div>
                             </div>
                         ))
@@ -758,23 +887,12 @@ export default function GestionPersonalScreen({ onBack }) {
                                     <div className="gc-item-nombre-row">
                                         <strong>{e.nombre}</strong>
                                         {e.legajo && <span className="gc-item-badge">Leg. {e.legajo}</span>}
-                                        {e.dni    && <span className="gc-item-badge gp-badge--dni">DNI {e.dni}</span>}
                                     </div>
-                                    {(e.objetivoNombre || e.clienteNombre) && (
-                                        <span className="gc-item-sub">
-                                            📍 {[e.objetivoNombre, e.clienteNombre].filter(Boolean).join(" · ")}
-                                        </span>
-                                    )}
-                                    {e.supervisorNombre && (
-                                        <span className="gc-item-sub">🔍 Sup: {e.supervisorNombre}</span>
-                                    )}
-                                    {(e.telefono || e.email) && (
-                                        <span className="gc-item-sub">
-                                            {e.telefono && `📞 ${e.telefono}`}
-                                            {e.telefono && e.email && " · "}
-                                            {e.email && `✉️ ${e.email}`}
-                                        </span>
-                                    )}
+                                    <span className="gc-item-sub">
+                                        🗂️ {(e.modulosAcceso || []).length > 0
+                                            ? `${(e.modulosAcceso || []).length} módulo${(e.modulosAcceso || []).length > 1 ? "s" : ""} habilitado${(e.modulosAcceso || []).length > 1 ? "s" : ""}`
+                                            : "Sin módulos habilitados"}
+                                    </span>
                                 </div>
                                 <div className="gc-item-actions">
                                     <button className="gc-icon-btn" onClick={() => abrirEncargado(e)}>✏️</button>
@@ -792,7 +910,7 @@ export default function GestionPersonalScreen({ onBack }) {
         <div className="gc-root">
             <header className="gc-header">
                 <button className="gc-back" onClick={onBack}>← Panel</button>
-                <span className="gc-header-title">👥 Gestión de Personal</span>
+                <span className="gc-header-title">👥 Asignación de Personal</span>
             </header>
 
             <div className="gp-tabs">
@@ -800,28 +918,39 @@ export default function GestionPersonalScreen({ onBack }) {
                     className={`gp-tab ${tab === "supervisores" ? "gp-tab--active" : ""}`}
                     onClick={() => setTab("supervisores")}>
                     🔍 Supervisores
+                    {supervisores.length > 0 && <span className="gp-tab-count">{supervisores.length}</span>}
                 </button>
                 <button
                     className={`gp-tab ${tab === "encargados" ? "gp-tab--active" : ""}`}
                     onClick={() => setTab("encargados")}>
                     🏅 Encargados
+                    {encargados.length > 0 && <span className="gp-tab-count">{encargados.length}</span>}
                 </button>
                 <button
-                    className={`gp-tab ${tab === "vigiladores" ? "gp-tab--active" : ""}`}
-                    onClick={() => setTab("vigiladores")}>
-                    👷 Vigiladores
+                    className={`gp-tab ${tab === "admin" ? "gp-tab--active" : ""}`}
+                    onClick={() => setTab("admin")}>
+                    🗂️ Admin
+                    {admins.length > 0 && <span className="gp-tab-count">{admins.length}</span>}
+                </button>
+                <button
+                    className={`gp-tab ${tab === "conductores" ? "gp-tab--active" : ""}`}
+                    onClick={() => setTab("conductores")}>
+                    🚗 Conductores
+                    {conductores.length > 0 && <span className="gp-tab-count">{conductores.length}</span>}
                 </button>
                 <button
                     className={`gp-tab ${tab === "legajos" ? "gp-tab--active" : ""}`}
                     onClick={() => setTab("legajos")}>
                     📋 Legajos
+                    {legajos.length > 0 && <span className="gp-tab-count">{legajos.length}</span>}
                 </button>
             </div>
 
             {tab === "supervisores" ? renderSupervisores()
            : tab === "encargados"  ? renderEncargados()
+           : tab === "admin"       ? renderAdmin()
            : tab === "legajos"     ? renderLegajos()
-           :                         renderVigiladores()}
+           :                         renderConductores()}
 
             <Modal />
         </div>

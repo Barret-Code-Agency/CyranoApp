@@ -395,3 +395,12 @@
     text-overflow: ellipsis;
     border-bottom: 1.5px solid var(--color-border);
 }
+
+/* ── Utility modifier classes ── */
+.sh-supervision-wrapper--full { max-width: 100%; }
+.sh-fullscreen { max-width: 100%; height: 100vh; display: flex; flex-direction: column; }
+.sh-admin-content { padding: var(--space-4, 1.5rem) var(--space-3, 1rem); }
+.sh-proximamente { padding: 2rem; text-align: center; color: var(--color-text-muted, #64748b); }
+.sh-proximamente-icon { font-size: 2rem; margin-bottom: 1rem; }
+.sh-proximamente-titulo { font-weight: 600; }
+.sh-back-btn--mt { margin-top: 1.5rem; }

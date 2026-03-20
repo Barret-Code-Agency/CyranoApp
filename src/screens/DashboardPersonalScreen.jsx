@@ -62,6 +62,31 @@ function rangosEdad(legajos) {
     });
     return Object.entries(rangos);
 }
+function ingresosPorAnio(legajos) {
+    const map = {};
+    legajos.forEach(p => {
+        if (!p.fechaIngreso) return;
+        const y = p.fechaIngreso.split("/")[2];
+        if (!y || y.length !== 4) return;
+        map[y] = (map[y] || 0) + 1;
+    });
+    return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
+}
+function antiguedadPorFuncion(legajos) {
+    const map = {};
+    legajos.forEach(p => {
+        const fn = normalizarTarea(p.tarea);
+        const a  = calcAntiguedad(p.fechaIngreso);
+        if (a === null) return;
+        if (!map[fn]) map[fn] = { sum: 0, count: 0 };
+        map[fn].sum += a;
+        map[fn].count++;
+    });
+    return Object.entries(map)
+        .map(([k, v]) => [k, parseFloat((v.sum / v.count).toFixed(1))])
+        .sort((a, b) => b[1] - a[1]);
+}
+
 function buildStats(legajos) {
     if (!legajos.length) return null;
     const masc = legajos.filter(p => p.sexo === "M").length;
@@ -89,16 +114,26 @@ function buildStats(legajos) {
         const order = ["Sin hijos", "1 hijo", "2 hijos", "3 hijos", "4+ hijos", "S/D"];
         return order.indexOf(a[0]) - order.indexOf(b[0]);
     });
+    const proximosJubilacion = legajos
+        .filter(p => { const e = calcEdad(p.nacimiento); return e !== null && e >= 60; })
+        .sort((a, b) => (calcEdad(b.nacimiento) || 0) - (calcEdad(a.nacimiento) || 0));
+
     return {
         total: legajos.length, masc, fem, promAntig, promEdad,
         conHijos, totalHijos, tareas, proyectos, servicios, hijosDistr,
         antiguedad: rangosAntiguedad(legajos),
         edades: rangosEdad(legajos),
+        sucursales:           countBy(legajos, p => p.sucursal   || "Sin sucursal"),
+        cargos:               countBy(legajos, p => p.cargo      || "Sin cargo"),
+        centrosCosto:         countBy(legajos, p => p.centroCosto || "Sin CC"),
+        ingresosPorAnio:      ingresosPorAnio(legajos),
+        antiguedadPorFuncion: antiguedadPorFuncion(legajos),
+        proximosJubilacion,
     };
 }
 
 // ── Mini bar chart ─────────────────────────────────────────────────────────
-function BarChart({ data, color = "var(--color-primary)", total }) {
+function BarChart({ data, color = "var(--color-primary)", total, suffix = "" }) {
     const max = Math.max(...data.map(([, v]) => v), 1);
     return (
         <div className="dp-barchart">
@@ -106,9 +141,9 @@ function BarChart({ data, color = "var(--color-primary)", total }) {
                 <div key={label} className="dp-bar-row">
                     <div className="dp-bar-label">{label}</div>
                     <div className="dp-bar-track">
-                        <div className="dp-bar-fill" style={{ width: `${(val / max) * 100}%`, background: color }} />
+                        <div className="dp-bar-fill" style={{ "--dp-bar-w": `${(val / max) * 100}%`, "--dp-bar-color": color }} />
                     </div>
-                    <div className="dp-bar-val">{val}{total ? ` (${Math.round(val/total*100)}%)` : ""}</div>
+                    <div className="dp-bar-val">{val}{suffix}{total ? ` (${Math.round(val/total*100)}%)` : ""}</div>
                 </div>
             ))}
         </div>
@@ -122,9 +157,7 @@ function DonutSexo({ masc, fem }) {
     const pctM = total ? Math.round((masc / total) * 100) : 0;
     return (
         <div className="dp-donut-wrap">
-            <div className="dp-donut" style={{
-                background: `conic-gradient(var(--dp-color-fem,#ec4899) 0deg ${deg}deg, var(--color-primary) ${deg}deg 360deg)`
-            }}>
+            <div className="dp-donut" style={{ "--dp-deg": deg + "deg" }}>
                 <div className="dp-donut-inner">
                     <div className="dp-donut-pct">{pctM}%</div>
                     <div className="dp-donut-lbl">Masc.</div>
@@ -132,13 +165,69 @@ function DonutSexo({ masc, fem }) {
             </div>
             <div className="dp-donut-legend">
                 <div className="dp-donut-leg-item">
-                    <span className="dp-donut-dot" style={{ background: "var(--color-primary)" }} />
+                    <span className="dp-donut-dot dp-donut-dot--primary" />
                     Masculino <strong>{masc}</strong>
                 </div>
                 <div className="dp-donut-leg-item">
-                    <span className="dp-donut-dot" style={{ background: "var(--dp-color-fem,#ec4899)" }} />
+                    <span className="dp-donut-dot dp-donut-dot--fem" />
                     Femenino <strong>{fem}</strong>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Calendario de cumpleaños ───────────────────────────────────────────────
+const DIAS_ES  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+function CalendarioCumpleanos({ legajos }) {
+    const hoy = new Date();
+    const dias = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(hoy);
+        d.setDate(hoy.getDate() + i);
+        return d;
+    });
+
+    const cumplesPorDia = dias.map(d => {
+        const mes = d.getMonth() + 1;
+        const dia = d.getDate();
+        const personas = legajos.filter(p => {
+            if (!p.nacimiento) return false;
+            const parts = p.nacimiento.split("/");
+            return parseInt(parts[0]) === dia && parseInt(parts[1]) === mes;
+        });
+        return { fecha: d, personas };
+    });
+
+    return (
+        <div className="dp-cumple-wrap">
+            <div className="dp-cumple-titulo">🎂 Cumpleaños — próximos 7 días</div>
+            <div className="dp-cumple-strip">
+                {cumplesPorDia.map(({ fecha, personas }, i) => (
+                    <div
+                        key={i}
+                        className={[
+                            "dp-cumple-dia",
+                            i === 0          ? "dp-cumple-dia--hoy"   : "",
+                            personas.length  ? "dp-cumple-dia--tiene" : "",
+                        ].join(" ")}
+                    >
+                        <div className="dp-cumple-dayname">{DIAS_ES[fecha.getDay()]}</div>
+                        <div className="dp-cumple-daynum">{fecha.getDate()}</div>
+                        <div className="dp-cumple-mes">{MESES_ES[fecha.getMonth()]}</div>
+                        <div className="dp-cumple-lista">
+                            {personas.length === 0
+                                ? <span className="dp-cumple-vacio">—</span>
+                                : personas.map((p, j) => (
+                                    <span key={j} className="dp-cumple-nombre">
+                                        🎂 {p.nombre?.split(" ")[0]}
+                                    </span>
+                                ))
+                            }
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -196,6 +285,9 @@ function StatsPanel({ legajos, zona }) {
                 </div>
             </div>
 
+            {/* Calendario cumpleaños */}
+            <CalendarioCumpleanos legajos={legajos} />
+
             {/* Fila 1 */}
             <div className="dp-row2">
                 <div className="dp-card">
@@ -236,6 +328,84 @@ function StatsPanel({ legajos, zona }) {
             <div className="dp-card dp-card--full">
                 <div className="dp-card-title">Distribución de hijos</div>
                 <BarChart data={stats.hijosDistr} color="#ec4899" total={stats.total} />
+            </div>
+
+            {/* Fila 4 */}
+            <div className="dp-row2">
+                <div className="dp-card">
+                    <div className="dp-card-title">Por sucursal</div>
+                    <BarChart data={stats.sucursales} color="#0891b2" total={stats.total} />
+                </div>
+                <div className="dp-card">
+                    <div className="dp-card-title">Por cargo</div>
+                    <BarChart data={stats.cargos} color="#7c3aed" total={stats.total} />
+                </div>
+            </div>
+
+            {/* Fila 5 */}
+            <div className="dp-row2">
+                <div className="dp-card">
+                    <div className="dp-card-title">Por centro de costo</div>
+                    <BarChart data={stats.centrosCosto} color="#059669" total={stats.total} />
+                </div>
+                <div className="dp-card">
+                    <div className="dp-card-title">Ingresos por año</div>
+                    <BarChart data={stats.ingresosPorAnio} color="#d97706" total={stats.total} />
+                </div>
+            </div>
+
+            {/* Antigüedad promedio por función */}
+            <div className="dp-card dp-card--full">
+                <div className="dp-card-title">Antigüedad promedio por función</div>
+                <BarChart data={stats.antiguedadPorFuncion} color="#8b5cf6" suffix=" a." />
+            </div>
+
+            {/* Personal próximo a jubilación */}
+            <div className="dp-card dp-card--full">
+                <div className="dp-card-title">
+                    Personal próximo a jubilación (≥ 60 años)
+                    {stats.proximosJubilacion.length > 0 && (
+                        <span className="dp-jubilacion-badge">{stats.proximosJubilacion.length}</span>
+                    )}
+                </div>
+                {stats.proximosJubilacion.length === 0 ? (
+                    <div className="dp-empty-inline">Sin personal de 60 años o más.</div>
+                ) : (
+                    <div className="dp-tabla-wrap">
+                        <table className="dp-tabla">
+                            <thead>
+                                <tr>
+                                    <th>Legajo</th>
+                                    <th>Nombre</th>
+                                    <th>Edad</th>
+                                    <th>Antigüedad</th>
+                                    <th>Función</th>
+                                    <th>Servicio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {stats.proximosJubilacion.map((p, i) => {
+                                    const edad  = calcEdad(p.nacimiento);
+                                    const antig = calcAntiguedad(p.fechaIngreso);
+                                    return (
+                                        <tr key={p.legajo || i}>
+                                            <td className="dp-td-legajo">{p.legajo}</td>
+                                            <td className="dp-td-nombre">{p.nombre}</td>
+                                            <td className="dp-td-num dp-td-alert">{edad} a.</td>
+                                            <td className="dp-td-num">{antig !== null ? `${antig.toFixed(1)} a.` : "—"}</td>
+                                            <td>
+                                                <span className={`dp-tag dp-tag--${normalizarTarea(p.tarea).toLowerCase()}`}>
+                                                    {normalizarTarea(p.tarea)}
+                                                </span>
+                                            </td>
+                                            <td>{p.servicio || "—"}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             {/* Tabla */}

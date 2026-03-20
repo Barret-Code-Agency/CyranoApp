@@ -409,3 +409,218 @@
 .dash-turno-sub { font-size:9px; color:var(--color-muted); }
 .dash-table-wrap { overflow-x:auto; }
 .dash-cumpl-restriccion { font-size:11px; color:var(--color-muted); font-style:italic; margin-bottom:4px; }
+
+/* ── ds- utility classes ── */
+
+/* Dynamic fill: width + background set via CSS custom properties */
+.dash-plan-fill,
+.ds-obj-fill,
+.sup-prog-fill,
+.ds-cumpl-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 0.4s ease;
+    width: var(--ds-w);
+}
+
+/* Color states */
+.ds-fill--good  { background: var(--color-success); }
+.ds-fill--mid   { background: #f59e0b; }
+.ds-fill--bad   { background: var(--color-danger); }
+
+.ds-color--good     { color: var(--color-success); }
+.ds-color--mid      { color: #f59e0b; }
+.ds-color--mid-dark { color: #d97706; }
+.ds-color--bad      { color: var(--color-danger); }
+
+/* Tag variants */
+.ds-tag-pct,
+.ds-tag-est { font-weight: 800; }
+.ds-tag--good { background: var(--color-success-ghost); color: var(--color-success); }
+.ds-tag--mid  { background: #fef3c7; color: #92400e; }
+.ds-tag--bad  { background: var(--color-danger-ghost); color: var(--color-danger); }
+
+/* Tiempos total note */
+.ds-tiempos-total-note {
+    text-align: right;
+    font-size: 11px;
+    color: #8894ac;
+    margin-top: 6px;
+}
+
+/* Tiempos grid */
+.ds-tiempo-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+}
+.ds-tiempo-card {
+    background: #f8f9fc;
+    border-radius: 10px;
+    padding: 12px 8px;
+    text-align: center;
+    border-top: 3px solid var(--ds-tipo-color);
+}
+.ds-tiempo-icon { font-size: 18px; }
+.ds-tiempo-pct  { font-weight: 800; font-size: 16px; color: var(--ds-tipo-color); margin-top: 4px; }
+.ds-tiempo-val  { font-weight: 700; font-size: 12px; color: #0d1b3e; }
+.ds-tiempo-label { font-size: 10px; color: #8894ac; margin-top: 2px; }
+
+/* Tiempos per-sup row */
+.ds-sup-tiempo-row { margin-bottom: 16px; }
+.ds-sup-tiempo-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+.ds-sup-tiempo-nombre { font-weight: 700; font-size: 13px; color: #0d1b3e; }
+.ds-sup-tiempo-sub    { font-size: 11px; color: #8894ac; }
+.ds-sup-tiempo-breakdown {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+    font-size: 11px;
+    flex-wrap: wrap;
+}
+.ds-tiempo-breakdown-item { color: var(--ds-tipo-color); font-weight: 700; }
+.ds-tiempo-breakdown-min  { color: #8894ac; font-weight: 400; }
+
+/* Table header with tipo color */
+.ds-th-tipo { color: var(--ds-tipo-color); }
+
+/* Table cell: td tipo value */
+.ds-td-tipo-val { color: var(--ds-tipo-color); font-weight: 700; }
+.ds-td-tipo-pct { color: #8894ac; }
+
+/* Totals row */
+.ds-tr-totals { background: #f0f2f7; font-weight: 700; }
+
+/* Inactive row */
+.ds-tr-inactive { opacity: 0.45; }
+
+/* Common td helpers */
+.ds-td-nombre-xs { font-weight: 600; font-size: var(--text-xs); }
+.ds-td-muted-xs  { font-size: var(--text-xs); color: #6b7280; }
+.ds-td-xs        { font-size: var(--text-xs); }
+.ds-td-objetivo  {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-xs);
+}
+.ds-td-empty { color: #ccc; }
+
+/* km value */
+.ds-km-val { font-weight: 700; color: var(--color-primary); }
+
+/* Supervisor cards block */
+.ds-sup-item { margin-bottom: 18px; padding-bottom: 18px; }
+.ds-sup-item--border { border-bottom: 1px solid var(--color-border); }
+
+.ds-sup-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.ds-sup-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--color-primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 15px;
+}
+.ds-sup-info   { flex: 1; }
+.ds-sup-nombre { font-weight: 700; font-size: 14px; color: var(--color-text); }
+.ds-sup-sub    { font-size: 11px; color: var(--color-muted); }
+
+.ds-sup-pct-wrap { text-align: right; }
+.ds-sup-pct-val  { font-family: var(--font-display, 'Bebas Neue', sans-serif); font-size: 1.8rem; line-height: 1; }
+.ds-sup-pct-sub  { font-size: 10px; color: var(--color-muted); }
+.ds-sup-no-plan  { font-size: 11px; color: var(--color-muted); }
+
+.ds-sup-bar-wrap { margin-bottom: 10px; }
+.sup-prog-bar {
+    height: 6px;
+    background: var(--color-surface3, #e8eaf2);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.ds-sup-stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.ds-sup-stats--mb { margin-bottom: 10px; }
+
+.ds-stat-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 48px;
+}
+.ds-stat-val { font-weight: 800; font-size: 15px; color: var(--ds-stat-color); }
+.ds-stat-lbl { font-size: 9px; color: var(--color-muted); text-align: center; }
+
+.ds-obj-list { display: flex; flex-direction: column; gap: 5px; }
+.ds-obj-row  { display: flex; align-items: center; gap: 8px; }
+.ds-obj-name {
+    font-size: 10px;
+    color: var(--color-text);
+    width: 130px;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ds-obj-track {
+    flex: 1;
+    height: 5px;
+    background: var(--color-border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.ds-obj-fill  { border-radius: 3px; transition: width 0.4s; }
+.ds-obj-score { font-size: 10px; font-weight: 700; width: 42px; text-align: right; flex-shrink: 0; }
+
+/* No plan small */
+.ds-no-plan-sm { color: var(--color-muted); font-size: 11px; }
+
+/* Cumplimiento supervisor rows */
+.ds-cumpl-sup-row { margin-bottom: 16px; }
+.ds-cumpl-sup-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+.ds-cumpl-sup-nombre { font-weight: 700; font-size: 13px; }
+.ds-cumpl-sup-pct    { font-weight: 800; font-size: 14px; }
+.ds-cumpl-bar-track  {
+    height: 8px;
+    border-radius: 4px;
+    background: #e8eaf2;
+    overflow: hidden;
+}
+.ds-cumpl-bar-fill   { border-radius: 4px; transition: width 0.5s; }
+.ds-cumpl-sup-sub    { font-size: 11px; color: #8894ac; margin-top: 3px; }
+
+/* Gauge center wrapper */
+.ds-gauge-center {
+    display: flex;
+    justify-content: center;
+    margin-bottom: var(--space-4);
+}
+/* Turno grid with top margin variant */
+.ds-turno-grid--mt { margin-top: var(--space-2); }
+
+/* Plan bar margin variant */
+.ds-plan-bar--mt { margin-top: 4px; }

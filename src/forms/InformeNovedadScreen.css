@@ -152,6 +152,7 @@
 }
 .in-input:focus { border-color: var(--color-primary); }
 .in-input--sm { padding: 7px 10px; font-size: 13px; }
+.in-input--readonly { background: var(--color-surface2); color: var(--color-text-secondary); }
 
 .in-textarea {
     padding: 10px 12px;
