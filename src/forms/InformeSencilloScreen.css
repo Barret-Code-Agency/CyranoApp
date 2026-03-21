@@ -39,6 +39,51 @@
     color: var(--color-text-primary);
 }
 
+/* ── Sección ── */
+.is-seccion {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.is-seccion-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 10px var(--space-4);
+    background: var(--color-surface2);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.is-seccion-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.is-seccion-titulo {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.is-seccion-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+}
+
 /* ── Body ── */
 .is-body {
     display: flex;
@@ -299,7 +344,6 @@
     flex-wrap: wrap;
     padding: var(--space-3);
     background: var(--color-surface2);
-    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
 }
 .is-confeccion-field {

@@ -1,7 +1,9 @@
 // src/screens/ProgramacionServiciosScreen.jsx
 // Planilla de programación de servicios — Programado vs Real
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import { useAppData }       from "../context/AppDataContext";
 import { useClientesData }  from "../hooks/useClientesData";
 import {
@@ -20,6 +22,7 @@ const OPCIONES = [
     { val: "",              label: "—",     cls: ""    },
     // Diurnos
     { val: "06:00 – 14:00", label: "06-14", cls: "dia" },
+    { val: "06:00 – 15:00", label: "06-15", cls: "dia" },
     { val: "06:00 – 16:00", label: "06-16", cls: "dia" },
     { val: "06:00 – 19:00", label: "06-19", cls: "dia" },
     { val: "06:00 – 18:00", label: "06-18", cls: "dia" },
@@ -37,9 +40,11 @@ const OPCIONES = [
     { val: "14:00 – 22:00", label: "14-22", cls: "tard"},
     // Noche
     { val: "17:00 – 05:00", label: "17-05", cls: "noch"},
+    { val: "17:00 – 07:00", label: "17-07", cls: "noch"},
     { val: "18:00 – 06:00", label: "18-06", cls: "noch"},
     { val: "19:00 – 07:00", label: "19-07", cls: "noch"},
     { val: "21:00 – 06:00", label: "21-06", cls: "noch"},
+    { val: "20:00 – 07:00", label: "20-07", cls: "noch"},
     { val: "22:00 – 06:00", label: "22-06", cls: "noch"},
     // Guardia 24hs
     { val: "06:00 – 06:00", label: "06-06", cls: "g24" },
@@ -174,13 +179,29 @@ function horasDeValor(val) {
 // ── Popup editor de celda ────────────────────────────────────────────────────────
 function CeldaPopup({ top, left, onSelect, onClose }) {
     const ref = useRef();
+    const [pos, setPos] = useState({ top, left });
+
     useEffect(() => {
         const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
         document.addEventListener("mousedown", h);
         return () => document.removeEventListener("mousedown", h);
     }, [onClose]);
+
+    useEffect(() => {
+        if (!ref.current) return;
+        const r = ref.current.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        let adjLeft = left;
+        let adjTop  = top;
+        if (left + r.width  > vw - 8) adjLeft = vw - r.width  - 8;
+        if (top  + r.height > vh - 8) adjTop  = top - r.height - 8;
+        if (adjLeft < 8) adjLeft = 8;
+        setPos({ top: adjTop, left: adjLeft });
+    }, [top, left]);
+
     return (
-        <div className="ps-popup" style={{ top, left }} ref={ref}>
+        <div className="ps-popup" style={{ top: pos.top, left: pos.left }} ref={ref}>
             {OPCIONES.map(op => (
                 <button
                     key={op.val}
@@ -786,6 +807,16 @@ function GrillaServicio({ config, onBack }) {
                 objetivoNombre: config.objetivoNombre,
                 proyectoNombre: config.proyectoNombre,
                 año: config.año, mes: config.mes,
+                horasConfig: {
+                    horasDomingo:    config.horasDomingo    ?? null,
+                    horasLunes:      config.horasLunes      ?? null,
+                    horasMartes:     config.horasMartes     ?? null,
+                    horasMiercoles:  config.horasMiercoles  ?? null,
+                    horasJueves:     config.horasJueves     ?? null,
+                    horasViernes:    config.horasViernes    ?? null,
+                    horasSabado:     config.horasSabado     ?? null,
+                    horasFeriados:   config.horasFeriados   ?? null,
+                },
                 personal,
                 diasEspeciales: diasEsp,
                 actualizadoEn: serverTimestamp(),
@@ -806,8 +837,14 @@ function GrillaServicio({ config, onBack }) {
 
     const agregarPersona = (v) => {
         if (personal.find(p => p.legajo === v.legajo)) return;
-        setPersonal(prev => [...prev, { legajo: v.legajo || "", nombre: v.nombre || "", programado: {}, real: {}, reemplazos: {} }]);
+        setPersonal(prev => [...prev, { legajo: v.legajo || "", nombre: v.nombre || "", programado: {}, real: {}, reemplazos: {}, capacitacion: {} }]);
         setModalAdd(false); setBusq("");
+    };
+
+    const setCap = (rowIdx, diaKey, val) => {
+        setPersonal(prev => prev.map((p, i) =>
+            i !== rowIdx ? p : { ...p, capacitacion: { ...(p.capacitacion || {}), [diaKey]: val === "" ? null : Number(val) } }
+        ));
     };
 
     const aplicarPatron = (rowIdx, patron) => {
@@ -840,8 +877,11 @@ function GrillaServicio({ config, onBack }) {
         config.horasSabado,
     ];
 
-    const horasFila = (p) =>
-        Object.values(p[vista] || {}).reduce((s, v) => s + horasDeValor(v), 0);
+    const horasFila = (p) => {
+        const data = p[vista] || {};
+        const total = dias.reduce((s, d) => s + horasDeValor(data[fmtKey(d)] || ""), 0);
+        return Math.round(total * 10) / 10;
+    };
 
     const horasDia = (d) => {
         const key = fmtKey(d);
@@ -951,7 +991,8 @@ function GrillaServicio({ config, onBack }) {
                         {personal.map((p, rowIdx) => {
                             const data = p[vista] || {};
                             return (
-                                <tr key={p.legajo + rowIdx} className="ps-row">
+                                <React.Fragment key={p.legajo + rowIdx}>
+                                <tr className="ps-row">
                                     <td className="ps-td-sticky ps-td-legajo">{p.legajo}</td>
                                     <td className="ps-td-sticky ps-td-nombre">{p.nombre}</td>
                                     <td className="ps-td-sticky ps-td-acciones">
@@ -966,15 +1007,20 @@ function GrillaServicio({ config, onBack }) {
                                         >🏥</button>
                                     </td>
                                     {dias.map(d => {
-                                        const key   = fmtKey(d);
-                                        const val   = data[key] || "";
-                                        const op    = OPCIONES.find(o => o.val === val);
-                                        const fin   = d.getDay() === 0 || d.getDay() === 6;
+                                        const key     = fmtKey(d);
+                                        const val     = data[key] || "";
+                                        const op      = OPCIONES.find(o => o.val === val);
+                                        const fin     = d.getDay() === 0 || d.getDay() === 6;
+                                        const trabaja = diasEsp[key];
                                         const hasRemp = AUS_CODES.includes(val) && p.reemplazos?.[key];
                                         return (
                                             <td
                                                 key={key}
-                                                className={`ps-celda ${op?.cls ? `ps-celda--${op.cls}` : ""} ${fin ? "ps-celda--fin" : ""}`}
+                                                className={[
+                                                    "ps-celda",
+                                                    op?.cls ? `ps-celda--${op.cls}` : "",
+                                                    fin && !op?.cls && trabaja !== false ? "ps-celda--fin" : "",
+                                                ].join(" ")}
                                                 onClick={e => {
                                                     const r = e.currentTarget.getBoundingClientRect();
                                                     setPopup({ rowIdx, diaKey: key, top: r.bottom + 4, left: r.left });
@@ -990,6 +1036,34 @@ function GrillaServicio({ config, onBack }) {
                                         <button className="ps-btn-del" onClick={() => quitarPersona(rowIdx)}>×</button>
                                     </td>
                                 </tr>
+                                {vista === "real" && (
+                                    <tr key={`cap-${p.legajo}-${rowIdx}`} className="ps-row-cap">
+                                        <td colSpan={3} className="ps-td-sticky ps-cap-label">Cap.</td>
+                                        {dias.map(d => {
+                                            const key = fmtKey(d);
+                                            const val = p.capacitacion?.[key] ?? "";
+                                            return (
+                                                <td key={key} className="ps-cap-cel">
+                                                    <input
+                                                        type="number"
+                                                        min={0} max={24} step={0.5}
+                                                        className="ps-cap-input"
+                                                        value={val === null ? "" : val}
+                                                        onChange={e => setCap(rowIdx, key, e.target.value)}
+                                                    />
+                                                </td>
+                                            );
+                                        })}
+                                        <td className="ps-cap-total">
+                                            {(() => {
+                                                const t = Math.round(dias.reduce((s, d) => s + (Number(p.capacitacion?.[fmtKey(d)]) || 0), 0) * 10) / 10;
+                                                return t || "—";
+                                            })()}
+                                        </td>
+                                        <td />
+                                    </tr>
+                                )}
+                                </React.Fragment>
                             );
                         })}
                     </tbody>
@@ -1006,7 +1080,7 @@ function GrillaServicio({ config, onBack }) {
                                 );
                             })}
                             <td className="ps-tfoot-total" colSpan={2}>
-                                {dias.reduce((s, d) => s + (horasDia(d) ?? 0), 0)} hs
+                                {Math.round(dias.reduce((s, d) => s + (horasDia(d) ?? 0), 0) * 10) / 10} hs
                             </td>
                         </tr>
                     </tfoot>
@@ -1089,6 +1163,677 @@ function GrillaServicio({ config, onBack }) {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+// ── ObjetivoEditableCard — tabla editable para un objetivo del período ────────────
+function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos = [] }) {
+    const { empresaNombre } = useAppData();
+    const [personal,      setPersonal]   = useState(docInicial.personal || []);
+    const [popup,         setPopup]      = useState(null);
+    const [guardando,     setGuardando]  = useState(false);
+    const [guardado,      setGuardado]   = useState(false);
+    const [modalAdd,      setModalAdd]   = useState(false);
+    const [busqAdd,       setBusqAdd]    = useState("");
+    const [todosLegajos,  setTodosLegajos] = useState([]);
+    const [patronModal,   setPatronModal] = useState(null);
+    const diasEsp = docInicial.diasEspeciales || {};
+
+    // Cargar legajos cuando se abre el modal
+    useEffect(() => {
+        if (!modalAdd || todosLegajos.length > 0 || !empresaNombre) return;
+        getDocs(query(collection(db, "legajos"), where("empresa", "==", empresaNombre)))
+            .then(snap => {
+                const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                data.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+                setTodosLegajos(data);
+            })
+            .catch(console.error);
+    }, [modalAdd, empresaNombre, todosLegajos.length]);
+
+    const agregarPersona = (v) => {
+        if (personal.find(p => p.legajo === v.legajo)) return;
+        setPersonal(prev => [...prev, { legajo: v.legajo || "", nombre: v.nombre || "", programado: {}, real: {}, reemplazos: {}, capacitacion: {} }]);
+        setModalAdd(false); setBusqAdd("");
+    };
+
+    const eliminarPersona = (rowIdx) => {
+        if (!window.confirm(`¿Quitar a ${personal[rowIdx]?.nombre} de esta planilla?`)) return;
+        setPersonal(prev => prev.filter((_, i) => i !== rowIdx));
+    };
+
+    const aplicarPatron = (rowIdx, patron) => {
+        setPersonal(prev => prev.map((p, i) =>
+            i !== rowIdx ? p : { ...p, [modo]: { ...(p[modo] || {}), ...patron } }
+        ));
+    };
+
+    const setCelda = (rowIdx, diaKey, val) => {
+        setPersonal(prev => prev.map((p, i) =>
+            i !== rowIdx ? p : { ...p, [modo]: { ...(p[modo] || {}), [diaKey]: val } }
+        ));
+        setPopup(null);
+    };
+
+    const setCap = (rowIdx, diaKey, val) => {
+        setPersonal(prev => prev.map((p, i) =>
+            i !== rowIdx ? p : { ...p, capacitacion: { ...(p.capacitacion || {}), [diaKey]: val === "" ? null : Number(val) } }
+        ));
+    };
+
+    const horasFila = (p) => {
+        const data = p[modo] || {};
+        return Math.round(dias.reduce((s, d) => s + horasDeValor(data[fmtKey(d)] || ""), 0) * 10) / 10;
+    };
+
+    const horasDiaDoc = (dia) => {
+        const objFallback = objetivos.find(o => o.id === docInicial.objetivoId);
+        const hc = docInicial.horasConfig || (objFallback ? {
+            horasLunes:     objFallback.horasLunes     ?? null,
+            horasMartes:    objFallback.horasMartes    ?? null,
+            horasMiercoles: objFallback.horasMiercoles ?? null,
+            horasJueves:    objFallback.horasJueves    ?? null,
+            horasViernes:   objFallback.horasViernes   ?? null,
+            horasSabado:    objFallback.horasSabado    ?? null,
+            horasDomingo:   objFallback.horasDomingo   ?? null,
+            horasFeriados:  objFallback.horasFeriados  ?? null,
+        } : null);
+        if (!hc) return null;
+        const key = fmtKey(dia);
+        if (FERIADOS_ARG[key]) return hc.horasFeriados != null ? Number(hc.horasFeriados) : null;
+        if (diasEsp[key] === false) return 0;
+        const hs = hc[HORAS_KEYS[dia.getDay()]];
+        return hs != null ? Number(hs) : null;
+    };
+
+    const guardar = async () => {
+        setGuardando(true);
+        try {
+            const ref = doc(db, "programacionServicios", docInicial.docId);
+            const snap = await getDoc(ref);
+            if (snap.exists()) {
+                await setDoc(ref, { ...snap.data(), personal, actualizadoEn: serverTimestamp() });
+            }
+            setGuardado(true);
+            setTimeout(() => setGuardado(false), 2500);
+        } catch (e) { alert("Error al guardar: " + e.message); }
+        finally { setGuardando(false); }
+    };
+
+    return (
+        <div className="ps-vt-objetivo">
+            <div className="ps-vt-obj-header">
+                <span className="ps-vt-obj-cliente">{docInicial.clienteNombre}</span>
+                {docInicial.proyectoNombre && <span className="ps-vt-obj-sep"> · {docInicial.proyectoNombre}</span>}
+                {docInicial.objetivoNombre  && <span className="ps-vt-obj-sep"> · {docInicial.objetivoNombre}</span>}
+                <span className="ps-vt-obj-count">{personal.length} personas</span>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                    <button className="ps-todos-btn-nueva" onClick={() => setModalAdd(true)}>
+                        ➕ Agregar
+                    </button>
+                    <button
+                        className="ps-vt-dl-btn"
+                        style={{ background: guardado ? "#16a34a" : "#1e40af", color: "#fff" }}
+                        disabled={guardando}
+                        onClick={guardar}
+                    >
+                        {guardado ? "✓ Guardado" : guardando ? "..." : "💾 Guardar"}
+                    </button>
+                </div>
+            </div>
+
+            <div className="ps-vt-tabla-wrap" style={{ position: "relative" }}>
+                        <table className="ps-table">
+                            <thead>
+                                <tr>
+                                    <th className="ps-th-sticky ps-th-legajo">Leg.</th>
+                                    <th className="ps-th-sticky ps-th-nombre">Nombre y Apellido</th>
+                                    {dias.map(dia => {
+                                        const key = fmtKey(dia);
+                                        const fin = dia.getDay() === 0 || dia.getDay() === 6;
+                                        const ferNombre = FERIADOS_ARG[key];
+                                        const trabaja = diasEsp[key];
+                                        return (
+                                            <th key={key}
+                                                className={["ps-th-dia",
+                                                    fin && !ferNombre && trabaja !== false ? "ps-th-dia--fin" : "",
+                                                    ferNombre ? "ps-th-dia--fer" : "",
+                                                ].join(" ")}
+                                                title={ferNombre}
+                                            >
+                                                <div className="ps-th-mes-label">{MESES_ES[dia.getMonth()].slice(0,3)}</div>
+                                                <div className="ps-th-num">{dia.getDate()}</div>
+                                                <div className="ps-th-dow">{DIAS_ES[dia.getDay()].slice(0,2)}</div>
+                                                {ferNombre && <div className="ps-th-badge ps-th-badge--fer">FER</div>}
+                                            </th>
+                                        );
+                                    })}
+                                    <th className="ps-th-hs">Hs</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {personal.length === 0 && (
+                                    <tr><td colSpan={dias.length + 2} className="ps-vt-obj-empty">Sin personal asignado</td></tr>
+                                )}
+                                {personal.map((p, rowIdx) => {
+                                    const data = p[modo] || {};
+                                    return (
+                                        <React.Fragment key={p.legajo + rowIdx}>
+                                            <tr className="ps-row">
+                                                <td className="ps-td-sticky ps-td-legajo">{p.legajo}</td>
+                                                <td className="ps-td-sticky ps-td-nombre">
+                                                    <button className="ps-btn-del-inline" title="Quitar" onClick={() => eliminarPersona(rowIdx)}>✕</button>
+                                                    {p.nombre}
+                                                    <button className="ps-btn-patron-inline" title="Asignar patrón" onClick={() => setPatronModal({ rowIdx })}>🗓</button>
+                                                </td>
+                                                {dias.map(dia => {
+                                                    const key = fmtKey(dia);
+                                                    const val = data[key] || "";
+                                                    const op  = OPCIONES.find(o => o.val === val);
+                                                    const fin = dia.getDay() === 0 || dia.getDay() === 6;
+                                                    const trabaja = diasEsp[key];
+                                                    return (
+                                                        <td key={key}
+                                                            className={["ps-celda",
+                                                                op?.cls ? `ps-celda--${op.cls}` : "",
+                                                                fin && !op?.cls && trabaja !== false ? "ps-celda--fin" : "",
+                                                            ].join(" ")}
+                                                            onClick={e => {
+                                                                const r = e.currentTarget.getBoundingClientRect();
+                                                                setPopup({ rowIdx, diaKey: key, top: r.bottom + 4, left: r.left });
+                                                            }}
+                                                        >
+                                                            <CeldaContenido val={val} op={op} />
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="ps-td-hs">{horasFila(p) || "—"}</td>
+                                            </tr>
+                                            {modo === "real" && (
+                                                <tr className="ps-row-cap">
+                                                    <td colSpan={2} className="ps-td-sticky ps-cap-label">Cap.</td>
+                                                    {dias.map(d => {
+                                                        const key = fmtKey(d);
+                                                        const val = p.capacitacion?.[key] ?? "";
+                                                        return (
+                                                            <td key={key} className="ps-cap-cel">
+                                                                <input type="number" min={0} max={24} step={0.5}
+                                                                    className="ps-cap-input"
+                                                                    value={val === null ? "" : val}
+                                                                    onChange={e => setCap(rowIdx, key, e.target.value)}
+                                                                />
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td className="ps-cap-total">
+                                                        {(() => { const t = Math.round(dias.reduce((s, d) => s + (Number(p.capacitacion?.[fmtKey(d)]) || 0), 0) * 10) / 10; return t || "—"; })()}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                            <tfoot>
+                                <tr className="ps-tfoot">
+                                    <td colSpan={2} className="ps-tfoot-label">Hs. a cubrir</td>
+                                    {dias.map(dia => {
+                                        const hs = horasDiaDoc(dia);
+                                        return (
+                                            <td key={fmtKey(dia)} className={`ps-tfoot-cel ${hs == null ? "ps-tfoot-cel--sin" : ""}`}>
+                                                {hs != null ? hs : "—"}
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="ps-tfoot-total">
+                                        {Math.round(dias.reduce((s, d) => s + (horasDiaDoc(d) ?? 0), 0) * 10) / 10} hs
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        {popup && (
+                            <CeldaPopup
+                                top={popup.top} left={popup.left}
+                                onSelect={val => setCelda(popup.rowIdx, popup.diaKey, val)}
+                                onClose={() => setPopup(null)}
+                            />
+                        )}
+            </div>
+
+            {/* ── Modal patrón ── */}
+            {patronModal && (
+                <PatronModal
+                    persona={personal[patronModal.rowIdx]}
+                    dias={dias}
+                    vista={modo}
+                    onAplicar={patron => { aplicarPatron(patronModal.rowIdx, patron); setPatronModal(null); }}
+                    onClose={() => setPatronModal(null)}
+                />
+            )}
+
+            {/* ── Modal agregar vigilador ── */}
+            {modalAdd && (
+                <div className="ps-overlay" onClick={() => { setModalAdd(false); setBusqAdd(""); }}>
+                    <div className="ps-modal ps-modal--nueva" onClick={e => e.stopPropagation()}>
+                        <div className="ps-modal-title">➕ Agregar vigilador</div>
+                        <input
+                            className="ps-modal-busq"
+                            placeholder="Buscar por nombre o legajo…"
+                            value={busqAdd}
+                            onChange={e => setBusqAdd(e.target.value)}
+                            autoFocus
+                        />
+                        <div className="ps-modal-lista">
+                            {todosLegajos
+                                .filter(v => {
+                                    if (personal.find(p => p.legajo === v.legajo)) return false;
+                                    const q = busqAdd.toLowerCase();
+                                    return !q || (v.nombre || "").toLowerCase().includes(q) || String(v.legajo).includes(q);
+                                })
+                                .map(v => (
+                                    <button key={v.id} className="ps-modal-item" onClick={() => agregarPersona(v)}>
+                                        <span className="ps-modal-legajo">{v.legajo}</span>
+                                        <span className="ps-modal-nombre">{v.nombre}</span>
+                                    </button>
+                                ))
+                            }
+                        </div>
+                        <div className="ps-modal-actions">
+                            <button className="ps-btn-secundario" onClick={() => { setModalAdd(false); setBusqAdd(""); }}>Cancelar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Programación — todos los objetivos del período, editables ─────────────────────
+export function ProgramacionTodos({ año, mes, modo = "programado" }) {
+    const { empresaNombre } = useAppData();
+    const { clientes, objetivos } = useClientesData(empresaNombre);
+    const [docs,        setDocs]        = useState([]);
+    const [cargando,    setCargando]    = useState(false);
+    const [modalNueva,  setModalNueva]  = useState(false);
+    const [clienteId,   setClienteId]   = useState("");
+    const [objetivoId,  setObjetivoId]  = useState("");
+    const [creando,     setCreando]     = useState(false);
+
+    const cargar = () => {
+        if (!empresaNombre) return;
+        setCargando(true);
+        getDocs(query(
+            collection(db, "programacionServicios"),
+            where("empresa", "==", empresaNombre),
+            where("año", "==", año),
+            where("mes", "==", mes)
+        ))
+            .then(snap => {
+                const data = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                data.sort((a, b) => (a.clienteNombre || "").localeCompare(b.clienteNombre || ""));
+                setDocs(data);
+            })
+            .catch(console.error)
+            .finally(() => setCargando(false));
+    };
+
+    useEffect(cargar, [empresaNombre, año, mes]);
+
+    const dias = getDias(año, mes);
+
+    const objFiltrados = objetivos.filter(o => o.clienteId === clienteId || o.clienteNombre === clientes.find(c => c.id === clienteId)?.nombre);
+    const clienteSel   = clientes.find(c => c.id === clienteId);
+    const objSel       = objetivos.find(o => o.id === objetivoId);
+
+    const crearPlanilla = async () => {
+        if (!clienteId || !objetivoId) return;
+        setCreando(true);
+        try {
+            const docId = `${empresaNombre}_${clienteId}_${objetivoId}_${año}-${String(mes).padStart(2,"0")}`;
+            await setDoc(doc(db, "programacionServicios", docId), {
+                empresa:        empresaNombre,
+                clienteId,
+                clienteNombre:  clienteSel?.nombre || "",
+                objetivoId,
+                objetivoNombre: objSel?.nombre     || "",
+                proyectoNombre: objSel?.proyecto   || "",
+                año, mes,
+                personal:       [],
+                diasEspeciales: {},
+                horasConfig: {
+                    horasLunes:     objSel?.horasLunes     ?? null,
+                    horasMartes:    objSel?.horasMartes    ?? null,
+                    horasMiercoles: objSel?.horasMiercoles ?? null,
+                    horasJueves:    objSel?.horasJueves    ?? null,
+                    horasViernes:   objSel?.horasViernes   ?? null,
+                    horasSabado:    objSel?.horasSabado    ?? null,
+                    horasDomingo:   objSel?.horasDomingo   ?? null,
+                    horasFeriados:  objSel?.horasFeriados  ?? null,
+                },
+                actualizadoEn:  serverTimestamp(),
+            }, { merge: true });
+            setModalNueva(false);
+            setClienteId(""); setObjetivoId("");
+            cargar();
+        } catch (e) { alert("Error: " + e.message); }
+        finally { setCreando(false); }
+    };
+
+    const tituloModo = modo === "programado" ? "Programación de Objetivos" : "Horarios Trabajados";
+
+    return (
+        <div className="ps-vt-root">
+            {/* ── Barra superior con botón nueva planilla ── */}
+            <div className="ps-todos-bar">
+                <span className="ps-todos-titulo">{tituloModo}</span>
+                <button className="ps-todos-btn-nueva" onClick={() => setModalNueva(true)}>
+                    ➕ Nueva planilla
+                </button>
+            </div>
+
+            <div className="ps-vt-body">
+                {cargando && <div className="ps-loading">Cargando planillas...</div>}
+                {!cargando && docs.length === 0 && (
+                    <div className="ps-vt-empty">No hay planillas para este período. Agregá una con "Nueva planilla".</div>
+                )}
+                {!cargando && docs.map(d => (
+                    <ObjetivoEditableCard key={d.docId} docInicial={d} dias={dias} modo={modo} objetivos={objetivos} />
+                ))}
+            </div>
+
+            {/* ── Modal nueva planilla ── */}
+            {modalNueva && (
+                <div className="ps-overlay" onClick={() => setModalNueva(false)}>
+                    <div className="ps-modal ps-modal--nueva" onClick={e => e.stopPropagation()}>
+                        <div className="ps-modal-title">➕ Nueva planilla</div>
+
+                        <div className="ps-field">
+                            <label className="ps-label">Cliente</label>
+                            <select className="ps-select" value={clienteId}
+                                onChange={e => { setClienteId(e.target.value); setObjetivoId(""); }}>
+                                <option value="">— Seleccionar cliente —</option>
+                                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="ps-field">
+                            <label className="ps-label">Objetivo / Servicio</label>
+                            <select className="ps-select" value={objetivoId}
+                                onChange={e => setObjetivoId(e.target.value)}
+                                disabled={!clienteId}>
+                                <option value="">— Seleccionar objetivo —</option>
+                                {objFiltrados.map(o => (
+                                    <option key={o.id} value={o.id}>
+                                        {[o.codigo, o.proyecto, o.nombre].filter(Boolean).join("  ·  ")}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="ps-modal-actions">
+                            <button className="ps-btn-secundario" onClick={() => setModalNueva(false)}>Cancelar</button>
+                            <button className="ps-btn-abrir" disabled={!clienteId || !objetivoId || creando}
+                                onClick={crearPlanilla}>
+                                {creando ? "Creando…" : "Crear planilla"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ── Vista de Turnos (solo lectura, todos los objetivos del período) ───────────────
+export function VistaTurnos({ año, mes }) {
+    const { empresaNombre } = useAppData();
+    const [docs, setDocs] = useState([]);
+    const [cargando, setCargando] = useState(false);
+
+    useEffect(() => {
+        if (!empresaNombre) return;
+        setCargando(true);
+        getDocs(query(
+            collection(db, "programacionServicios"),
+            where("empresa", "==", empresaNombre),
+            where("año", "==", año),
+            where("mes", "==", mes)
+        ))
+            .then(snap => {
+                const data = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                data.sort((a, b) => (a.clienteNombre || "").localeCompare(b.clienteNombre || ""));
+                setDocs(data);
+            })
+            .catch(console.error)
+            .finally(() => setCargando(false));
+    }, [empresaNombre, año, mes]);
+
+    const dias = getDias(año, mes);
+    const mesAnterior = mes === 1 ? 12 : mes - 1;
+    const añoAnterior = mes === 1 ? año - 1 : año;
+
+    const [descargando, setDescargando] = useState(false);
+
+    // ── Helpers de descarga ───────────────────────────────────────────────────
+    const capturar = async (id) => {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        return html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+    };
+
+    // Agrega 3 cm de margen lateral (en canvas units) a ambos lados
+    const conMargenes = (canvas) => {
+        const DPI = 96;
+        const CM_TO_PX = DPI / 2.54;
+        const margen = Math.round(3 * CM_TO_PX * 2); // ×2 por scale:2
+        const c2 = document.createElement("canvas");
+        c2.width  = canvas.width  + margen * 2;
+        c2.height = canvas.height + margen * 2;
+        const ctx = c2.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, c2.width, c2.height);
+        ctx.drawImage(canvas, margen, margen);
+        return c2;
+    };
+
+    const nombreArchivo = (d) =>
+        [d.clienteNombre, d.proyectoNombre, d.objetivoNombre]
+            .filter(Boolean).join(" - ")
+            .replace(/[/\\?%*:|"<>]/g, "-");
+
+    const descargarUno = async (docId, nombre, fmt) => {
+        setDescargando(true);
+        try {
+            const raw = await capturar(`vt-obj-${docId}`);
+            if (!raw) return;
+            const canvas = conMargenes(raw);
+            if (fmt === "jpg") {
+                const a = document.createElement("a");
+                a.download = `${nombre}.jpg`;
+                a.href = canvas.toDataURL("image/jpeg", 0.95);
+                a.click();
+            } else {
+                const w = canvas.width, h = canvas.height;
+                const pdf = new jsPDF({ orientation: w > h ? "l" : "p", unit: "px", format: [w, h] });
+                pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, w, h);
+                pdf.save(`${nombre}.pdf`);
+            }
+        } finally { setDescargando(false); }
+    };
+
+    const descargarTodos = async (fmt) => {
+        if (docs.length === 0) return;
+        setDescargando(true);
+        try {
+            if (fmt === "jpg") {
+                for (const d of docs) {
+                    const raw = await capturar(`vt-obj-${d.docId}`);
+                    if (!raw) continue;
+                    const canvas = conMargenes(raw);
+                    const a = document.createElement("a");
+                    a.download = `${nombreArchivo(d)}.jpg`;
+                    a.href = canvas.toDataURL("image/jpeg", 0.95);
+                    a.click();
+                    await new Promise(r => setTimeout(r, 300));
+                }
+            } else {
+                let pdf = null;
+                for (const d of docs) {
+                    const raw = await capturar(`vt-obj-${d.docId}`);
+                    if (!raw) continue;
+                    const canvas = conMargenes(raw);
+                    const w = canvas.width, h = canvas.height;
+                    const ori = w > h ? "l" : "p";
+                    if (!pdf) {
+                        pdf = new jsPDF({ orientation: ori, unit: "px", format: [w, h] });
+                    } else {
+                        pdf.addPage([w, h], ori);
+                    }
+                    pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, w, h);
+                }
+                if (pdf) pdf.save(`Turnos ${MESES_ES[mes - 1]} ${año}.pdf`);
+            }
+        } finally { setDescargando(false); }
+    };
+
+    // Calcula hs a cubrir para un día dado el horasConfig guardado en el doc
+    const horasDiaDoc = (dia, hc, diasEsp) => {
+        if (!hc) return null;
+        const key = fmtKey(dia);
+        if (FERIADOS_ARG[key]) return hc.horasFeriados != null ? Number(hc.horasFeriados) : null;
+        if (diasEsp[key] === false) return 0;
+        const hs = hc[HORAS_KEYS[dia.getDay()]];
+        return hs != null ? Number(hs) : null;
+    };
+
+    return (
+        <div className="ps-vt-root">
+            <div className="ps-vt-header">
+                <span className="ps-vt-title">Vista de Turnos</span>
+                <span className="ps-vt-hint">
+                    24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior} — 23/{String(mes).padStart(2,"0")}/{año}
+                </span>
+                {docs.length > 0 && (
+                    <div className="ps-vt-dl-group">
+                        <span className="ps-vt-dl-label">Todos:</span>
+                        <button className="ps-vt-dl-btn ps-vt-dl-btn--jpg" disabled={descargando} onClick={() => descargarTodos("jpg")}>⬇ JPG</button>
+                        <button className="ps-vt-dl-btn ps-vt-dl-btn--pdf" disabled={descargando} onClick={() => descargarTodos("pdf")}>⬇ PDF</button>
+                    </div>
+                )}
+                {descargando && <span className="ps-vt-dl-status">Generando...</span>}
+            </div>
+
+            <div className="ps-vt-body">
+                {cargando && <div className="ps-loading">Cargando turnos...</div>}
+                {!cargando && docs.length === 0 && (
+                    <div className="ps-vt-empty">No hay planillas programadas para este período.</div>
+                )}
+                {!cargando && docs.map(d => {
+                    const hc      = d.horasConfig || null;
+                    const diasEsp = d.diasEspeciales || {};
+                    return (
+                        <div key={d.docId} className="ps-vt-objetivo" id={`vt-obj-${d.docId}`}>
+                            <div className="ps-vt-obj-header">
+                                <span className="ps-vt-obj-cliente">{d.clienteNombre}</span>
+                                {d.proyectoNombre && <span className="ps-vt-obj-sep"> · {d.proyectoNombre}</span>}
+                                {d.objetivoNombre && <span className="ps-vt-obj-sep"> · {d.objetivoNombre}</span>}
+                                <span className="ps-vt-obj-count">{(d.personal || []).length} personas</span>
+                                <div className="ps-vt-obj-dl">
+                                    <button className="ps-vt-dl-btn ps-vt-dl-btn--jpg" disabled={descargando}
+                                        onClick={() => descargarUno(d.docId, nombreArchivo(d), "jpg")}>⬇ JPG</button>
+                                    <button className="ps-vt-dl-btn ps-vt-dl-btn--pdf" disabled={descargando}
+                                        onClick={() => descargarUno(d.docId, nombreArchivo(d), "pdf")}>⬇ PDF</button>
+                                </div>
+                            </div>
+                            {(d.personal || []).length === 0
+                                ? <div className="ps-vt-obj-empty">Sin personal asignado</div>
+                                : (
+                                    <div className="ps-vt-tabla-wrap">
+                                        <table className="ps-table ps-vt-table">
+                                            <thead>
+                                                <tr>
+                                                    <th className="ps-th-sticky ps-th-legajo">Leg.</th>
+                                                    <th className="ps-th-sticky ps-th-nombre">Nombre y Apellido</th>
+                                                    {dias.map(dia => {
+                                                        const key      = fmtKey(dia);
+                                                        const fin      = dia.getDay() === 0 || dia.getDay() === 6;
+                                                        const ferNombre = FERIADOS_ARG[key];
+                                                        const trabaja  = diasEsp[key];
+                                                        return (
+                                                            <th key={key}
+                                                                className={[
+                                                                    "ps-th-dia",
+                                                                    fin && !ferNombre && trabaja !== false ? "ps-th-dia--fin" : "",
+                                                                    ferNombre ? "ps-th-dia--fer" : "",
+                                                                ].join(" ")}
+                                                                title={ferNombre}
+                                                            >
+                                                                <div className="ps-th-mes-label">{MESES_ES[dia.getMonth()].slice(0,3)}</div>
+                                                                <div className="ps-th-num">{dia.getDate()}</div>
+                                                                <div className="ps-th-dow">{DIAS_ES[dia.getDay()].slice(0,2)}</div>
+                                                                {ferNombre && <div className="ps-th-badge ps-th-badge--fer">FER</div>}
+                                                            </th>
+                                                        );
+                                                    })}
+                                                    <th className="ps-th-hs">Hs</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(d.personal || []).map((p, i) => {
+                                                    const data = p.programado || {};
+                                                    const hs = Math.round(dias.reduce((s, d) => s + horasDeValor(data[fmtKey(d)] || ""), 0) * 10) / 10;
+                                                    return (
+                                                        <tr key={p.legajo + i} className="ps-row">
+                                                            <td className="ps-td-sticky ps-td-legajo">{p.legajo}</td>
+                                                            <td className="ps-td-sticky ps-td-nombre">{p.nombre}</td>
+                                                            {dias.map(dia => {
+                                                                const key    = fmtKey(dia);
+                                                                const val    = data[key] || "";
+                                                                const op     = OPCIONES.find(o => o.val === val);
+                                                                const fin    = dia.getDay() === 0 || dia.getDay() === 6;
+                                                                const trabaja = diasEsp[key];
+                                                                return (
+                                                                    <td key={key}
+                                                                        className={[
+                                                                            "ps-celda",
+                                                                            op?.cls ? `ps-celda--${op.cls}` : "",
+                                                                            fin && !op?.cls && trabaja !== false ? "ps-celda--fin" : "",
+                                                                        ].join(" ")}
+                                                                    >
+                                                                        <CeldaContenido val={val} op={op} />
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                            <td className="ps-td-hs">{hs || "—"}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="ps-tfoot">
+                                                    <td colSpan={2} className="ps-tfoot-label">Hs. a cubrir</td>
+                                                    {dias.map(dia => {
+                                                        const hs = horasDiaDoc(dia, hc, diasEsp);
+                                                        return (
+                                                            <td key={fmtKey(dia)} className={`ps-tfoot-cel ${hs == null ? "ps-tfoot-cel--sin" : ""}`}>
+                                                                {hs != null ? hs : "—"}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td className="ps-tfoot-total">
+                                                        {Math.round(dias.reduce((s, dia) => s + (horasDiaDoc(dia, hc, diasEsp) ?? 0), 0) * 10) / 10} hs
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                )
+                            }
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }

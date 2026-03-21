@@ -22,6 +22,8 @@ const CAMPOS = [
     { key: "hijos",        label: "Cantidad de hijos",                type: "text"   },
     { key: "centroCosto",  label: "Centro de costo",                  type: "text"   },
     { key: "cuil",         label: "CUIL",                             type: "text"   },
+    { key: "regimen",      label: "Régimen",                          type: "select", opts: ["", "4 x 2 x 12", "5 x 2 x 12", "6 x 1 x 8", "12 x 36", "14 x 14 x 12", "14 x 14 x 8", "200"] },
+    { key: "grupoTurno14", label: "Grupo Turno 14×14",                type: "select", opts: ["", "3", "4"] },
 ];
 
 export default function EditarPersonalScreen({ onBack }) {
@@ -168,7 +170,7 @@ export default function EditarPersonalScreen({ onBack }) {
                                         value={form[c.key] || ""}
                                         onChange={e => setForm(f => ({ ...f, [c.key]: e.target.value }))}
                                     >
-                                        {c.opts.map(o => <option key={o} value={o}>{o === "M" ? "Masculino" : "Femenino"}</option>)}
+                                        {c.opts.map(o => <option key={o} value={o}>{o === "" ? "— Sin asignar —" : o === "M" ? "Masculino" : o === "F" ? "Femenino" : o}</option>)}
                                     </select>
                                 ) : (
                                     <input

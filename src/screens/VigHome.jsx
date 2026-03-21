@@ -10,11 +10,14 @@ import RondasVigScreen from "./RondasVigScreen";
 import InformeSencilloScreen from "../forms/InformeSencilloScreen";
 import InformeNovedadScreen from "../forms/InformeNovedadScreen";
 import VerInformesScreen from "../forms/VerInformesScreen";
+import VerComunicacionesScreen from "../forms/VerComunicacionesScreen";
+import MisTurnosVigScreen from "./MisTurnosVigScreen";
 import ControlVehicularScreen from "./ControlVehicularScreen";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useClientesData } from "../hooks/useClientesData";
 import "../styles/VigHome.css";
+import "../styles/SupervisorHome.css";
 
 const TURNOS = [
     "06:00 – 14:00",
@@ -237,15 +240,15 @@ function PanelInformes({ onBack, onSelect }) {
         <div className="vh-subpanel">
             <button className="vh-back" onClick={onBack}>← Volver al panel</button>
             <div className="vh-subpanel-title">📄 Informes</div>
-            <div className="vh-opciones">
+            <div className="sh-grid" style={{ padding: "var(--space-3) 0 0" }}>
                 {OPCIONES_INFORMES.map(op => (
-                    <button key={op.id} className={`vh-opcion vh-opcion--${op.color}`} onClick={() => setVista(op.id)}>
-                        <span className="vh-opcion-icon">{op.icon}</span>
-                        <div className="vh-opcion-info">
+                    <button key={op.id} className="sh-modulo" onClick={() => setVista(op.id)}>
+                        <span className="sh-modulo-icon">{op.icon}</span>
+                        <div className="sh-modulo-info">
                             <strong>{op.titulo}</strong>
                             <small>{op.desc}</small>
                         </div>
-                        <span className="vh-modulo-arrow">›</span>
+                        <span className="sh-modulo-arrow">›</span>
                     </button>
                 ))}
             </div>
@@ -281,15 +284,15 @@ function PanelPlanillas({ onBack }) {
         <div className="vh-subpanel">
             <button className="vh-back" onClick={onBack}>← Volver al panel</button>
             <div className="vh-subpanel-title">📊 Planillas</div>
-            <div className="vh-opciones">
+            <div className="sh-grid" style={{ padding: "var(--space-3) 0 0" }}>
                 {OPCIONES_PLANILLAS.map(op => (
-                    <button key={op.id} className={`vh-opcion vh-opcion--${op.color}`} onClick={() => setVista(op.id)}>
-                        <span className="vh-opcion-icon">{op.icon}</span>
-                        <div className="vh-opcion-info">
+                    <button key={op.id} className="sh-modulo" onClick={() => setVista(op.id)}>
+                        <span className="sh-modulo-icon">{op.icon}</span>
+                        <div className="sh-modulo-info">
                             <strong>{op.titulo}</strong>
                             <small>{op.desc}</small>
                         </div>
-                        <span className="vh-modulo-arrow">›</span>
+                        <span className="sh-modulo-arrow">›</span>
                     </button>
                 ))}
             </div>
@@ -381,16 +384,7 @@ export default function VigHome({ onLogout, user: propUser }) {
 
     const handleLogout = async () => { await logout(); onLogout?.(); };
 
-    const handleModulo = (id) => {
-        if (id === "informes")            setSeccion("informes");
-        if (id === "planillas")           setSeccion("planillas");
-        if (id === "realizar_ronda")      setSeccion("realizar_ronda");
-        if (id === "control_vehicular")   setSeccion("control_vehicular");
-        if (id === "inventarios")         setSeccion("inventarios");
-        if (id === "muro_procedimientos") setSeccion("muro_procedimientos");
-        if (id === "muro_comunicacion")   setSeccion("muro_comunicacion");
-        if (id === "capacitacion")        setSeccion("capacitacion");
-    };
+    const handleModulo = (id) => { setSeccion(id); };
 
     const headerJSX = (
         <header className="vh-header">
@@ -427,11 +421,14 @@ export default function VigHome({ onLogout, user: propUser }) {
 
     if (seccion === "informes")         return <div className="vh-root">{headerJSX}<PanelInformes  onBack={() => setSeccion(null)} /></div>;
     if (seccion === "planillas")        return <div className="vh-root">{headerJSX}<PanelPlanillas onBack={() => setSeccion(null)} /></div>;
+    if (seccion === "muro_comunicacion") return <VerComunicacionesScreen onBack={() => setSeccion(null)} />;
+    if (seccion === "turnos_ver")        return <MisTurnosVigScreen      onBack={() => setSeccion(null)} />;
 
     const PROXIMOS = {
+        libro_actas:         { icon: "📖", titulo: "Libro de Actas Digital" },
+        pedido_insumos:      { icon: "📦", titulo: "Pedido de Insumos" },
         inventarios:         { icon: "🗃️", titulo: "Inventarios" },
         muro_procedimientos: { icon: "📌", titulo: "Muro de Procedimientos" },
-        muro_comunicacion:   { icon: "📢", titulo: "Muro de Comunicación y Novedades" },
         capacitacion:        { icon: "🎓", titulo: "Capacitación y Entrenamiento" },
     };
     if (PROXIMOS[seccion]) {
@@ -448,16 +445,31 @@ export default function VigHome({ onLogout, user: propUser }) {
         );
     }
     if (seccion === "realizar_ronda")   return <RondasVigScreen onBack={() => setSeccion(null)} />;
-    if (seccion === "control_vehicular") return (
-        <div className="vh-root">
-            {headerJSX}
-            <SelectorVehiculo
-                vehiculos={data?.vehiculos ?? []}
-                supervisor={user?.name ?? ""}
-                onBack={() => setSeccion(null)}
-            />
-        </div>
-    );
+    if (seccion === "control_vehicular") {
+        const vehiculos = data?.vehiculos ?? [];
+        if (vehiculos.length === 0) {
+            return (
+                <div className="vh-root">
+                    {headerJSX}
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">🚗 Control de Vehículo</div>
+                        <div className="vh-coming-soon">No hay vehículos configurados para este objetivo</div>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div className="vh-root">
+                {headerJSX}
+                <SelectorVehiculo
+                    vehiculos={vehiculos}
+                    supervisor={user?.name ?? ""}
+                    onBack={() => setSeccion(null)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="vh-root">
@@ -466,7 +478,7 @@ export default function VigHome({ onLogout, user: propUser }) {
 
             <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} />
 
-            <div className="vh-grid">
+            <div className="sh-grid">
                 {MODULOS.map(m => {
                     const modulosPermitidos = user?.permisosModulos != null
                         ? user.permisosModulos
@@ -476,16 +488,16 @@ export default function VigHome({ onLogout, user: propUser }) {
                     return (
                         <button
                             key={m.id}
-                            className={`vh-modulo ${!habilitado ? "vh-modulo--disabled" : ""}`}
+                            className={`sh-modulo ${!habilitado ? "sh-modulo--disabled" : ""}`}
                             disabled={!habilitado}
                             onClick={() => habilitado && handleModulo(m.id)}
                         >
-                            <span className="vh-modulo-icon">{m.icon}</span>
-                            <div className="vh-modulo-info">
+                            <span className="sh-modulo-icon">{m.icon}</span>
+                            <div className="sh-modulo-info">
                                 <strong>{m.titulo}</strong>
                                 <small>{habilitado ? m.descripcion : "Sin acceso"}</small>
                             </div>
-                            {habilitado && <span className="vh-modulo-arrow">›</span>}
+                            {habilitado && <span className="sh-modulo-arrow">›</span>}
                         </button>
                     );
                 })}

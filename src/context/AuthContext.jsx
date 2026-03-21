@@ -96,6 +96,7 @@ export function AuthProvider({ children }) {
     // El creador solo puede asignar roles que tiene permitido (ROLES_CREABLES_POR)
     const crearUsuario = async ({
         email, password, nombre, rol,
+        cargo        = "",
         empresaId    = null,
         contratoIds  = [],
         permisosOverride = {},
@@ -114,6 +115,7 @@ export function AuthProvider({ children }) {
                 nombre,
                 email:           email.trim(),
                 rol:             rol ?? "vigilador",
+                cargo:           cargo || "",
                 empresaId,
                 contratoIds,
                 permisosOverride,

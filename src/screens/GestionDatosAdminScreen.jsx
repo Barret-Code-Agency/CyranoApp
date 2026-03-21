@@ -54,6 +54,8 @@ const COLECCIONES = [
             { key: "servicio",     label: "Servicio / Objetivo", type: "text"   },
             { key: "sucursal",     label: "Sucursal",            type: "text"   },
             { key: "zona",         label: "Zona",                type: "text"   },
+            { key: "regimen",      label: "Régimen",             type: "select", opts: [{ v: "", l: "— Sin asignar —" }, { v: "4 x 2 x 12", l: "4 x 2 x 12" }, { v: "5 x 2 x 12", l: "5 x 2 x 12" }, { v: "6 x 1 x 8", l: "6 x 1 x 8" }, { v: "12 x 36", l: "12 x 36" }, { v: "14 x 14 x 12", l: "14 x 14 x 12" }, { v: "14 x 14 x 8", l: "14 x 14 x 8" }, { v: "200", l: "200" }] },
+            { key: "grupoTurno14", label: "Grupo Turno 14×14",   type: "select", opts: [{ v: "", l: "— Sin grupo —" }, { v: "3", l: "Grupo 3" }, { v: "4", l: "Grupo 4" }] },
         ],
     },
     {
@@ -175,7 +177,7 @@ const COLECCIONES = [
 ];
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function GestionDatosAdminScreen({ onBack, coleccionInicial = 0, canCreate = false }) {
+export default function GestionDatosAdminScreen({ onBack, coleccionInicial = 0, canCreate = false, noDelete = false }) {
     const { empresaNombre } = useAppData();
 
     const [colIdx,          setColIdx]          = useState(coleccionInicial);
@@ -552,11 +554,13 @@ export default function GestionDatosAdminScreen({ onBack, coleccionInicial = 0, 
                                             title="Editar"
                                             onClick={() => abrir(d)}
                                         >✏️</button>
+                                        {!noDelete && (
                                         <button
                                             className="gd-row-btn gd-row-btn--del"
                                             title="Borrar"
                                             onClick={() => setPendienteBorrar(d)}
                                         >🗑</button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

@@ -9,9 +9,16 @@ const ROL_LABEL = { admin: "Administrador", operator: "Supervisor/Analista" };
 const ROL_COLOR = { admin: "red", operator: "blue" };
 
 // ── Formulario nuevo usuario ──────────────────────────────────────────────────
+const ROLES_FORM = [
+    { value: "vigilador",      label: "👷 Vigilador"      },
+    { value: "supervisor",     label: "🔍 Supervisor"     },
+    { value: "administrativo", label: "🗂️ Administrativo" },
+    { value: "encargado",      label: "👤 Encargado"      },
+];
+
 function NuevoUsuarioForm({ onCreated, onCancel }) {
     const { crearUsuario } = useAuth();
-    const [form, setForm]   = useState({ nombre: "", email: "", password: "", rol: "operator" });
+    const [form, setForm]   = useState({ nombre: "", email: "", password: "", rol: "vigilador", cargo: "" });
     const [loading, setLoading] = useState(false);
     const [error,   setError]   = useState("");
     const [showPass, setShowPass] = useState(false);
@@ -24,7 +31,7 @@ function NuevoUsuarioForm({ onCreated, onCancel }) {
         if (form.password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres.");
         setError(""); setLoading(true);
         try {
-            await crearUsuario(form);
+            await crearUsuario({ ...form });
             onCreated(form.nombre);
         } catch (e) {
             setError(e.message.includes("email-already-in-use")
@@ -46,6 +53,16 @@ function NuevoUsuarioForm({ onCreated, onCancel }) {
                     placeholder="Fernando Hector Delgado"
                     value={form.nombre}
                     onChange={e => set("nombre", e.target.value)}
+                />
+            </div>
+
+            <div className="field">
+                <label className="label">Función / Cargo</label>
+                <input
+                    type="text"
+                    placeholder="Ej: Encargado, Jefe de Operaciones, Vigilador..."
+                    value={form.cargo}
+                    onChange={e => set("cargo", e.target.value)}
                 />
             </div>
 
@@ -89,13 +106,13 @@ function NuevoUsuarioForm({ onCreated, onCancel }) {
             <div className="field">
                 <label className="label">Rol</label>
                 <div className="usr-rol-opts">
-                    {["operator", "admin"].map(r => (
+                    {ROLES_FORM.map(r => (
                         <button
-                            key={r}
-                            className={`usr-rol-btn ${form.rol === r ? "active " + ROL_COLOR[r] : ""}`}
-                            onClick={() => set("rol", r)}
+                            key={r.value}
+                            className={`usr-rol-btn ${form.rol === r.value ? "active blue" : ""}`}
+                            onClick={() => set("rol", r.value)}
                         >
-                            {r === "operator" ? "👤 Supervisor" : "🔐 Administrador"}
+                            {r.label}
                         </button>
                     ))}
                 </div>
@@ -346,8 +363,8 @@ function UsuarioCard({ u, currentUid, onToggle, onReset, onSaveAnalista }) {
                     </div>
                     <div className="usr-card-email">{u.email}</div>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
-                        <span className={`usr-rol-tag ${ROL_COLOR[u.rol]}`}>
-                            {ROL_LABEL[u.rol] || u.rol}
+                        <span className={`usr-rol-tag ${ROL_COLOR[u.rol] || "blue"}`}>
+                            {u.cargo || ROL_LABEL[u.rol] || u.rol}
                         </span>
                         {u.esAnalista && (
                             <span style={{ background: "#fff8d6", color: "#7a5c00", border: "1px solid #d4a820",
@@ -472,9 +489,8 @@ export default function UsersScreen() {
     };
 
     const filtrados = usuarios.filter(u => {
-        if (filtro === "admin")    return u.rol === "admin";
-        if (filtro === "operator") return u.rol === "operator";
         if (filtro === "inactivo") return u.activo === false;
+        if (filtro !== "todos")    return (Array.isArray(u.roles) ? u.roles.includes(filtro) : u.rol === filtro);
         return true;
     });
 
@@ -512,17 +528,29 @@ export default function UsersScreen() {
                 </div>
             </div>
 
-            {/* Filtros */}
+            {/* Filtros + botón crear */}
             <div className="usr-filtros">
-                {["todos", "operator", "admin", "inactivo"].map(f => (
+                {[
+                    { v: "todos",          l: "Todos"        },
+                    { v: "supervisor",     l: "Supervisores" },
+                    { v: "administrativo", l: "Admins"       },
+                    { v: "encargado",      l: "Encargados"   },
+                    { v: "vigilador",      l: "Vigiladores"  },
+                    { v: "inactivo",       l: "Inactivos"    },
+                ].map(f => (
                     <button
-                        key={f}
-                        className={`usr-filtro-btn ${filtro === f ? "active" : ""}`}
-                        onClick={() => setFiltro(f)}
+                        key={f.v}
+                        className={`usr-filtro-btn ${filtro === f.v ? "active" : ""}`}
+                        onClick={() => setFiltro(f.v)}
                     >
-                        {f === "todos" ? "Todos" : f === "operator" ? "Supervisores" : f === "admin" ? "Admins" : "Inactivos"}
+                        {f.l}
                     </button>
                 ))}
+                {!showForm && (
+                    <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={() => setShowForm(true)}>
+                        + Crear usuario
+                    </button>
+                )}
             </div>
 
             {/* Formulario nuevo usuario */}
@@ -558,11 +586,6 @@ export default function UsersScreen() {
                 ))
             )}
 
-            {!showForm && (
-                <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowForm(true)}>
-                    + Crear usuario
-                </button>
-            )}
 
             {toast && <div className="admin-toast">{toast}</div>}
         </div>

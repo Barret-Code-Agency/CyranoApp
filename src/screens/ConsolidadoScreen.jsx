@@ -6,6 +6,11 @@ import { useAppData } from "../context/AppDataContext";
 import { useAuth }     from "../context/AuthContext";
 import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import {
+    ResponsiveContainer, BarChart, Bar,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
+    PieChart, Pie, Cell,
+} from "recharts";
 import "../styles/ConsolidadoScreen.css";
 
 // ── Constantes ───────────────────────────────────────────────────────────────
@@ -152,10 +157,15 @@ function ConsolidadoGrilla({ config, onBack }) {
     const [zonaMap,      setZonaMap]      = useState({});
     const [regimenMap,   setRegimenMap]   = useState({});
     const [docIdMap,     setDocIdMap]     = useState({});
+    const [tareaMap,     setTareaMap]     = useState({}); // legajo → tarea
+    const [cargoMap,     setCargoMap]     = useState({}); // legajo → cargo
+    const [grupoMap,     setGrupoMap]     = useState({}); // legajo → grupoTurno14
+    const [francosMap,   setFrancosMap]   = useState({}); // grupo → Set<"YYYY-MM-DD">
     const [excluidos,    setExcluidos]    = useState(new Set());
     const [cargando,     setCargando]     = useState(true);
     const [vista,      setVista]      = useState("programado");
     const [filtroBusq, setFiltroBusq] = useState("");
+    const [showGraf,   setShowGraf]   = useState(false);
 
     const dias = getDias(config.año, config.mes);
     const mesAnterior = config.mes === 1 ? 12 : config.mes - 1;
@@ -167,13 +177,14 @@ function ConsolidadoGrilla({ config, onBack }) {
         (async () => {
             setCargando(true);
             try {
-                const [progSnap, legSnap] = await Promise.all([
+                const [progSnap, legSnap, diagSnap] = await Promise.all([
                     getDocs(query(collection(db, "programacionServicios"),
                                   where("empresa", "==", empresaNombre),
                                   where("año", "==", config.año),
                                   where("mes", "==", config.mes))),
                     getDocs(query(collection(db, "legajos"),
                                   where("empresa", "==", empresaNombre))),
+                    getDocs(collection(db, "diagramas14x14")),
                 ]);
                 setRawDocs(progSnap.docs.map(d => d.data()));
 
@@ -181,15 +192,21 @@ function ConsolidadoGrilla({ config, onBack }) {
                 const zm  = {};
                 const rm  = {};
                 const dm  = {};
+                const gm  = {};
+                const tm  = {};
+                const cm  = {};
                 const exc = new Set();
                 const pers = [];
                 legSnap.docs.forEach(d => {
                     const data = d.data();
                     if (!data.legajo) return;
                     const leg = String(data.legajo);
-                    zm[leg] = data.zona    || "";
-                    rm[leg] = data.regimen || "";
+                    zm[leg] = data.zona         || "";
+                    rm[leg] = data.regimen      || "";
                     dm[leg] = d.id;
+                    gm[leg] = data.grupoTurno14 || "";
+                    tm[leg] = data.tarea        || "";
+                    cm[leg] = data.cargo        || "";
                     if (TAREAS_EXCLUIR.has(data.tarea)) {
                         exc.add(leg);
                     } else {
@@ -223,9 +240,20 @@ function ConsolidadoGrilla({ config, onBack }) {
                     )
                 );
 
+                // Franco map: grupo → Set de fechas
+                const fm = {};
+                diagSnap.docs.forEach(d => {
+                    const g = d.data();
+                    if (g.grupo && g.francos) fm[g.grupo] = new Set(g.francos);
+                });
+
                 setZonaMap(zm);
                 setRegimenMap(rm);
                 setDocIdMap(dm);
+                setTareaMap(tm);
+                setCargoMap(cm);
+                setGrupoMap(gm);
+                setFrancosMap(fm);
                 setExcluidos(exc);
                 setTodoPersonal(pers);
             } catch (e) {
@@ -341,9 +369,22 @@ function ConsolidadoGrilla({ config, onBack }) {
         );
     }, [todasFilas, filtroBusq]);
 
-    const calcExtras = (data, regimen) => {
+    const calcExtras = (data, regimen, grupoTurno14) => {
         let ext50 = 0, ext100 = 0;
-        if (regimen === "200") {
+        if (regimen === "14 x 14 x 8" || regimen === "14 x 14 x 12") {
+            const umbral  = regimen === "14 x 14 x 8" ? 8 : 12;
+            const francos = francosMap[grupoTurno14] || new Set();
+            dias.forEach(d => {
+                const key = fmtKey(d);
+                const hs  = horasDeValor(data[key] || "");
+                if (hs <= 0) return;
+                if (francos.has(key)) {
+                    ext100 += hs;          // trabajó en franco → todo al 100%
+                } else if (hs > umbral) {
+                    ext50 += hs - umbral;  // superó umbral en día normal → 50%
+                }
+            });
+        } else if (regimen === "200") {
             const hsTotal = dias.reduce((s, d) => s + horasDeValor(data[fmtKey(d)] || ""), 0);
             ext50 = Math.max(0, hsTotal - 200);
         } else {
@@ -380,7 +421,7 @@ function ConsolidadoGrilla({ config, onBack }) {
     const calcResumen = (data) => {
         let hsTotal = 0, diasTrab = 0, francos = 0, ausentes = 0, vac = 0;
         let lv = 0, sabado = 0, domingo = 0, ferDias = 0;
-        let domingoHs = 0, ferHs = 0;
+        let domingoHs = 0, ferHs = 0, sabadoHs = 0, lvHs = 0;
 
         dias.forEach(d => {
             const key   = fmtKey(d);
@@ -392,10 +433,10 @@ function ConsolidadoGrilla({ config, onBack }) {
             if (hs > 0) {
                 hsTotal += hs;
                 diasTrab++;
-                if (esFer)          { ferDias++;  ferHs    += hs; }
-                else if (dow === 0) { domingo++;   domingoHs += hs; }
-                else if (dow === 6)   sabado++;
-                else                  lv++;
+                if (esFer)          { ferDias++; ferHs    += hs; }
+                else if (dow === 0) { domingo++;  domingoHs += hs; }
+                else if (dow === 6) { sabado++;   sabadoHs  += hs; }
+                else                { lv++;       lvHs      += hs; }
             } else if (val === "Fco" || val === "Com") {
                 francos++;
             } else if (val === "Vac") {
@@ -406,8 +447,64 @@ function ConsolidadoGrilla({ config, onBack }) {
         });
 
         return { hsTotal, diasTrab, francos, ausentes, vac,
-                 lv, sabado, domingo, ferDias, domingoHs, ferHs };
+                 lv, sabado, domingo, ferDias, domingoHs, ferHs, sabadoHs, lvHs };
     };
+
+    // ── Datos para gráficos ───────────────────────────────────────────────────
+    const grafPersonas = useMemo(() => {
+        return todasFilas.map(f => {
+            const r = calcResumen(f.data);
+            const { ext50, ext100 } = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "");
+            const exc = f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0;
+            return {
+                nombre: f.nombre.trim(),
+                hs:     Math.round(r.hsTotal * 10) / 10,
+                ext50:  Math.round(ext50  * 10) / 10,
+                ext100: Math.round(ext100 * 10) / 10,
+                exc:    Math.round(exc    * 10) / 10,
+            };
+        }).sort((a, b) => b.hs - a.hs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [todasFilas, regimenMap, grupoMap, francosMap]);
+
+    const grafDesvios = useMemo(() => {
+        const totAut = todasFilas.reduce((acc, f) => {
+            const r = calcResumen(f.data);
+            return {
+                lvHs:      acc.lvHs      + r.lvHs,
+                saDomFerHs:acc.saDomFerHs + (r.sabadoHs + r.domingoHs + r.ferHs),
+            };
+        }, { lvHs: 0, saDomFerHs: 0 });
+        const totPag = todasFilas.reduce((acc, f) => {
+            const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "");
+            return { ext50: acc.ext50 + ext.ext50, ext100: acc.ext100 + ext.ext100 };
+        }, { ext50: 0, ext100: 0 });
+        const autExt50  = Math.round(totAut.lvHs       * 0.07 * 10) / 10;
+        const autExt100 = Math.round(totAut.saDomFerHs * 0.07 * 10) / 10;
+        const pagExt50  = Math.round(totPag.ext50  * 10) / 10;
+        const pagExt100 = Math.round(totPag.ext100 * 10) / 10;
+        return {
+            comparacion: [
+                { name: "Ext 50%",  Autorizado: autExt50,  Pagado: pagExt50  },
+                { name: "Ext 100%", Autorizado: autExt100, Pagado: pagExt100 },
+            ],
+            kpis: [
+                {
+                    label: "Ext 50%",
+                    aut: autExt50, pag: pagExt50,
+                    desv: Math.round((pagExt50 - autExt50) * 10) / 10,
+                    pct:  autExt50 ? Math.round((pagExt50 / autExt50 - 1) * 1000) / 10 : null,
+                },
+                {
+                    label: "Ext 100%",
+                    aut: autExt100, pag: pagExt100,
+                    desv: Math.round((pagExt100 - autExt100) * 10) / 10,
+                    pct:  autExt100 ? Math.round((pagExt100 / autExt100 - 1) * 1000) / 10 : null,
+                },
+            ],
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [todasFilas, regimenMap, grupoMap, francosMap]);
 
     const handleRegimen = async (leg, valor) => {
         setRegimenMap(prev => ({ ...prev, [leg]: valor }));
@@ -454,9 +551,185 @@ function ConsolidadoGrilla({ config, onBack }) {
                             onClick={() => setVista("programado")}>Programado</button>
                         <button className={`con-tab ${vista === "real" ? "con-tab--on" : ""}`}
                             onClick={() => setVista("real")}>Real</button>
+                        <button className={`con-tab con-tab--graf ${showGraf ? "con-tab--on" : ""}`}
+                            onClick={() => setShowGraf(v => !v)}>📊 Gráficos</button>
                     </div>
                 </div>
             </header>
+
+            {/* ── Panel de gráficos ── */}
+            {showGraf && todasFilas.length > 0 && (() => {
+            const GrafTick = ({ x, y, payload }) => {
+                const txt = String(payload?.value || "");
+                const MAX = 26;
+                const label = txt.length > MAX ? txt.slice(0, MAX) + "…" : txt;
+                return (
+                    <text x={x} y={y} dy={4} textAnchor="end" fill="#cbd5e1" fontSize={10}>
+                        {label}
+                    </text>
+                );
+            };
+            return (
+                <div className="con-graf-panel">
+                    {/* KPIs de desvíos */}
+                    <div className="con-graf-kpis">
+                        {[...grafDesvios.kpis, {
+                            label: "Total Extras",
+                            aut:  Math.round((grafDesvios.kpis[0].aut  + grafDesvios.kpis[1].aut)  * 10) / 10,
+                            pag:  Math.round((grafDesvios.kpis[0].pag  + grafDesvios.kpis[1].pag)  * 10) / 10,
+                            desv: Math.round((grafDesvios.kpis[0].desv + grafDesvios.kpis[1].desv) * 10) / 10,
+                            pct:  (() => {
+                                const aut = grafDesvios.kpis[0].aut + grafDesvios.kpis[1].aut;
+                                const pag = grafDesvios.kpis[0].pag + grafDesvios.kpis[1].pag;
+                                return aut ? Math.round((pag / aut - 1) * 1000) / 10 : null;
+                            })(),
+                        }].map(k => (
+                            <div key={k.label} className="con-graf-kpi">
+                                <div className="con-graf-kpi-label">{k.label}</div>
+                                <div className="con-graf-kpi-row">
+                                    <span className="con-graf-kpi-item">
+                                        <span className="con-graf-kpi-sub">Autorizado</span>
+                                        <span className="con-graf-kpi-val">{k.aut || "—"}</span>
+                                    </span>
+                                    <span className="con-graf-kpi-item">
+                                        <span className="con-graf-kpi-sub">Pagado</span>
+                                        <span className="con-graf-kpi-val">{k.pag || "—"}</span>
+                                    </span>
+                                    <span className="con-graf-kpi-item">
+                                        <span className="con-graf-kpi-sub">Desvío</span>
+                                        <span className={`con-graf-kpi-val ${k.desv > 0 ? "con-graf-kpi--pos" : k.desv < 0 ? "con-graf-kpi--neg" : ""}`}>
+                                            {k.desv > 0 ? "+" : ""}{k.desv || "—"}
+                                        </span>
+                                    </span>
+                                    <span className="con-graf-kpi-item">
+                                        <span className="con-graf-kpi-sub">% Desvío</span>
+                                        <span className={`con-graf-kpi-val ${k.pct > 0 ? "con-graf-kpi--pos" : k.pct < 0 ? "con-graf-kpi--neg" : ""}`}>
+                                            {k.pct != null ? `${k.pct > 0 ? "+" : ""}${k.pct}%` : "—"}
+                                        </span>
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Gráficos */}
+                    <div className="con-graf-charts">
+                        {/* Top 20 Ext 50% */}
+                        {(() => {
+                            const data = grafPersonas.slice().sort((a,b) => b.ext50 - a.ext50).slice(0,20);
+                            return (
+                                <div className="con-graf-card">
+                                    <div className="con-graf-card-title">Top 20 — Ext 50%</div>
+                                    <div className="con-graf-scroll-inner">
+                                    <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
+                                        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" horizontal={false} />
+                                            <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 10 }} height={18} />
+                                            <YAxis type="category" dataKey="nombre" tick={<GrafTick />} width={160} />
+                                            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", fontSize: 12 }} />
+                                            <Bar dataKey="ext50" name="Ext 50%" fill="#f59e0b" radius={[0,3,3,0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Top 10 Ext 100% */}
+                        {(() => {
+                            const data = grafPersonas.slice().sort((a,b) => b.ext100 - a.ext100).slice(0,10);
+                            return (
+                                <div className="con-graf-card">
+                                    <div className="con-graf-card-title">Top 10 — Ext 100%</div>
+                                    <div className="con-graf-scroll-inner">
+                                    <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
+                                        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" horizontal={false} />
+                                            <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 10 }} height={18} />
+                                            <YAxis type="category" dataKey="nombre" tick={<GrafTick />} width={160} />
+                                            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", fontSize: 12 }} />
+                                            <Bar dataKey="ext100" name="Ext 100%" fill="#ef4444" radius={[0,3,3,0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Desvíos — gauges semicírculo */}
+                        <div className="con-graf-card con-graf-card--full">
+                            <div className="con-graf-card-title">Desvíos — Autorizado vs Pagado</div>
+                            <div className="con-desv-panels">
+                                {[...grafDesvios.kpis, {
+                                    label: "Total Extras",
+                                    aut:  Math.round((grafDesvios.kpis[0].aut  + grafDesvios.kpis[1].aut)  * 10) / 10,
+                                    pag:  Math.round((grafDesvios.kpis[0].pag  + grafDesvios.kpis[1].pag)  * 10) / 10,
+                                    desv: Math.round((grafDesvios.kpis[0].desv + grafDesvios.kpis[1].desv) * 10) / 10,
+                                    pct:  (() => {
+                                        const aut = grafDesvios.kpis[0].aut + grafDesvios.kpis[1].aut;
+                                        const pag = grafDesvios.kpis[0].pag + grafDesvios.kpis[1].pag;
+                                        return aut ? Math.round((pag / aut - 1) * 1000) / 10 : null;
+                                    })(),
+                                }].map(k => {
+                                    const over  = k.pag > k.aut;
+                                    const ratio = k.aut > 0 ? Math.min(k.pag / k.aut, 1.3) : 0;
+                                    const color = over ? "#ef4444" : "#22c55e";
+                                    const gaugeData = [
+                                        { v: ratio,            fill: color    },
+                                        { v: Math.max(0, 1.3 - ratio), fill: "#1e3a5f" },
+                                    ];
+                                    return (
+                                        <div key={k.label} className="con-desv-panel">
+                                            <div className="con-desv-title">{k.label}</div>
+                                            <div className="con-desv-gauge-wrap">
+                                                <PieChart width={200} height={110} margin={{ top:0,right:0,bottom:0,left:0 }}>
+                                                    {/* Fondo del gauge */}
+                                                    <Pie data={[{v:1.3}]} dataKey="v" cx={100} cy={100}
+                                                        startAngle={210} endAngle={-30}
+                                                        innerRadius={58} outerRadius={80} strokeWidth={0}>
+                                                        <Cell fill="#0f172a" />
+                                                    </Pie>
+                                                    {/* Barra del gauge */}
+                                                    <Pie data={gaugeData} dataKey="v" cx={100} cy={100}
+                                                        startAngle={210} endAngle={-30}
+                                                        innerRadius={60} outerRadius={78} strokeWidth={0}>
+                                                        {gaugeData.map((e,i) => <Cell key={i} fill={e.fill} />)}
+                                                    </Pie>
+                                                </PieChart>
+                                                <div className="con-desv-gauge-center">
+                                                    <span className="con-desv-val" style={{color}}>{k.pag}</span>
+                                                    <span className="con-desv-aut">de {k.aut} aut.</span>
+                                                </div>
+                                            </div>
+                                            <div className="con-desv-stats">
+                                                <div className="con-desv-stat">
+                                                    <span className="con-desv-stat-dot" style={{background:"#22c55e"}} />
+                                                    <span className="con-desv-stat-label">Autorizado</span>
+                                                    <span className="con-desv-stat-val">{k.aut} hs</span>
+                                                </div>
+                                                <div className="con-desv-stat">
+                                                    <span className="con-desv-stat-dot" style={{background: color}} />
+                                                    <span className="con-desv-stat-label">Pagado</span>
+                                                    <span className="con-desv-stat-val" style={{color}}>{k.pag} hs</span>
+                                                </div>
+                                                <div className="con-desv-stat">
+                                                    <span className="con-desv-stat-dot" style={{background: color}} />
+                                                    <span className="con-desv-stat-label">Desvío</span>
+                                                    <span className="con-desv-stat-val" style={{color}}>
+                                                        {k.desv > 0 ? "+" : ""}{k.desv} hs
+                                                        {k.pct != null && <em> ({k.pct > 0 ? "+" : ""}{k.pct}%)</em>}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+            })()}
 
             {todasFilas.length === 0 ? (
                 <div className="con-empty">
@@ -573,25 +846,60 @@ function ConsolidadoGrilla({ config, onBack }) {
                                         <td className="con-td-sum con-td-sum--aus">{r.vac     || "—"}</td>
                                         {(() => {
                                             const reg = regimenMap[f.legajo] || "";
-                                            const { ext50, ext100 } = calcExtras(f.data, reg);
+                                            const { ext50, ext100 } = calcExtras(f.data, reg, grupoMap[f.legajo] || "");
                                             const noc = Object.values(f.nocData || {}).reduce((s,v)=>s+v,0);
+                                            const exc = f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0;
                                             return <>
                                                 <td className="con-td-sum con-td-sum--ext">{ext50  ? fmtHs(ext50)  : "—"}</td>
                                                 <td className="con-td-sum con-td-sum--ext">{ext100 ? fmtHs(ext100) : "—"}</td>
-                                                <td className="con-td-sum con-td-sum--ext">—</td>
+                                                <td className="con-td-sum con-td-sum--ext">{exc   ? fmtHs(exc)   : "—"}</td>
                                                 <td className="con-td-sum con-td-sum--ext">{noc ? fmtHs(noc) : "—"}</td>
                                             </>;
                                         })()}
-                                        <td className="con-td-sum con-td-sum--bon">—</td>
-                                        <td className="con-td-sum con-td-sum--bon">—</td>
-                                        <td className="con-td-sum con-td-sum--bon">—</td>
-                                        <td className="con-td-sum con-td-sum--bon">—</td>
-                                        <td className="con-td-sum con-td-sum--bon">—</td>
+                                        <td className="con-td-sum con-td-sum--bon">
+                                            {f.proyecto === "113"
+                                                ? r.ausentes >= dias.length ? "0%" : "100%"
+                                                : "—"}
+                                        </td>
+                                        <td className="con-td-sum con-td-sum--bon">
+                                            {f.proyecto === "113"
+                                                ? r.ausentes >= dias.length ? "0%" : "100%"
+                                                : "—"}
+                                        </td>
+                                        <td className="con-td-sum con-td-sum--bon">
+                                            {String(f.zona || "").toUpperCase().includes("BUENOS AIRES")
+                                                ? r.ausentes > 4 ? "0%" : "100%"
+                                                : "—"}
+                                        </td>
+                                        <td className="con-td-sum con-td-sum--bon">
+                                            {String(f.zona || "").toUpperCase().includes("BUENOS AIRES")
+                                                ? r.ausentes > 4 ? "0%" : "100%"
+                                                : "—"}
+                                        </td>
+                                        <td className="con-td-sum con-td-sum--bon">
+                                            {f.legajo === "20038" ? "100%" : "—"}
+                                        </td>
+                                        <td className="con-td-sum con-td-sum--bon2">
+                                            {String(f.zona || "").toUpperCase().includes("SANTA CRUZ") && String(tareaMap[f.legajo] || "").toUpperCase().includes("ENCARGADO")
+                                                ? r.ausentes > 14 ? "0%" : "100%"
+                                                : "—"}
+                                        </td>
+                                        <td className="con-td-sum con-td-sum--bon2">
+                                            {String(f.zona || "").toUpperCase().includes("SANTA CRUZ")
+                                                ? r.ausentes > 4 ? "0%" : "100%"
+                                                : "—"}
+                                        </td>
                                         <td className="con-td-sum con-td-sum--bon2">—</td>
-                                        <td className="con-td-sum con-td-sum--bon2">—</td>
-                                        <td className="con-td-sum con-td-sum--bon2">—</td>
-                                        <td className="con-td-sum con-td-sum--bon2">—</td>
-                                        <td className="con-td-sum con-td-sum--bon2">—</td>
+                                        <td className="con-td-sum con-td-sum--bon2">
+                                            {String(f.zona || "").toUpperCase().includes("SANTA CRUZ")
+                                                ? r.ausentes > 4 ? "0%" : "100%"
+                                                : "—"}
+                                        </td>
+                                        <td className="con-td-sum con-td-sum--bon2">
+                                            {String(f.zona || "").toUpperCase().includes("SANTA CRUZ")
+                                                ? r.ausentes > 4 ? "0%" : "100%"
+                                                : "—"}
+                                        </td>
                                     </tr>
                                 );
                             })}
@@ -601,7 +909,11 @@ function ConsolidadoGrilla({ config, onBack }) {
                         <tfoot>
                             <tr className="con-tfoot">
                                 <td className="con-td-fix">{filas.length}</td>
-                                <td className="con-td-fix" colSpan={5}></td>
+                                <td className="con-td-fix"></td>
+                                <td className="con-td-fix"></td>
+                                <td className="con-td-fix con-tfoot-label">Totales</td>
+                                <td className="con-td-fix"></td>
+                                <td className="con-td-fix"></td>
                                 {dias.map(d => {
                                     const key = fmtKey(d);
                                     const total = filas.reduce((s, f) => s + horasDeValor(f.data[key] || ""), 0);
@@ -625,11 +937,22 @@ function ConsolidadoGrilla({ config, onBack }) {
                                             sab:   acc.sab   + r.sabado,
                                             dom:   acc.dom   + r.domingo,
                                             fer:   acc.fer   + r.ferDias,
-                                            ext50: acc.ext50 + calcExtras(f.data, regimenMap[f.legajo] || "").ext50,
-                                            ext100:acc.ext100+ calcExtras(f.data, regimenMap[f.legajo] || "").ext100,
+                                            ext50: acc.ext50 + calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "").ext50,
+                                            ext100:acc.ext100+ calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "").ext100,
+                                            exc:   acc.exc   + (f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0),
                                             noc:   acc.noc   + Object.values(f.nocData || {}).reduce((s,v)=>s+v,0),
+                                            // bonus
+                                            b1:  acc.b1  + (f.proyecto === "113" && calcResumen(f.data).ausentes < dias.length ? 1 : 0),
+                                            b2:  acc.b2  + (f.proyecto === "113" && calcResumen(f.data).ausentes < dias.length ? 1 : 0),
+                                            b3:  acc.b3  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
+                                            b4:  acc.b4  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
+                                            b5:  acc.b5  + (f.legajo === "20038" ? 1 : 0),
+                                            b21: acc.b21 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && String(tareaMap[f.legajo]||"").toUpperCase().includes("ENCARGADO") && calcResumen(f.data).ausentes <= 14 ? 1 : 0),
+                                            b22: acc.b22 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
+                                            b24: acc.b24 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
+                                            b25: acc.b25 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
                                         };
-                                    }, { hs:0, dias:0, fco:0, vac:0, aus:0, lv:0, sab:0, dom:0, fer:0, ext50:0, ext100:0, noc:0 });
+                                    }, { hs:0, dias:0, fco:0, vac:0, aus:0, lv:0, sab:0, dom:0, fer:0, ext50:0, ext100:0, exc:0, noc:0, b1:0,b2:0,b3:0,b4:0,b5:0,b21:0,b22:0,b24:0,b25:0 });
                                     return <>
                                         <td className="con-tfoot-sum">{fmtHs(tots.hs)}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--dias">{tots.dias || "—"}</td>
@@ -641,9 +964,9 @@ function ConsolidadoGrilla({ config, onBack }) {
                                         <td className="con-tfoot-sum con-tfoot-sum--aus">{tots.fco || "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--aus">{tots.aus || "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--aus">{tots.vac || "—"}</td>
-                                        <td className="con-tfoot-sum con-tfoot-sum--ext">{tots.ext50  ? fmtHs(tots.ext50)  : "—"}</td>
-                                        <td className="con-tfoot-sum con-tfoot-sum--ext">{tots.ext100 ? fmtHs(tots.ext100) : "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--ext">—</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext">—</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext">{tots.exc ? fmtHs(tots.exc) : "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--ext">{tots.noc ? fmtHs(tots.noc) : "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--bon" />
                                         <td className="con-tfoot-sum con-tfoot-sum--bon" />
@@ -658,6 +981,85 @@ function ConsolidadoGrilla({ config, onBack }) {
                                     </>;
                                 })()}
                             </tr>
+
+                            {/* Cantidad autorizada */}
+                            {(() => {
+                                const aut = filas.reduce((acc, f) => {
+                                    const r = calcResumen(f.data);
+                                    return {
+                                        lvHs:      acc.lvHs      + r.lvHs,
+                                        saDomFerHs:acc.saDomFerHs + (r.sabadoHs + r.domingoHs + r.ferHs),
+                                        b2:        acc.b2        + (f.proyecto === "139" ? 1 : 0),
+                                        sc:        acc.sc        + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") ? 1 : 0),
+                                    };
+                                }, { lvHs: 0, saDomFerHs: 0, b2: 0, sc: 0 });
+                                const autExt50  = Math.round(aut.lvHs       * 0.07 * 10) / 10;
+                                const autExt100 = Math.round(aut.saDomFerHs * 0.07 * 10) / 10;
+                                return (
+                                    <tr className="con-tfoot con-tfoot--sub">
+                                        <td className="con-td-fix" colSpan={6 + dias.length + 10} style={{textAlign:"right", fontSize:10, color:"#93c5fd", paddingRight:8}}>
+                                            Cant. autorizada
+                                        </td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext">{autExt50  ? fmtHs(autExt50)  : "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext">{autExt100 ? fmtHs(autExt100) : "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext" />
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext" />
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">4</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">{aut.b2 || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">{filas.length || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">{filas.length || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">1</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">4</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">{aut.sc || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">10</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">{aut.sc || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">{aut.sc || "—"}</td>
+                                    </tr>
+                                );
+                            })()}
+
+                            {/* Pagados */}
+                            {(() => {
+                                const tots = filas.reduce((acc, f) => {
+                                    const r   = calcResumen(f.data);
+                                    const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "");
+                                    return {
+                                        ext50: acc.ext50 + ext.ext50,
+                                        ext100:acc.ext100+ ext.ext100,
+                                        exc:   acc.exc   + (f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0),
+                                        b1:  acc.b1  + (f.proyecto === "113" && r.ausentes < dias.length ? 1 : 0),
+                                        b2:  acc.b2  + (f.proyecto === "113" && r.ausentes < dias.length ? 1 : 0),
+                                        b3:  acc.b3  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && r.ausentes <= 4 ? 1 : 0),
+                                        b4:  acc.b4  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && r.ausentes <= 4 ? 1 : 0),
+                                        b5:  acc.b5  + (f.legajo === "20038" ? 1 : 0),
+                                        b21: acc.b21 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && String(tareaMap[f.legajo]||"").toUpperCase().includes("ENCARGADO") && r.ausentes <= 14 ? 1 : 0),
+                                        b22: acc.b22 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && r.ausentes <= 4 ? 1 : 0),
+                                        b24: acc.b24 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && r.ausentes <= 4 ? 1 : 0),
+                                        b25: acc.b25 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && r.ausentes <= 4 ? 1 : 0),
+                                    };
+                                }, { ext50:0, ext100:0, exc:0, b1:0,b2:0,b3:0,b4:0,b5:0,b21:0,b22:0,b24:0,b25:0 });
+                                return (
+                                    <tr className="con-tfoot con-tfoot--sub">
+                                        <td className="con-td-fix" colSpan={6 + dias.length + 10} style={{textAlign:"right", fontSize:10, color:"#93c5fd", paddingRight:8}}>
+                                            Pagados
+                                        </td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext">{tots.ext50  ? fmtHs(tots.ext50)  : "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext">{tots.ext100 ? fmtHs(tots.ext100) : "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext">{tots.exc ? fmtHs(tots.exc) : "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--ext" />
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">{tots.b1  || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">{tots.b2  || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">{tots.b3  || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">{tots.b4  || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon">{tots.b5  || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b21 || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b22 || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">—</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b24 || "—"}</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b25 || "—"}</td>
+                                    </tr>
+                                );
+                            })()}
                         </tfoot>
                     </table>
                 </div>
@@ -667,8 +1069,7 @@ function ConsolidadoGrilla({ config, onBack }) {
             {filas.length > 0 && (
                 <div className="con-stats">
                     <div className="con-stats-section">
-                        <div className="con-stats-title">Distribución por régimen</div>
-                        <div className="con-stats-chips">
+<div className="con-stats-chips">
                             {REGIMENES.filter(r => r).map(reg => {
                                 const count = filas.filter(f => (regimenMap[f.legajo] || "") === reg).length;
                                 if (!count) return null;
@@ -691,7 +1092,118 @@ function ConsolidadoGrilla({ config, onBack }) {
                         </div>
                     </div>
                     <div className="con-stats-graficos">
-                        {/* espacio reservado para gráficos */}
+                        {(() => {
+                            // Helper: calcula cards de donuts para un subset de filas
+                            const buildCards = (rows) => {
+                                const totAut = rows.reduce((acc, f) => {
+                                    const r = calcResumen(f.data);
+                                    return {
+                                        lvHs:      acc.lvHs       + r.lvHs,
+                                        saDomFerHs:acc.saDomFerHs + (r.sabadoHs + r.domingoHs + r.ferHs),
+                                    };
+                                }, { lvHs: 0, saDomFerHs: 0 });
+                                const aut50  = Math.round(totAut.lvHs       * 0.07 * 10) / 10;
+                                const aut100 = Math.round(totAut.saDomFerHs * 0.07 * 10) / 10;
+                                const totPag = rows.reduce((acc, f) => {
+                                    const e = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "");
+                                    return { ext50: acc.ext50 + e.ext50, ext100: acc.ext100 + e.ext100 };
+                                }, { ext50: 0, ext100: 0 });
+                                const pag50  = Math.round(totPag.ext50  * 10) / 10;
+                                const pag100 = Math.round(totPag.ext100 * 10) / 10;
+                                const totalAut = Math.round((aut50  + aut100) * 10) / 10;
+                                const totalPag = Math.round((pag50  + pag100) * 10) / 10;
+                                const pct50  = aut50  ? Math.round((pag50  / aut50  - 1) * 1000) / 10 : null;
+                                const pct100 = aut100 ? Math.round((pag100 / aut100 - 1) * 1000) / 10 : null;
+                                const pctTot = totalAut ? Math.round((totalPag / totalAut - 1) * 1000) / 10 : null;
+                                return [
+                                    {
+                                        label: "Permitidas",
+                                        center: totalAut || 0, color: "#22c55e",
+                                        data: [
+                                            { v: totalAut,                         fill: "#22c55e" },
+                                            { v: Math.max(0, totalPag - totalAut), fill: "#e2e8f0" },
+                                        ],
+                                    },
+                                    {
+                                        label: "Realizadas",
+                                        center: totalPag || 0,
+                                        pct: pctTot,
+                                        color: totalPag > totalAut ? "#ef4444" : "#3b82f6",
+                                        data: [
+                                            { v: Math.min(totalPag, totalAut),     fill: totalPag > totalAut ? "#ef4444" : "#3b82f6" },
+                                            { v: Math.max(0, totalAut - totalPag), fill: "#e2e8f0" },
+                                        ],
+                                    },
+                                    {
+                                        label: "Ext 50% — Hs",
+                                        center: pag50 || 0, pct: pct50, color: "#f59e0b",
+                                        data: [
+                                            { v: pag50,                       fill: "#f59e0b" },
+                                            { v: Math.max(0, aut50 - pag50),  fill: "#e2e8f0" },
+                                        ],
+                                    },
+                                    {
+                                        label: "Ext 100% — Hs",
+                                        center: pag100 || 0, pct: pct100, color: "#ef4444",
+                                        data: [
+                                            { v: pag100,                        fill: "#ef4444" },
+                                            { v: Math.max(0, aut100 - pag100),  fill: "#e2e8f0" },
+                                        ],
+                                    },
+                                    {
+                                        label: "% Desvío total",
+                                        center: pctTot != null ? `${pctTot > 0 ? "+" : ""}${pctTot}%` : "—",
+                                        color: pctTot > 0 ? "#f87171" : "#34d399",
+                                        data: (() => {
+                                            const cap = Math.min(Math.abs(pctTot || 0), 100);
+                                            return [
+                                                { v: cap,       fill: pctTot > 0 ? "#f87171" : "#34d399" },
+                                                { v: 100 - cap, fill: "#e2e8f0" },
+                                            ];
+                                        })(),
+                                    },
+                                ];
+                            };
+
+                            const renderDonuts = (cards, prefix) => cards.map(c => (
+                                <div key={prefix + c.label} className="con-donut-card">
+                                    <div className="con-donut-label">{c.label}</div>
+                                    <div className="con-donut-wrap">
+                                        <PieChart width={100} height={100} margin={{ top:0,right:0,bottom:0,left:0 }}>
+                                            <Pie data={c.data} dataKey="v" cx={50} cy={50}
+                                                innerRadius={32} outerRadius={46}
+                                                startAngle={90} endAngle={-270} strokeWidth={0}>
+                                                {c.data.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                                            </Pie>
+                                        </PieChart>
+                                        <div className="con-donut-center">
+                                            <span className="con-donut-val" style={{ color: c.color }}>{c.center}</span>
+                                            {c.pct != null && (
+                                                <span className={`con-donut-pct ${c.pct > 0 ? "con-donut--pos" : c.pct < 0 ? "con-donut--neg" : ""}`}>
+                                                    {c.pct > 0 ? "+" : ""}{c.pct}%
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {c.sub && <div className="con-donut-sub">{c.sub}</div>}
+                                </div>
+                            ));
+
+                            const grupos = [
+                                { label: "Total",        rows: filas,                                                                                                    bg: "#eff6ff", border: "#bfdbfe", labelColor: "#1d4ed8" },
+                                { label: "Santa Cruz",   rows: filas.filter(f => String(f.zona||"").toUpperCase().includes("SANTA CRUZ")),   bg: "#f0fdf4", border: "#bbf7d0", labelColor: "#15803d" },
+                                { label: "Buenos Aires", rows: filas.filter(f => String(f.zona||"").toUpperCase().includes("BUENOS AIRES")), bg: "#fdf4ff", border: "#e9d5ff", labelColor: "#7e22ce" },
+                            ];
+
+                            return grupos.map(g => (
+                                <div key={g.label} className="con-donut-grupo" style={{ background: g.bg, borderColor: g.border }}>
+                                    <div className="con-donut-grupo-label" style={{ color: g.labelColor }}>{g.label}</div>
+                                    <div className="con-donut-grupo-cards">
+                                        {renderDonuts(buildCards(g.rows), g.label)}
+                                    </div>
+                                </div>
+                            ));
+                        })()}
                     </div>
                 </div>
             )}

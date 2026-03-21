@@ -37,28 +37,44 @@ function countBy(arr, fn) {
     arr.forEach(x => { const k = fn(x); map[k] = (map[k] || 0) + 1; });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
 }
+function getGeneracion(nacimiento) {
+    if (!nacimiento) return null;
+    const y = parseInt(nacimiento.split("/")[2]);
+    if (!y || y < 1900) return null;
+    if (y <= 1945) return "Silenciosa";
+    if (y <= 1964) return "Baby Boomers";
+    if (y <= 1980) return "Gen X";
+    if (y <= 1996) return "Millennials";
+    if (y <= 2012) return "Centenials";
+    return "Alfa";
+}
+const ORDEN_GEN = ["Silenciosa","Baby Boomers","Gen X","Millennials","Centenials","Alfa"];
 function rangosAntiguedad(legajos) {
-    const rangos = { "< 2 años": 0, "2–5 años": 0, "5–10 años": 0, "> 10 años": 0 };
+    const rangos = { "< 2 años": 0, "2–5 años": 0, "5–10 años": 0, "10–15 años": 0, "15–20 años": 0, "> 20 años": 0 };
     legajos.forEach(p => {
         const a = calcAntiguedad(p.fechaIngreso);
         if (a === null) return;
-        if (a < 2) rangos["< 2 años"]++;
-        else if (a < 5) rangos["2–5 años"]++;
+        if (a < 2)       rangos["< 2 años"]++;
+        else if (a < 5)  rangos["2–5 años"]++;
         else if (a < 10) rangos["5–10 años"]++;
-        else rangos["> 10 años"]++;
+        else if (a < 15) rangos["10–15 años"]++;
+        else if (a < 20) rangos["15–20 años"]++;
+        else             rangos["> 20 años"]++;
     });
     return Object.entries(rangos);
 }
 function rangosEdad(legajos) {
-    const rangos = { "< 30": 0, "30–39": 0, "40–49": 0, "50–59": 0, "≥ 60": 0 };
+    const rangos = { "18–20": 0, "20–29": 0, "30–39": 0, "40–49": 0, "50–59": 0, "60–65": 0, "> 65": 0 };
     legajos.forEach(p => {
         const e = calcEdad(p.nacimiento);
-        if (e === null) return;
-        if (e < 30) rangos["< 30"]++;
-        else if (e < 40) rangos["30–39"]++;
-        else if (e < 50) rangos["40–49"]++;
-        else if (e < 60) rangos["50–59"]++;
-        else rangos["≥ 60"]++;
+        if (e === null || e < 18) return;
+        if (e <= 20)      rangos["18–20"]++;
+        else if (e <= 29) rangos["20–29"]++;
+        else if (e <= 39) rangos["30–39"]++;
+        else if (e <= 49) rangos["40–49"]++;
+        else if (e <= 59) rangos["50–59"]++;
+        else if (e <= 65) rangos["60–65"]++;
+        else              rangos["> 65"]++;
     });
     return Object.entries(rangos);
 }
@@ -67,7 +83,7 @@ function ingresosPorAnio(legajos) {
     legajos.forEach(p => {
         if (!p.fechaIngreso) return;
         const y = p.fechaIngreso.split("/")[2];
-        if (!y || y.length !== 4) return;
+        if (!y || y.length !== 4 || parseInt(y) < 2013) return;
         map[y] = (map[y] || 0) + 1;
     });
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
@@ -118,9 +134,33 @@ function buildStats(legajos) {
         .filter(p => { const e = calcEdad(p.nacimiento); return e !== null && e >= 60; })
         .sort((a, b) => (calcEdad(b.nacimiento) || 0) - (calcEdad(a.nacimiento) || 0));
 
+    // Encuadre: Fuera de convenio = Jefes/Supervisores FC, el resto = Convenio
+    const fueraConv = legajos.filter(p => {
+        const t = normalizarTarea(p.tarea);
+        return t === "Jefe" || (p.encuadre || "").toLowerCase().includes("fuera");
+    }).length;
+    const convenio = legajos.length - fueraConv;
+
+    // Contrato: Efectivo vs Prueba (usa campo tipoContrato si existe, sino cuenta efectivos)
+    const prueba    = legajos.filter(p => (p.tipoContrato || "").toLowerCase().includes("prueba")).length;
+    const efectivos = legajos.length - prueba;
+
+    // Generaciones
+    const genMap = {};
+    legajos.forEach(p => {
+        const g = getGeneracion(p.nacimiento);
+        if (!g) return;
+        genMap[g] = (genMap[g] || 0) + 1;
+    });
+    const generaciones = ORDEN_GEN
+        .filter(g => genMap[g] !== undefined)
+        .map(g => [g, genMap[g]]);
+
     return {
         total: legajos.length, masc, fem, promAntig, promEdad,
         conHijos, totalHijos, tareas, proyectos, servicios, hijosDistr,
+        convenio, fueraConv, efectivos, prueba,
+        generaciones,
         antiguedad: rangosAntiguedad(legajos),
         edades: rangosEdad(legajos),
         sucursales:           countBy(legajos, p => p.sucursal   || "Sin sucursal"),
@@ -237,25 +277,6 @@ function CalendarioCumpleanos({ legajos }) {
 function StatsPanel({ legajos, zona }) {
     const stats = useMemo(() => buildStats(legajos), [legajos]);
 
-    const [busqueda, setBusqueda]         = useState("");
-    const [filtroCargo, setFiltroCargo]   = useState("Todos");
-    const [filtroProyecto, setFiltroProyecto] = useState("Todos");
-
-    const tablaFiltrada = useMemo(() => {
-        const q = busqueda.toLowerCase();
-        return legajos.filter(p => {
-            const matchBusq = !q ||
-                (p.nombre || "").toLowerCase().includes(q) ||
-                (p.legajo || "").toLowerCase().includes(q) ||
-                (p.servicio || "").toLowerCase().includes(q);
-            const matchCargo = filtroCargo === "Todos" || normalizarTarea(p.tarea) === filtroCargo;
-            const matchProy  = filtroProyecto === "Todos" || p.proyecto === filtroProyecto;
-            return matchBusq && matchCargo && matchProy;
-        }).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
-    }, [legajos, busqueda, filtroCargo, filtroProyecto]);
-
-    const proyectosUnicos = ["Todos", ...new Set(legajos.map(p => p.proyecto).filter(Boolean))];
-    const cargosUnicos    = ["Todos", ...new Set(legajos.map(p => normalizarTarea(p.tarea)).filter(Boolean))];
 
     if (!stats) return <div className="dp-empty">Sin datos para esta zona.</div>;
 
@@ -285,23 +306,83 @@ function StatsPanel({ legajos, zona }) {
                 </div>
             </div>
 
+            {/* ── Estructura de RRHH — fila única ── */}
+            <div className="dp-rrhh-row">
+                {/* Encuadre — ancho fijo */}
+                <div className="dp-card dp-rrhh-encuadre">
+                    <div className="dp-card-title">Encuadre</div>
+                    <div className="dp-encuadre-row">
+                        <div className="dp-encuadre-blk">
+                            <div className="dp-encuadre-val">{stats.convenio}</div>
+                            <div className="dp-encuadre-lbl">Convenio</div>
+                        </div>
+                        <div className="dp-encuadre-sep" />
+                        <div className="dp-encuadre-blk dp-encuadre-blk--fc">
+                            <div className="dp-encuadre-val">{stats.fueraConv}</div>
+                            <div className="dp-encuadre-lbl">Fuera de convenio</div>
+                        </div>
+                        <div className="dp-encuadre-sep" />
+                        <div className="dp-encuadre-blk dp-encuadre-blk--prueba">
+                            <div className="dp-encuadre-val">{stats.efectivos}</div>
+                            <div className="dp-encuadre-lbl">Efectivos</div>
+                        </div>
+                        <div className="dp-encuadre-sep" />
+                        <div className="dp-encuadre-blk dp-encuadre-blk--prueba">
+                            <div className="dp-encuadre-val">{stats.prueba}</div>
+                            <div className="dp-encuadre-lbl">En prueba</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Género — compacto */}
+                <div className="dp-card dp-rrhh-small">
+                    <div className="dp-card-title">Género</div>
+                    <DonutSexo masc={stats.masc} fem={stats.fem} />
+                </div>
+
+                {/* Generaciones — compacto */}
+                {stats.generaciones.length > 0 && (
+                    <div className="dp-card dp-rrhh-small">
+                        <div className="dp-card-title">Generaciones</div>
+                        <div className="dp-gen-row dp-gen-row--compact">
+                            {stats.generaciones.map(([gen, count]) => (
+                                <div key={gen} className="dp-gen-blk">
+                                    <div className="dp-gen-val">{count}</div>
+                                    <div className="dp-gen-bar-wrap">
+                                        <div
+                                            className="dp-gen-bar"
+                                            style={{ height: `${Math.max(4, Math.round((count / stats.total) * 52))}px` }}
+                                        />
+                                    </div>
+                                    <div className="dp-gen-lbl">{gen}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {/* Calendario cumpleaños */}
             <CalendarioCumpleanos legajos={legajos} />
 
-            {/* Fila 1 */}
-            <div className="dp-row2">
-                <div className="dp-card">
-                    <div className="dp-card-title">Distribución por sexo</div>
-                    <DonutSexo masc={stats.masc} fem={stats.fem} />
-                </div>
+            {/* Fila 1 — función + cargo + sucursal */}
+            <div className="dp-row3">
                 <div className="dp-card">
                     <div className="dp-card-title">Por función</div>
                     <BarChart data={stats.tareas} total={stats.total} />
                 </div>
+                <div className="dp-card">
+                    <div className="dp-card-title">Por cargo</div>
+                    <BarChart data={stats.cargos} color="#7c3aed" total={stats.total} />
+                </div>
+                <div className="dp-card">
+                    <div className="dp-card-title">Por sucursal</div>
+                    <BarChart data={stats.sucursales} color="#0891b2" total={stats.total} />
+                </div>
             </div>
 
-            {/* Fila 2 */}
-            <div className="dp-row2">
+            {/* Fila 2 — proyecto + objetivo + centro de costo */}
+            <div className="dp-row3">
                 <div className="dp-card">
                     <div className="dp-card-title">Por proyecto / contrato</div>
                     <BarChart data={stats.proyectos} color="var(--color-success)" total={stats.total} />
@@ -310,13 +391,21 @@ function StatsPanel({ legajos, zona }) {
                     <div className="dp-card-title">Por servicio / objetivo</div>
                     <BarChart data={stats.servicios.slice(0, 10)} color="var(--color-warn)" total={stats.total} />
                 </div>
+                <div className="dp-card">
+                    <div className="dp-card-title">Por centro de costo</div>
+                    <BarChart data={stats.centrosCosto} color="#059669" total={stats.total} />
+                </div>
             </div>
 
-            {/* Fila 3 */}
-            <div className="dp-row2">
+            {/* Fila 3 — antigüedad + antigüedad por función + rango etario */}
+            <div className="dp-row3">
                 <div className="dp-card">
                     <div className="dp-card-title">Antigüedad</div>
                     <BarChart data={stats.antiguedad} color="#8b5cf6" total={stats.total} />
+                </div>
+                <div className="dp-card">
+                    <div className="dp-card-title">Antigüedad por función</div>
+                    <BarChart data={stats.antiguedadPorFuncion} color="#8b5cf6" suffix=" a." />
                 </div>
                 <div className="dp-card">
                     <div className="dp-card-title">Rango etario</div>
@@ -324,40 +413,16 @@ function StatsPanel({ legajos, zona }) {
                 </div>
             </div>
 
-            {/* Hijos */}
-            <div className="dp-card dp-card--full">
-                <div className="dp-card-title">Distribución de hijos</div>
-                <BarChart data={stats.hijosDistr} color="#ec4899" total={stats.total} />
-            </div>
-
-            {/* Fila 4 */}
+            {/* Hijos + Ingresos */}
             <div className="dp-row2">
                 <div className="dp-card">
-                    <div className="dp-card-title">Por sucursal</div>
-                    <BarChart data={stats.sucursales} color="#0891b2" total={stats.total} />
-                </div>
-                <div className="dp-card">
-                    <div className="dp-card-title">Por cargo</div>
-                    <BarChart data={stats.cargos} color="#7c3aed" total={stats.total} />
-                </div>
-            </div>
-
-            {/* Fila 5 */}
-            <div className="dp-row2">
-                <div className="dp-card">
-                    <div className="dp-card-title">Por centro de costo</div>
-                    <BarChart data={stats.centrosCosto} color="#059669" total={stats.total} />
+                    <div className="dp-card-title">Hijos</div>
+                    <BarChart data={stats.hijosDistr} color="#ec4899" total={stats.total} />
                 </div>
                 <div className="dp-card">
                     <div className="dp-card-title">Ingresos por año</div>
                     <BarChart data={stats.ingresosPorAnio} color="#d97706" total={stats.total} />
                 </div>
-            </div>
-
-            {/* Antigüedad promedio por función */}
-            <div className="dp-card dp-card--full">
-                <div className="dp-card-title">Antigüedad promedio por función</div>
-                <BarChart data={stats.antiguedadPorFuncion} color="#8b5cf6" suffix=" a." />
             </div>
 
             {/* Personal próximo a jubilación */}
@@ -408,71 +473,6 @@ function StatsPanel({ legajos, zona }) {
                 )}
             </div>
 
-            {/* Tabla */}
-            <div className="dp-card dp-card--full">
-                <div className="dp-card-title">Listado del personal</div>
-                <div className="dp-tabla-filtros">
-                    <input
-                        className="dp-search"
-                        placeholder="🔍 Buscar por nombre, legajo o servicio…"
-                        value={busqueda}
-                        onChange={e => setBusqueda(e.target.value)}
-                    />
-                    <select className="dp-select" value={filtroCargo} onChange={e => setFiltroCargo(e.target.value)}>
-                        {cargosUnicos.map(c => <option key={c}>{c}</option>)}
-                    </select>
-                    <select className="dp-select" value={filtroProyecto} onChange={e => setFiltroProyecto(e.target.value)}>
-                        {proyectosUnicos.map(p => <option key={p}>{p}</option>)}
-                    </select>
-                    <span className="dp-tabla-count">{tablaFiltrada.length} resultados</span>
-                </div>
-                <div className="dp-tabla-wrap">
-                    <table className="dp-tabla">
-                        <thead>
-                            <tr>
-                                <th>Legajo</th>
-                                <th>Nombre</th>
-                                <th>Función</th>
-                                <th>Cargo</th>
-                                <th>Servicio</th>
-                                <th>Proyecto</th>
-                                <th>Antigüedad</th>
-                                <th>Edad</th>
-                                <th>Hijos</th>
-                                <th>Sexo</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {tablaFiltrada.map((p, i) => {
-                                const antig = calcAntiguedad(p.fechaIngreso);
-                                const edad  = calcEdad(p.nacimiento);
-                                return (
-                                    <tr key={p.id || p.legajo || i}>
-                                        <td className="dp-td-legajo">{p.legajo}</td>
-                                        <td className="dp-td-nombre">{p.nombre}</td>
-                                        <td>
-                                            <span className={`dp-tag dp-tag--${normalizarTarea(p.tarea).toLowerCase()}`}>
-                                                {normalizarTarea(p.tarea)}
-                                            </span>
-                                        </td>
-                                        <td className="dp-td-muted">{p.cargo}</td>
-                                        <td>{p.servicio || "—"}</td>
-                                        <td className="dp-td-muted">{p.proyecto || "—"}</td>
-                                        <td className="dp-td-num">{antig !== null ? `${antig.toFixed(1)} a.` : "—"}</td>
-                                        <td className="dp-td-num">{edad !== null ? edad : "—"}</td>
-                                        <td className="dp-td-num">{p.hijos !== "" ? p.hijos : "—"}</td>
-                                        <td>
-                                            <span className={`dp-sexo-badge ${p.sexo === "F" ? "dp-sexo-badge--f" : ""}`}>
-                                                {p.sexo === "F" ? "♀" : "♂"}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         </>
     );
 }
@@ -484,11 +484,11 @@ const ZONAS = [
     { key: "Santa Cruz",   label: "⛏️ Santa Cruz"       },
 ];
 
-export default function DashboardPersonalScreen({ onBack }) {
+export default function DashboardPersonalScreen({ onBack, zonaFija }) {
     const { empresaNombre } = useAppData();
     const [todosLegajos, setTodosLegajos] = useState([]);
     const [loading, setLoading]           = useState(true);
-    const [zonaActiva, setZonaActiva]     = useState("todas");
+    const [zonaActiva, setZonaActiva]     = useState(zonaFija ?? "todas");
 
     useEffect(() => {
         const cargar = async () => {
@@ -539,24 +539,26 @@ export default function DashboardPersonalScreen({ onBack }) {
                 <div className="dp-header-sub">{empresaNombre} · {todosLegajos.length} personas en total</div>
             </div>
 
-            {/* Tabs de zona */}
-            <div className="dp-zona-tabs">
-                {ZONAS.map(z => (
-                    <button
-                        key={z.key}
-                        className={`dp-zona-tab ${zonaActiva === z.key ? "dp-zona-tab--active" : ""}`}
-                        onClick={() => setZonaActiva(z.key)}
-                    >
-                        {z.label}
-                        <span className="dp-zona-tab-count">
-                            {z.key === "todas"
-                                ? todosLegajos.length
-                                : todosLegajos.filter(p => (p.zona || p.sucursal || "") === z.key).length
-                            }
-                        </span>
-                    </button>
-                ))}
-            </div>
+            {/* Tabs de zona — ocultos si hay zonaFija */}
+            {!zonaFija && (
+                <div className="dp-zona-tabs">
+                    {ZONAS.map(z => (
+                        <button
+                            key={z.key}
+                            className={`dp-zona-tab ${zonaActiva === z.key ? "dp-zona-tab--active" : ""}`}
+                            onClick={() => setZonaActiva(z.key)}
+                        >
+                            {z.label}
+                            <span className="dp-zona-tab-count">
+                                {z.key === "todas"
+                                    ? todosLegajos.length
+                                    : todosLegajos.filter(p => (p.zona || p.sucursal || "") === z.key).length
+                                }
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* Stats del tab activo */}
             <StatsPanel legajos={legajosFiltrados} zona={zonaActiva} />

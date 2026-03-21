@@ -21,6 +21,18 @@ const generarCodigo = (tipo, identificador) => {
     return `${pre}-${slug}-${fecha}-${hora}`;
 };
 
+function Seccion({ numero, titulo, children }) {
+    return (
+        <section className="is-seccion">
+            <div className="is-seccion-header">
+                <span className="is-seccion-num">{numero}</span>
+                <span className="is-seccion-titulo">{titulo}</span>
+            </div>
+            <div className="is-seccion-body">{children}</div>
+        </section>
+    );
+}
+
 export default function InformeSencilloScreen({ onBack }) {
     const { user }                       = useAuth();
     const { empresaNombre, empresaLogos } = useAppData();
@@ -213,97 +225,92 @@ export default function InformeSencilloScreen({ onBack }) {
 
             <div className="is-body">
 
-                {/* Título oficial */}
                 <div className="is-doc-title">I N F O R M E</div>
                 <div className="is-empresa-sub">{empresaNombre}</div>
 
-                {/* Confección (readonly) */}
-                <div className="is-confeccion-row">
-                    <div className="is-confeccion-field">
-                        <span className="is-label">Producido por</span>
-                        <span className="is-readonly-val">{user?.name || "—"}</span>
+                {/* ── 1. Datos generales ── */}
+                <Seccion numero="1" titulo="Datos generales">
+                    <div className="is-confeccion-row">
+                        <div className="is-confeccion-field">
+                            <span className="is-label">Producido por</span>
+                            <span className="is-readonly-val">{user?.name || "—"}</span>
+                        </div>
+                        <div className="is-confeccion-field">
+                            <span className="is-label">Fecha de confección</span>
+                            <span className="is-readonly-val">{fechaConfeccion}</span>
+                        </div>
+                        <div className="is-confeccion-field">
+                            <span className="is-label">Hora</span>
+                            <span className="is-readonly-val">{horaConfeccion}</span>
+                        </div>
                     </div>
-                    <div className="is-confeccion-field">
-                        <span className="is-label">Fecha de confección</span>
-                        <span className="is-readonly-val">{fechaConfeccion}</span>
-                    </div>
-                    <div className="is-confeccion-field">
-                        <span className="is-label">Hora</span>
-                        <span className="is-readonly-val">{horaConfeccion}</span>
-                    </div>
-                </div>
 
-                {/* Cliente */}
-                <div className="is-field">
-                    <label className="is-label">Cliente</label>
-                    <select className="is-input is-select"
-                        value={selCliente}
-                        onChange={e => { setSelCliente(e.target.value); setSelObjetivo(""); setSelPuesto(""); }}>
-                        <option value="">— Seleccioná cliente —</option>
-                        {clientes.map(c => <option key={c.id} value={c.id}>{c.codigo ? `${c.codigo} · ` : ""}{c.nombre}</option>)}
-                    </select>
-                </div>
-
-                {/* Objetivo */}
-                <div className="is-row2">
-                    <div className="is-field is-field--grow">
-                        <label className="is-label">Objetivo / Servicio</label>
+                    <div className="is-field">
+                        <label className="is-label">Cliente</label>
                         <select className="is-input is-select"
-                            value={selObjetivo}
-                            onChange={e => setSelObjetivo(e.target.value)}
-                            disabled={!selCliente}>
-                            <option value="">— Seleccioná objetivo —</option>
-                            {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{fmtObjetivo(o)}</option>)}
+                            value={selCliente}
+                            onChange={e => { setSelCliente(e.target.value); setSelObjetivo(""); }}>
+                            <option value="">— Seleccioná cliente —</option>
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.codigo ? `${c.codigo} · ` : ""}{c.nombre}</option>)}
                         </select>
                     </div>
-                    <div className="is-field is-field--date">
-                        <label className="is-label">Fecha del hecho</label>
-                        <input className="is-input" type="date" value={form.fechaHecho}
-                            onChange={e => set("fechaHecho", e.target.value)} />
-                    </div>
-                </div>
 
-                {/* Dirección y teléfono (auto desde objetivo, readonly) */}
-                {objetivoObj && (
                     <div className="is-row2">
                         <div className="is-field is-field--grow">
-                            <label className="is-label">Dirección</label>
-                            <input className="is-input is-input--readonly" value={objetivoObj.domicilio || "—"} readOnly />
+                            <label className="is-label">Objetivo / Servicio</label>
+                            <select className="is-input is-select"
+                                value={selObjetivo}
+                                onChange={e => setSelObjetivo(e.target.value)}
+                                disabled={!selCliente}>
+                                <option value="">— Seleccioná objetivo —</option>
+                                {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{fmtObjetivo(o)}</option>)}
+                            </select>
                         </div>
                         <div className="is-field is-field--date">
-                            <label className="is-label">Teléfono</label>
-                            <input className="is-input is-input--readonly" value={objetivoObj.telefono || "—"} readOnly />
+                            <label className="is-label">Fecha del hecho</label>
+                            <input className="is-input" type="date" value={form.fechaHecho}
+                                onChange={e => set("fechaHecho", e.target.value)} />
                         </div>
                     </div>
-                )}
 
-                {/* REF */}
-                <div className="is-field">
-                    <label className="is-label">REF</label>
-                    <input className="is-input" value={form.ref}
-                        onChange={e => set("ref", e.target.value)}
-                        placeholder="Asunto o referencia del informe" />
-                </div>
+                    {objetivoObj && (
+                        <div className="is-row2">
+                            <div className="is-field is-field--grow">
+                                <label className="is-label">Dirección</label>
+                                <input className="is-input is-input--readonly" value={objetivoObj.domicilio || "—"} readOnly />
+                            </div>
+                            <div className="is-field is-field--date">
+                                <label className="is-label">Teléfono</label>
+                                <input className="is-input is-input--readonly" value={objetivoObj.telefono || "—"} readOnly />
+                            </div>
+                        </div>
+                    )}
+                </Seccion>
 
-                {/* Cuerpo */}
-                <div className="is-field">
-                    <label className="is-label">Contenido</label>
-                    <textarea className="is-textarea" value={form.cuerpo}
-                        onChange={e => set("cuerpo", e.target.value)}
-                        placeholder="Redactá el informe aquí..." rows={10} />
-                </div>
+                {/* ── 2. Contenido ── */}
+                <Seccion numero="2" titulo="Contenido del informe">
+                    <div className="is-field">
+                        <label className="is-label">REF</label>
+                        <input className="is-input" value={form.ref}
+                            onChange={e => set("ref", e.target.value)}
+                            placeholder="Asunto o referencia del informe" />
+                    </div>
+                    <div className="is-field">
+                        <label className="is-label">Contenido</label>
+                        <textarea className="is-textarea" value={form.cuerpo}
+                            onChange={e => set("cuerpo", e.target.value)}
+                            placeholder="Redactá el informe aquí..." rows={10} />
+                    </div>
+                    <div className="is-field">
+                        <label className="is-label">Para conocimiento de</label>
+                        <input className="is-input" value={form.paraConocimientoDe}
+                            onChange={e => set("paraConocimientoDe", e.target.value)}
+                            placeholder="Ej: Supervisor, RRHH..." />
+                    </div>
+                </Seccion>
 
-                {/* Para conocimiento de */}
-                <div className="is-field">
-                    <label className="is-label">Para conocimiento de</label>
-                    <input className="is-input" value={form.paraConocimientoDe}
-                        onChange={e => set("paraConocimientoDe", e.target.value)}
-                        placeholder="Ej: Supervisor, RRHH..." />
-                </div>
-
-                {/* Firma */}
-                <div className="is-field">
-                    <label className="is-label">Firma del vigilador</label>
+                {/* ── 3. Firma ── */}
+                <Seccion numero="3" titulo="Firma del vigilador">
                     {!firmado ? (
                         <div className="is-firma-panel">
                             <p className="is-firma-hint">Firmá en el recuadro con el dedo o el mouse</p>
@@ -321,27 +328,21 @@ export default function InformeSencilloScreen({ onBack }) {
                                 onTouchEnd={stopDraw}
                             />
                             <div className="is-firma-btns">
-                                <button className="is-btn is-btn--ghost is-btn--sm" onClick={clearFirma}>
-                                    🗑 Borrar
-                                </button>
-                                <button className="is-btn is-btn--primary is-btn--sm" onClick={confirmarFirma}>
-                                    ✔ Confirmar firma
-                                </button>
+                                <button className="is-btn is-btn--ghost is-btn--sm" onClick={clearFirma}>🗑 Borrar</button>
+                                <button className="is-btn is-btn--primary is-btn--sm" onClick={confirmarFirma}>✔ Confirmar firma</button>
                             </div>
                         </div>
                     ) : (
                         <div className="is-firma-confirmed">
                             <img src={firmaDataUrl} alt="Firma" className="is-firma-img" />
                             <div className="is-firma-ok">✅ Firma confirmada — {user?.name}</div>
-                            <button
-                                className="is-btn is-btn--ghost is-btn--sm"
-                                onClick={() => { setFirmado(false); setFirmaDataUrl(null); }}
-                            >
+                            <button className="is-btn is-btn--ghost is-btn--sm"
+                                onClick={() => { setFirmado(false); setFirmaDataUrl(null); }}>
                                 Volver a firmar
                             </button>
                         </div>
                     )}
-                </div>
+                </Seccion>
 
                 {error && <div className="is-error">{error}</div>}
 

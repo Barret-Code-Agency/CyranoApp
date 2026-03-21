@@ -2,13 +2,24 @@
 import { useState } from "react";
 import { useAuth }                from "../context/AuthContext";
 import { useAppData }             from "../context/AppDataContext";
-import GestionDatosAdminScreen   from "./GestionDatosAdminScreen";
-import DashboardPersonalScreen   from "./DashboardPersonalScreen";
+import GestionDatosAdminScreen    from "./GestionDatosAdminScreen";
+import DashboardPersonalScreen    from "./DashboardPersonalScreen";
+import ControlClienteScreen       from "./ControlClienteScreen";
+import { VistaTurnos }            from "./ProgramacionServiciosScreen";
+import InformeSencilloScreen      from "../forms/InformeSencilloScreen";
+import InformeNovedadScreen       from "../forms/InformeNovedadScreen";
+import VerInformesScreen          from "../forms/VerInformesScreen";
+import VerComunicacionesScreen    from "../forms/VerComunicacionesScreen";
+import CrearComunicacionScreen    from "../forms/CrearComunicacionScreen";
 import "../styles/VigHome.css";
+import "../styles/SupervisorHome.css";
+import "../styles/ConsolidadoScreen.css";
 import "../styles/GestionDatosAdminScreen.css";
 
 // ── Calendario semanal (idéntico al de VigHome) ────────────────────────────
 const DIAS_ES  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MESES_ES_LARGO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
+                        "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 function fmtKey(d) { return d.toISOString().slice(0, 10); }
 
@@ -77,23 +88,56 @@ function CalendarioSemanal({ actividades = {} }) {
     );
 }
 
-// ── Módulos del Administrativo ─────────────────────────────────────────────
+// ── Selector de período (mismo estilo que Consolidado) ─────────────────────
+function PeriodoCard({ icono, titulo, onVer }) {
+    const hoy = new Date();
+    const [mes, setMes] = useState(hoy.getMonth() + 1);
+    const [año, setAño] = useState(hoy.getFullYear());
+    const mesAnt = mes === 1 ? 12 : mes - 1;
+    const añoAnt = mes === 1 ? año - 1 : año;
+    return (
+        <div className="con-sel-list">
+            <div className="sh-modulo con-sel-item">
+                <span className="sh-modulo-icon">{icono}</span>
+                <div className="sh-modulo-info">
+                    <strong>{titulo}</strong>
+                    <small>
+                        Del 24/{String(mesAnt).padStart(2,"0")}/{añoAnt}&nbsp;al&nbsp;23/{String(mes).padStart(2,"0")}/{año}
+                    </small>
+                </div>
+                <div className="con-sel-campos">
+                    <select className="con-select" value={mes} onChange={e => setMes(Number(e.target.value))}>
+                        {MESES_ES_LARGO.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                    </select>
+                    <select className="con-select con-select--año" value={año} onChange={e => setAño(Number(e.target.value))}>
+                        {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <button className="con-btn-abrir" onClick={() => onVer(año, mes)}>Ver →</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Módulos ────────────────────────────────────────────────────────────────
 const MODULOS = [
-    { id: "muro_comunicacion", icon: "📢", titulo: "Muro de Comunicación y Novedades", desc: "Novedades y comunicados de tu empresa"                     },
-    { id: "planillas",         icon: "📊", titulo: "Planillas",                         desc: "Consultá las planillas operativas"                         },
-    { id: "informes",          icon: "📄", titulo: "Informes",                          desc: "Creá o consultá informes"                                  },
-    { id: "turnos",            icon: "🕐", titulo: "Turnos de trabajo",                 desc: "Gestioná los turnos del personal"                          },
-    { id: "actualizacion_datos", icon: "🗂️", titulo: "Actualización de Datos",         desc: "Editá legajos, clientes, objetivos, vehículos y más"       },
-    { id: "dashboard_personal",  icon: "👥", titulo: "Dashboard de personal",          desc: "Estado y novedades del personal"                            },
-    { id: "facturacion",       icon: "💰", titulo: "Facturación",                       desc: "Gestión de facturación"                                    },
-    { id: "control_horas",     icon: "⏱️", titulo: "Control de horas",                  desc: "Control de horas trabajadas"                               },
-    { id: "ausentismo",        icon: "📉", titulo: "Ausentismo",                        desc: "Registro y seguimiento de ausentismo"                      },
+    { id: "muro_comunicacion",   icon: "📢", titulo: "Muro de Comunicación y Novedades", desc: "Novedades y comunicados de tu empresa"               },
+    { id: "planillas",           icon: "📊", titulo: "Planillas",                         desc: "Consultá las planillas operativas"                   },
+    { id: "informes",            icon: "📄", titulo: "Informes",                          desc: "Ver o crear informes"                                },
+    { id: "turnos",              icon: "🕐", titulo: "Turnos de trabajo",                 desc: "Visualizá los horarios del personal"                 },
+    { id: "actualizacion_datos", icon: "🗂️", titulo: "Actualización de Datos",           desc: "Editá legajos, clientes, objetivos, vehículos y más" },
+    { id: "dashboard_personal",  icon: "👥", titulo: "Dashboard de personal",            desc: "Estado y novedades del personal"                     },
+    { id: "facturacion",         icon: "💰", titulo: "Facturación",                       desc: "Gestión de facturación"                              },
+    { id: "control_horas",       icon: "⏱️", titulo: "Control de horas",                  desc: "Control de horas y facturación al cliente"           },
+    { id: "ausentismo",          icon: "📉", titulo: "Ausentismo",                        desc: "Registro y seguimiento de ausentismo"                },
 ];
 
 export default function AdministrativoHome({ user: propUser, onLogout }) {
     const { user: authUser, logout } = useAuth();
     const { empresaLogos, data }     = useAppData();
-    const [seccion, setSeccion]      = useState(null);
+    const [seccion,    setSeccion]    = useState(null);
+    const [subSeccion, setSubSeccion] = useState(null);
+    const [periodoSel, setPeriodoSel] = useState(null);
 
     const user = authUser || propUser;
     const handleLogout = async () => { await logout(); onLogout?.(); };
@@ -113,25 +157,202 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
         </header>
     );
 
+    const volverBtn = (onClick) => (
+        <div style={{ padding: "1rem 1.5rem 0" }}>
+            <button className="sh-back-btn" onClick={onClick}>← Volver</button>
+        </div>
+    );
+
+    // ── Muro de comunicación ───────────────────────────────────────────────
+    if (seccion === "muro_comunicacion") {
+        if (subSeccion === "ver")   return <VerComunicacionesScreen  onBack={() => setSubSeccion(null)} />;
+        if (subSeccion === "crear") return <CrearComunicacionScreen  onBack={() => setSubSeccion(null)} />;
+        const MURO_MENUS = [
+            { id: "ver",   icon: "📋", titulo: "Ver novedades y comunicaciones", desc: "Consultá las comunicaciones publicadas para el personal" },
+            { id: "crear", icon: "✏️", titulo: "Crear comunicación",             desc: "Publicá una comunicación o novedad para todo el personal" },
+        ];
+        return (
+            <div className="vh-root">
+                {header}
+                {volverBtn(() => setSeccion(null))}
+                <div className="sh-grid">
+                    {MURO_MENUS.map(m => (
+                        <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                            <span className="sh-modulo-icon">{m.icon}</span>
+                            <div className="sh-modulo-info">
+                                <strong>{m.titulo}</strong>
+                                <small>{m.desc}</small>
+                            </div>
+                            <span className="sh-modulo-arrow">›</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    // ── Actualización de datos ─────────────────────────────────────────────
     if (seccion === "actualizacion_datos") {
         return (
             <div className="gd-page">
                 {header}
-                <GestionDatosAdminScreen onBack={() => setSeccion(null)} />
+                <GestionDatosAdminScreen onBack={() => setSeccion(null)} noDelete={true} />
             </div>
         );
     }
 
+    // ── Dashboard de personal (filtrado por zona del usuario) ──────────────
     if (seccion === "dashboard_personal") {
         return (
             <div className="vh-root">
                 {header}
-                <DashboardPersonalScreen onBack={() => setSeccion(null)} />
+                <DashboardPersonalScreen
+                    onBack={() => setSeccion(null)}
+                    zonaFija={user?.zona || null}
+                />
             </div>
         );
     }
 
-    // Secciones con pantalla "próximamente"
+    // ── Control de horas ───────────────────────────────────────────────────
+    if (seccion === "control_horas") {
+        const CONTROL_HORAS_MENUS = [
+            { id: "control_cliente", icon: "🤝", titulo: "Control cliente",  desc: "Seguimiento y control de horas facturadas al cliente" },
+            { id: "carga_horas",     icon: "⏱️", titulo: "Carga de horas",    desc: "Cargá las horas trabajadas del período"              },
+        ];
+
+        if (subSeccion === "control_cliente") {
+            if (!periodoSel) {
+                return (
+                    <div className="vh-root">
+                        {header}
+                        {volverBtn(() => setSubSeccion(null))}
+                        <PeriodoCard icono="🤝" titulo="Control cliente" onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                    </div>
+                );
+            }
+            return (
+                <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+                    {volverBtn(() => setPeriodoSel(null))}
+                    <ControlClienteScreen año={periodoSel.año} mes={periodoSel.mes} />
+                </div>
+            );
+        }
+
+        if (subSeccion === "carga_horas") {
+            return (
+                <div className="vh-root">
+                    {header}
+                    {volverBtn(() => setSubSeccion(null))}
+                    <div className="vh-subpanel">
+                        <div className="vh-subpanel-title">⏱️ Carga de horas</div>
+                        <div className="vh-coming-soon">Próximamente</div>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="vh-root">
+                {header}
+                {volverBtn(() => { setSeccion(null); setSubSeccion(null); setPeriodoSel(null); })}
+                <div className="sh-grid">
+                    {CONTROL_HORAS_MENUS.map(m => (
+                        <button key={m.id} className="sh-modulo" onClick={() => { setPeriodoSel(null); setSubSeccion(m.id); }}>
+                            <span className="sh-modulo-icon">{m.icon}</span>
+                            <div className="sh-modulo-info">
+                                <strong>{m.titulo}</strong>
+                                <small>{m.desc}</small>
+                            </div>
+                            <span className="sh-modulo-arrow">›</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    // ── Turnos de trabajo → Vista de horarios ──────────────────────────────
+    if (seccion === "turnos") {
+        if (!periodoSel) {
+            return (
+                <div className="vh-root">
+                    {header}
+                    {volverBtn(() => setSeccion(null))}
+                    <PeriodoCard icono="🕐" titulo="Vista de horarios" onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                </div>
+            );
+        }
+        return (
+            <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+                {volverBtn(() => setPeriodoSel(null))}
+                <VistaTurnos año={periodoSel.año} mes={periodoSel.mes} />
+            </div>
+        );
+    }
+
+    // ── Informes ───────────────────────────────────────────────────────────
+    if (seccion === "informes") {
+        if (subSeccion === "ver_informes") {
+            return <VerInformesScreen onBack={() => setSubSeccion(null)} />;
+        }
+        if (subSeccion === "informe_sencillo") {
+            return <InformeSencilloScreen onBack={() => setSubSeccion(null)} />;
+        }
+        if (subSeccion === "informe_gravedad") {
+            return <InformeNovedadScreen onBack={() => setSubSeccion(null)} />;
+        }
+        if (subSeccion === "crear_informes") {
+            const CREAR_MENUS = [
+                { id: "informe_sencillo",  icon: "📝", titulo: "Informe sencillo",   desc: "Redactá un informe no urgente" },
+                { id: "informe_gravedad",  icon: "🚨", titulo: "Informe de gravedad", desc: "Registrá un incidente con daños a personas o bienes" },
+            ];
+            return (
+                <div className="vh-root">
+                    {header}
+                    {volverBtn(() => setSubSeccion(null))}
+                    <div className="sh-grid">
+                        {CREAR_MENUS.map(m => (
+                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon">{m.icon}</span>
+                                <div className="sh-modulo-info">
+                                    <strong>{m.titulo}</strong>
+                                    <small>{m.desc}</small>
+                                </div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // Menú principal de informes
+        const INFORMES_MENUS = [
+            { id: "ver_informes",    icon: "🔍", titulo: "Ver informes",    desc: "Consultá los informes redactados" },
+            { id: "crear_informes",  icon: "✏️", titulo: "Crear informe",   desc: "Redactá un nuevo informe" },
+        ];
+        return (
+            <div className="vh-root">
+                {header}
+                {volverBtn(() => { setSeccion(null); setSubSeccion(null); })}
+                <div className="sh-grid">
+                    {INFORMES_MENUS.map(m => (
+                        <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                            <span className="sh-modulo-icon">{m.icon}</span>
+                            <div className="sh-modulo-info">
+                                <strong>{m.titulo}</strong>
+                                <small>{m.desc}</small>
+                            </div>
+                            <span className="sh-modulo-arrow">›</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    // ── Secciones próximamente ─────────────────────────────────────────────
     if (seccion) {
         const mod = MODULOS.find(m => m.id === seccion);
         return (
@@ -146,6 +367,7 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
         );
     }
 
+    // ── Menú principal ─────────────────────────────────────────────────────
     return (
         <div className="vh-root">
             {header}
@@ -154,22 +376,22 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
 
             <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} />
 
-            <div className="vh-grid">
+            <div className="sh-grid">
                 {(user?.permisosModulos != null
                     ? MODULOS.filter(m => user.permisosModulos.includes(m.id))
                     : MODULOS
                 ).map(m => (
                     <button
                         key={m.id}
-                        className="vh-modulo"
-                        onClick={() => setSeccion(m.id)}
+                        className="sh-modulo"
+                        onClick={() => { setSubSeccion(null); setPeriodoSel(null); setSeccion(m.id); }}
                     >
-                        <span className="vh-modulo-icon">{m.icon}</span>
-                        <div className="vh-modulo-info">
+                        <span className="sh-modulo-icon">{m.icon}</span>
+                        <div className="sh-modulo-info">
                             <strong>{m.titulo}</strong>
                             <small>{m.desc}</small>
                         </div>
-                        <span className="vh-modulo-arrow">›</span>
+                        <span className="sh-modulo-arrow">›</span>
                     </button>
                 ))}
             </div>
