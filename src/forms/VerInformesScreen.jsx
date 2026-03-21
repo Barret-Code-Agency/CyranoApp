@@ -120,8 +120,8 @@ export default function VerInformesScreen({ onBack, soloPropio = false }) {
     // ── Render ────────────────────────────────────────────────
     return (
         <div className="vi-root">
+            <button className="vh-back vi-back-top" onClick={onBack}>← Volver al panel</button>
             <header className="vi-header">
-                <button className="vi-back" onClick={onBack}>← Volver</button>
                 <span className="vi-header-title">🗂 Ver Informes</span>
                 <button className="vi-refresh" onClick={cargar} title="Actualizar">↺</button>
             </header>

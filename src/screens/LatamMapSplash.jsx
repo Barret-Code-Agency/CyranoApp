@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import '../styles/LatamMapSplash.css';
+import './LatamMapSplash.css';
 
 const flags = [
     { name: 'Argentina',       src: 'https://flagcdn.com/ar.svg' },

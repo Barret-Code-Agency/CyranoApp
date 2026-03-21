@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import { collection, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../../firebase";
-import ModalNuevaEmpresa, { MODULOS_DEF, MODULOS_DEFAULT } from "./ModalNuevaEmpresa";
+import ModalNuevaEmpresa, { MODULOS_DEFAULT } from "./ModalNuevaEmpresa";
+import { MODULOS_DEF } from "../../config/roles";
 
 export default function PanelEmpresas() {
     const [empresas,     setEmpresas]     = useState([]);

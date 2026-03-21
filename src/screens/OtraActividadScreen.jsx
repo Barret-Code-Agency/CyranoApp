@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { nowTime } from "../utils/helpers";
 import { useAppData } from "../context/AppDataContext";
-import "../styles/OtraActividadScreen.css";
+import "./OtraActividadScreen.css";
 
 export default function OtraActividadScreen({ geo, onBack }) {
     const { data, iniciarActividad, finalizarActividad, actividadActiva, cancelarActividad } = useAppData();

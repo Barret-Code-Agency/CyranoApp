@@ -2,7 +2,7 @@
 // Dashboard de tiempos por supervisor: control, capacitación, otras actividades, traslados
 import { useState, useMemo } from "react";
 import { useAppData } from "../context/AppDataContext";
-import "../styles/DashboardTiempos.css";
+import "./DashboardTiempos.css";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

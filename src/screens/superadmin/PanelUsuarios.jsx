@@ -4,6 +4,8 @@ import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { ROLE_LABELS, ROLE_COLORS } from "../../config/roles";
 
+const SISTEMA_KEY = "⚙️ Sistema (Super Admins)";
+
 // Roles que se pueden asignar desde este panel (se excluye super_admin)
 const ROLES_ASIGNABLES = Object.entries(ROLE_LABELS).filter(([k]) => k !== "super_admin");
 
@@ -17,6 +19,7 @@ function rolesIniciales(u) {
 
 export default function PanelUsuarios() {
     const [usuarios,     setUsuarios]     = useState([]);
+    const [empresas,     setEmpresas]     = useState({});   // { id → nombre }
     const [loading,      setLoading]      = useState(true);
     const [editando,     setEditando]     = useState(null);
     const [form,         setForm]         = useState({});
@@ -27,10 +30,17 @@ export default function PanelUsuarios() {
     const cargarUsuarios = useCallback(async () => {
         setLoading(true);
         try {
-            const snap = await getDocs(collection(db, "usuarios"));
-            const lista = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+            const [snapU, snapE] = await Promise.all([
+                getDocs(collection(db, "usuarios")),
+                getDocs(collection(db, "empresas")),
+            ]);
+            const lista = snapU.docs.map(d => ({ uid: d.id, ...d.data() }))
                 .sort((a, b) => (a.nombre ?? "").localeCompare(b.nombre ?? ""));
+            const mapa = Object.fromEntries(
+                snapE.docs.map(d => [d.id, d.data().nombre ?? d.id])
+            );
             setUsuarios(lista);
+            setEmpresas(mapa);
         } finally {
             setLoading(false);
         }
@@ -38,13 +48,22 @@ export default function PanelUsuarios() {
 
     useEffect(() => { cargarUsuarios(); }, [cargarUsuarios]);
 
-    // Agrupar por empresaId
+    // Agrupar por empresaId — los super_admin van a su propio grupo
     const grupos = {};
     for (const u of usuarios) {
-        const emp = u.empresaId ?? "(Sin empresa)";
-        if (!grupos[emp]) grupos[emp] = [];
-        grupos[emp].push(u);
+        const esSuperAdmin = rolesIniciales(u).includes("super_admin");
+        const empId = esSuperAdmin ? SISTEMA_KEY : (u.empresaId ?? "(Sin empresa)");
+        if (!grupos[empId]) grupos[empId] = [];
+        grupos[empId].push(u);
     }
+
+    const labelGrupo = (empId) => {
+        if (empId === SISTEMA_KEY || empId === "(Sin empresa)") return empId;
+        const nombre = empresas[empId];
+        return nombre && nombre !== empId
+            ? `${nombre}  ·  ${empId}`
+            : empId;
+    };
 
     const toggleEmpresa = (emp) =>
         setEmpresasOpen(prev => ({ ...prev, [emp]: !prev[emp] }));
@@ -73,10 +92,11 @@ export default function PanelUsuarios() {
         setGuardando(true);
         setMsg(null);
         try {
+            const esSA = form.roles.includes("super_admin");
             await updateDoc(doc(db, "usuarios", uid), {
                 roles:     form.roles,
                 rol:       form.roles[0],
-                empresaId: form.empresaId.trim() || null,
+                empresaId: esSA ? null : (form.empresaId.trim() || null),
                 activo:    form.activo,
             });
             setMsg({ texto: "✅ Guardado correctamente", ok: true });
@@ -112,8 +132,8 @@ export default function PanelUsuarios() {
                 {Object.entries(grupos).sort(([a], [b]) => a.localeCompare(b)).map(([empresa, personal]) => (
                     <div key={empresa} className="sa-ug-empresa">
                         <button className="sa-ug-empresa-header" onClick={() => toggleEmpresa(empresa)}>
-                            <span className="sa-ug-empresa-icon">🏢</span>
-                            <span className="sa-ug-empresa-nombre">{empresa}</span>
+                            <span className="sa-ug-empresa-icon">{empresa === SISTEMA_KEY ? "⚙️" : "🏢"}</span>
+                            <span className="sa-ug-empresa-nombre">{labelGrupo(empresa)}</span>
                             <span className="sa-ug-empresa-count">{personal.length} usuario{personal.length !== 1 ? "s" : ""}</span>
                             <span className="sa-ug-empresa-arrow">{empresasOpen[empresa] ? "▲" : "▼"}</span>
                         </button>
@@ -168,6 +188,7 @@ export default function PanelUsuarios() {
                                                         <small className="sa-ur-hint">El primer rol marcado es el rol primario.</small>
                                                     </div>
 
+                                                    {!form.roles.includes("super_admin") && (
                                                     <div className="sa-ur-form-row">
                                                         <label className="sa-ur-label">Empresa ID</label>
                                                         <input
@@ -178,6 +199,7 @@ export default function PanelUsuarios() {
                                                             onChange={e => setForm(f => ({ ...f, empresaId: e.target.value }))}
                                                         />
                                                     </div>
+                                                    )}
 
                                                     <div className="sa-ur-form-row">
                                                         <label className="sa-ur-label">Estado</label>

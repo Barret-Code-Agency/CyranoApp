@@ -1,5 +1,5 @@
 // src/screens/RoleSelectScreen.jsx
-import "../styles/RoleSelectScreen.css";
+import "./RoleSelectScreen.css";
 
 const ROLES_UI = [
     {

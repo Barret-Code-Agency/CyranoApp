@@ -7,7 +7,7 @@ import PanelEmpresas      from "./superadmin/PanelEmpresas";
 import PanelUsuarios      from "./superadmin/PanelUsuarios";
 import PanelPermisos      from "./superadmin/PanelPermisos";
 import PanelMantenimiento from "./superadmin/PanelMantenimiento";
-import "../styles/SuperAdminScreen.css";
+import "./SuperAdminScreen.css";
 
 const NAV = [
     { id: "dashboard",    icon: "📊", label: "Dashboard"     },

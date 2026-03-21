@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useAppData } from "../../context/AppDataContext";
 import { generarPDFJornada } from "../../utils/generarPDFJornada";
 import { fmtMin as _fmtMin, urlToBase64 as _urlToBase64 } from "../../utils/helpers";
-import "../../styles/JornadaDetalle.css";
+import "./JornadaDetalle.css";
 
 const CATS_DEF = [
     { tipo:"ctrl",     label:"Controles",       icon:"🎯" },

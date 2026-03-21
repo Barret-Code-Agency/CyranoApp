@@ -3,7 +3,7 @@
 // Renderiza las actividades predefinidas del checkpoint (boolean + observación si NO).
 
 import { useState, useRef } from "react";
-import "../styles/ChecklistModal.css";
+import "./ChecklistModal.css";
 
 export default function ChecklistModal({ cp, onComplete, onClose }) {
     const [respuestas, setRespuestas] = useState({});

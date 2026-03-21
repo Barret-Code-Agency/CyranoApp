@@ -21,8 +21,8 @@ function TipoBadge({ tipo }) {
 function DetalleView({ item, onBack }) {
     return (
         <div className="vc-root">
+            <button className="vh-back vc-back-top" onClick={onBack}>← Volver</button>
             <header className="vc-header">
-                <button className="vc-back" onClick={onBack}>← Volver</button>
                 <span className="vc-header-title">📢 Comunicación</span>
             </header>
 
@@ -83,8 +83,8 @@ export default function VerComunicacionesScreen({ onBack }) {
 
     return (
         <div className="vc-root">
+            <button className="vh-back vc-back-top" onClick={onBack}>← Volver al panel</button>
             <header className="vc-header">
-                <button className="vc-back" onClick={onBack}>← Volver</button>
                 <span className="vc-header-title">📢 Muro de Comunicación y Novedades</span>
             </header>
 

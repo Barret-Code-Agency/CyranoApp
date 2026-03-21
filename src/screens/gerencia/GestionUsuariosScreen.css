@@ -1,0 +1,464 @@
+/* GestionUsuariosScreen.css */
+
+.gu-root {
+    padding: 1.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+    font-family: var(--font-body, sans-serif);
+}
+
+/* ── Header ── */
+.gu-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.gu-titulo {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--color-text, #f1f5f9);
+}
+
+.gu-subtitulo {
+    font-size: 0.8rem;
+    color: var(--color-muted, #94a3b8);
+    margin-top: 2px;
+}
+
+.gu-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+.gu-btn-nuevo {
+    background: var(--color-primary, #3b82f6);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.gu-btn-nuevo:hover { opacity: 0.85; }
+
+.gu-btn-back {
+    background: none;
+    border: 1px solid var(--color-border, #334155);
+    color: var(--color-muted, #94a3b8);
+    border-radius: 8px;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.gu-btn-back:hover {
+    border-color: var(--color-text, #f1f5f9);
+    color: var(--color-text, #f1f5f9);
+}
+
+.gu-instruccion {
+    font-size: 0.82rem;
+    color: var(--color-muted, #94a3b8);
+    margin: 0.25rem 0 1.25rem;
+    line-height: 1.5;
+}
+
+/* ── Mensajes globales ── */
+.gu-msg-global {
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+.gu-msg-global--ok  { background: #14532d; color: #86efac; }
+.gu-msg-global--err { background: #7f1d1d; color: #fca5a5; }
+
+/* ── Loading ── */
+.gu-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: var(--color-muted, #94a3b8);
+    font-size: 0.9rem;
+}
+
+.gu-spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-top-color: var(--color-primary, #3b82f6);
+    border-radius: 50%;
+    animation: gu-spin 0.7s linear infinite;
+}
+@keyframes gu-spin { to { transform: rotate(360deg); } }
+
+/* ── Empty ── */
+.gu-empty {
+    text-align: center;
+    padding: 3rem;
+    color: var(--color-muted, #94a3b8);
+}
+.gu-empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+.gu-empty-txt  { font-size: 0.9rem; }
+
+/* ── Lista de usuarios ── */
+.gu-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.gu-user-card {
+    background: var(--color-surface, #1e293b);
+    border: 1px solid var(--color-border, #334155);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.gu-user-card--editing {
+    border-color: var(--color-primary, #3b82f6);
+}
+
+.gu-user-card--inactivo {
+    opacity: 0.6;
+}
+
+.gu-user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.9rem 1rem;
+}
+
+.gu-avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--color-primary, #3b82f6);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+
+.gu-user-datos { flex: 1; min-width: 0; }
+
+.gu-user-nombre {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--color-text, #f1f5f9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gu-user-email {
+    font-size: 0.78rem;
+    color: var(--color-muted, #94a3b8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gu-user-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+/* Badges de rol */
+.gu-rol-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+.gu-rol-badge--blue   { background: #1e3a5f; color: #93c5fd; }
+.gu-rol-badge--green  { background: #14532d; color: #86efac; }
+.gu-rol-badge--orange { background: #431407; color: #fdba74; }
+.gu-rol-badge--gray   { background: #1f2937; color: #9ca3af; }
+.gu-rol-badge--red    { background: #450a0a; color: #fca5a5; }
+
+.gu-mods-count {
+    font-size: 0.72rem;
+    color: var(--color-muted, #64748b);
+}
+
+.gu-inactivo-tag {
+    font-size: 0.72rem;
+    background: #450a0a;
+    color: #fca5a5;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 700;
+}
+
+.gu-btn-editar {
+    background: none;
+    border: 1px solid var(--color-border, #334155);
+    color: var(--color-muted, #94a3b8);
+    border-radius: 8px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+.gu-btn-editar:hover {
+    border-color: var(--color-primary, #3b82f6);
+    color: var(--color-primary, #3b82f6);
+}
+
+/* ── Formulario de edición ── */
+.gu-form {
+    border-top: 1px solid var(--color-border, #334155);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    background: var(--color-surface2, #0f172a);
+}
+
+.gu-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.gu-form-row--inline {
+    flex-direction: row;
+    align-items: center;
+}
+
+.gu-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-muted, #64748b);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Roles */
+.gu-roles-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.gu-role-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    border: 1px solid var(--color-border, #334155);
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--color-muted, #94a3b8);
+    transition: all 0.15s;
+    user-select: none;
+}
+.gu-role-chip input { display: none; }
+.gu-role-chip:hover { border-color: var(--color-primary, #3b82f6); color: var(--color-text, #f1f5f9); }
+.gu-role-chip--on {
+    background: var(--color-primary, #3b82f6);
+    border-color: var(--color-primary, #3b82f6);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Perfiles rápidos */
+.gu-perfiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.gu-perfil-btn {
+    background: var(--color-surface, #1e293b);
+    border: 1px solid var(--color-border, #334155);
+    color: var(--color-text, #f1f5f9);
+    border-radius: 8px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.gu-perfil-btn:hover {
+    background: var(--color-primary, #3b82f6);
+    border-color: var(--color-primary, #3b82f6);
+    color: #fff;
+}
+
+/* Módulos */
+.gu-mods-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.4rem;
+}
+
+.gu-mod-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 8px;
+    border: 1px solid var(--color-border, #334155);
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--color-muted, #94a3b8);
+    transition: all 0.15s;
+    user-select: none;
+}
+.gu-mod-check input { display: none; }
+.gu-mod-check:hover { border-color: var(--color-text, #475569); color: var(--color-text, #f1f5f9); }
+.gu-mod-check--on {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: var(--color-text, #f1f5f9);
+}
+.gu-mod-icon { font-size: 0.9rem; }
+
+/* Toggle activo */
+.gu-toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.gu-toggle input { display: none; }
+.gu-toggle-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    background: #450a0a;
+    color: #fca5a5;
+    transition: all 0.15s;
+}
+.gu-toggle-label--on { background: #14532d; color: #86efac; }
+
+/* Mensajes inline */
+.gu-msg { font-size: 0.82rem; font-weight: 600; padding: 0.4rem 0.75rem; border-radius: 6px; }
+.gu-msg--err { background: #7f1d1d; color: #fca5a5; }
+.gu-msg--ok  { background: #14532d; color: #86efac; }
+
+/* Acciones del formulario */
+.gu-form-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.gu-btn-save {
+    background: var(--color-primary, #3b82f6);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.gu-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.gu-btn-save:hover:not(:disabled) { opacity: 0.85; }
+
+.gu-btn-cancel {
+    background: none;
+    border: 1px solid var(--color-border, #334155);
+    color: var(--color-muted, #94a3b8);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.gu-btn-cancel:hover { border-color: var(--color-text, #f1f5f9); color: var(--color-text, #f1f5f9); }
+
+/* ── Input básico ── */
+.gu-input {
+    background: var(--color-surface, #1e293b);
+    border: 1px solid var(--color-border, #334155);
+    color: var(--color-text, #f1f5f9);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+}
+.gu-input:focus { border-color: var(--color-primary, #3b82f6); }
+.gu-input::placeholder { color: var(--color-muted, #475569); }
+
+/* ── Modal nuevo usuario ── */
+.gu-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.gu-modal {
+    background: var(--color-surface, #1e293b);
+    border: 1px solid var(--color-border, #334155);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.gu-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border, #334155);
+}
+
+.gu-modal-titulo {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--color-text, #f1f5f9);
+}
+
+.gu-modal-cerrar {
+    background: none;
+    border: none;
+    color: var(--color-muted, #94a3b8);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    transition: all 0.15s;
+}
+.gu-modal-cerrar:hover { background: var(--color-surface2, #0f172a); color: var(--color-text, #f1f5f9); }
+
+.gu-modal-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.gu-modal-footer {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--color-border, #334155);
+}

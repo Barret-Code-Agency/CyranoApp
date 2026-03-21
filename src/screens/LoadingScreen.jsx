@@ -1,6 +1,6 @@
 // src/screens/LoadingScreen.jsx
 import { useState, useEffect, useRef } from "react";
-import "../styles/LoadingScreen.css";
+import "./LoadingScreen.css";
 
 const MESSAGES_SPLASH = [
     "Iniciando sistema...",

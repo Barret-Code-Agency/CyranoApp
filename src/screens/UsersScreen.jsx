@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
-import "../styles/UsersScreen.css";
+import "./UsersScreen.css";
 
 const ROL_LABEL = { admin: "Administrador", operator: "Supervisor/Analista" };
 const ROL_COLOR = { admin: "red", operator: "blue" };

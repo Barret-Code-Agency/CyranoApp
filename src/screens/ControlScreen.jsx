@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from "react";
 import { nowTime } from "../utils/helpers";
 import { useAppData } from "../context/AppDataContext";
-import "../styles/ControlScreen.css";
+import "./ControlScreen.css";
 
 const CRITERIOS = [
     "Presencia",

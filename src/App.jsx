@@ -10,22 +10,23 @@ import "./styles/global.css";
 import SplashScreen        from "./screens/LatamMapSplash";
 import RoleSelectScreen    from "./screens/RoleSelectScreen";
 import SuperAdminScreen    from "./screens/SuperAdminScreen";
-import VigHome             from "./screens/VigHome";
+import VigHome             from "./screens/vigilador/VigHome";
 import LoadingScreen       from "./screens/LoadingScreen";
 import Login               from "./screens/Login";
 import AdminScreen         from "./screens/AdminScreen";
-import AdminContratoHome  from "./screens/AdminContratoHome";
-import SupervisorDashboard   from "./screens/SupervisorDashboard";
-import SupervisorHome        from "./screens/SupervisorHome";
-import AdministrativoHome   from "./screens/AdministrativoHome";
-import JornadaScreen       from "./screens/JornadaScreen";
+import AdminContratoHome  from "./screens/gerencia/AdminContratoHome";
+import SupervisorDashboard   from "./screens/supervisor/SupervisorDashboard";
+import SupervisorHome        from "./screens/supervisor/SupervisorHome";
+import AdministrativoHome   from "./screens/administrativo/AdministrativoHome";
+import JornadaScreen       from "./screens/vigilador/JornadaScreen";
 import MenuScreen          from "./screens/MenuScreen";
 import CapacitacionScreen  from "./screens/CapacitacionScreen";
 import OtraActividadScreen from "./screens/OtraActividadScreen";
 import ControlScreen       from "./screens/ControlScreen";
-import FinJornadaScreen    from "./screens/FinJornadaScreen";
+import FinJornadaScreen    from "./screens/vigilador/FinJornadaScreen";
 import SendModal           from "./screens/SendModal";
 import ShieldLogo          from "./components/ShieldLogo";
+import AppHeader            from "./components/AppHeader";
 
 function AppContent() {
     const [phase, setPhase]             = useState("splash");
@@ -159,33 +160,7 @@ function AppContent() {
     return (
         <div className="app">
             {showHeader && (
-                <header className="header" style={isAdmin ? { background: "#ffffff", borderBottom: "2px solid var(--color-primary)" } : {}}>
-                    <div className="header-logo-area">
-                        <ShieldLogo size={54} />
-                        <div className="header-logo-text">
-                            <div className="header-logo-dot" />
-                            CYRANO<span>APP</span>
-                            {isAdmin && <span className="admin-badge">ADMIN</span>}
-                        </div>
-                    </div>
-                    {user && (
-                        <button
-                            onClick={async () => { await logout(); setUser(null); goTo("splash"); }}
-                            style={{
-                                cursor: "pointer", border: "1.5px solid",
-                                borderColor: isAdmin ? "var(--color-primary)" : "var(--color-border)",
-                                borderRadius: "var(--radius-full)",
-                                background: isAdmin ? "var(--color-primary-ghost)" : "var(--color-surface2)",
-                                padding: "5px 12px", display: "flex", alignItems: "center",
-                                gap: 6, fontSize: 11, fontWeight: 700,
-                                color: isAdmin ? "var(--color-primary)" : "var(--color-text-secondary)",
-                                whiteSpace: "nowrap", transition: "all 0.15s ease",
-                            }}
-                        >
-                            🚪 Cerrar sesión
-                        </button>
-                    )}
-                </header>
+                <AppHeader onLogout={async () => { await logout(); setUser(null); goTo("splash"); }} />
             )}
             <main className="main">
 {phase === "jornada"        && (user || authUser) && <JornadaScreen user={authUser || user} onStarted={handleJornadaStarted} />}

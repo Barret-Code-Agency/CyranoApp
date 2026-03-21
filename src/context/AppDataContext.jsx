@@ -2,9 +2,9 @@
 // ── Migrado a Firestore ───────────────────────────────────────────────────────
 // Jornadas, planesSuper, plan → Firestore (tiempo real, multi-device)
 // Config, jornadaActiva, actividadActiva → localStorage (local, rápido)
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import {
-    collection, doc, setDoc, addDoc,
+    collection, doc, setDoc, addDoc, getDoc,
     onSnapshot, query, where, writeBatch,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -121,8 +121,8 @@ const DEFAULT_PLAN = [
     { objetivo: "PAS Patrulla Vehiculo",              visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
 ];
 
-// ── ID de empresa (hardcoded — multi-tenant en versión SaaS) ─────────────────
-const EMPRESA_ID = "brinks_ar";
+// ── Fallback de empresa para usuarios sin empresaId asignado ─────────────────
+const EMPRESA_ID_FALLBACK = "brinks_ar";
 
 const AppDataContext = createContext(null);
 
@@ -144,6 +144,9 @@ export function AppDataProvider({ children, uid }) {
     const [empresaNombre,  setEmpresaNombre]  = useState("Brinks");
     const [empresaModulos, setEmpresaModulos] = useState(null);
 
+    // Ref para que las funciones de escritura accedan al empresaId actual sin stale closure
+    const empresaIdRef = useRef(EMPRESA_ID_FALLBACK);
+
     // ── Persist local ────────────────────────────────────────────────────────
     useEffect(() => { save("cyrano_config",           config);          }, [config]);
     useEffect(() => { save("cyrano_jornada_activa",   jornadaActiva);   }, [jornadaActiva]);
@@ -162,28 +165,35 @@ export function AppDataProvider({ children, uid }) {
                 setDbReady(true);
                 return;
             }
-            // Usuario autenticado — abrir suscripciones
-            (() => {
+
+            // Resolver empresaId del usuario antes de abrir suscripciones
+            getDoc(doc(db, "usuarios", firebaseUser.uid)).then(userSnap => {
+                const empresaId = userSnap.exists()
+                    ? (userSnap.data().empresaId ?? EMPRESA_ID_FALLBACK)
+                    : EMPRESA_ID_FALLBACK;
+
+                empresaIdRef.current = empresaId;
+
         const unsubs = [];
         let ready = 0;
         const markReady = () => { ready++; if (ready >= 3) setDbReady(true); };
 
-        // 0. Logos de empresa (doc raíz) — fallback a imágenes estáticas si no hay en Firestore
+        // 0. Empresa — logos, nombre y módulos habilitados
         const LOGO_DEFAULTS = {
             splash: "/images/png-transparent-logo.png",
             panel:  "/images/png-transparent-logo.png",
         };
         try {
             unsubs.push(onSnapshot(
-                doc(db, "empresas", EMPRESA_ID),
+                doc(db, "empresas", empresaId),
                 (snap) => {
                     const d = snap.exists() ? snap.data() : {};
                     setEmpresaLogos({
                         splash: d.logoSplash ?? LOGO_DEFAULTS.splash,
                         panel:  d.logoPanel  ?? LOGO_DEFAULTS.panel,
                     });
-                    if (d.nombre)   setEmpresaNombre(d.nombre);
-                    if (d.modulos)  setEmpresaModulos(d.modulos);
+                    if (d.nombre)  setEmpresaNombre(d.nombre);
+                    setEmpresaModulos(d.modulos ?? null);
                 }
             ));
         } catch {
@@ -194,8 +204,8 @@ export function AppDataProvider({ children, uid }) {
         try {
             const q = query(
                 collection(db, "jornadas"),
-                where("empresaId", "==", EMPRESA_ID)
-            ); // sin orderBy para no requerir índice compuesto — se ordena en JS
+                where("empresaId", "==", empresaId)
+            );
             unsubs.push(onSnapshot(q,
                 (snap) => {
                     setJornadas(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
@@ -213,17 +223,16 @@ export function AppDataProvider({ children, uid }) {
         // 2. Planes de supervisores — doc único por empresa
         try {
             unsubs.push(onSnapshot(
-                doc(db, "empresas", EMPRESA_ID, "datos", "planes_super"),
+                doc(db, "empresas", empresaId, "datos", "planes_super"),
                 (snap) => {
                     if (snap.exists()) {
                         setPlanesSuper(snap.data().planes || {});
                     } else {
-                        // Primera vez: migrar desde localStorage
                         const local = load("cyrano_planes_super", {});
                         setPlanesSuper(local);
                         if (Object.keys(local).length > 0) {
                             setDoc(
-                                doc(db, "empresas", EMPRESA_ID, "datos", "planes_super"),
+                                doc(db, "empresas", empresaId, "datos", "planes_super"),
                                 { planes: local, updatedAt: new Date().toISOString() }
                             ).catch(console.error);
                         }
@@ -241,7 +250,7 @@ export function AppDataProvider({ children, uid }) {
         // 3. Plan global
         try {
             unsubs.push(onSnapshot(
-                doc(db, "empresas", EMPRESA_ID, "datos", "plan_global"),
+                doc(db, "empresas", empresaId, "datos", "plan_global"),
                 (snap) => {
                     if (snap.exists()) {
                         setPlanState(snap.data().objetivos || DEFAULT_PLAN);
@@ -249,7 +258,7 @@ export function AppDataProvider({ children, uid }) {
                         const local = load("cyrano_plan", DEFAULT_PLAN);
                         setPlanState(local);
                         setDoc(
-                            doc(db, "empresas", EMPRESA_ID, "datos", "plan_global"),
+                            doc(db, "empresas", empresaId, "datos", "plan_global"),
                             { objetivos: local, updatedAt: new Date().toISOString() }
                         ).catch(console.error);
                     }
@@ -266,7 +275,7 @@ export function AppDataProvider({ children, uid }) {
         // 4. Config global (objetivos, vehículos, vigiladores, etc.)
         try {
             unsubs.push(onSnapshot(
-                doc(db, "empresas", EMPRESA_ID, "datos", "config_global"),
+                doc(db, "empresas", empresaId, "datos", "config_global"),
                 (snap) => {
                     if (snap.exists() && snap.data().config) {
                         setConfig(prev => ({ ...DEFAULT_CONFIG, ...snap.data().config }));
@@ -277,7 +286,10 @@ export function AppDataProvider({ children, uid }) {
         } catch (e) { /* usa DEFAULT_CONFIG */ }
 
             unsubs.forEach(u => u && unsubFirestore.push(u));
-            })();
+            }).catch(err => {
+                console.error("[AppData] getDoc usuario:", err);
+                setDbReady(true);
+            });
         });
 
         return () => {
@@ -290,10 +302,9 @@ export function AppDataProvider({ children, uid }) {
     const updateConfig = (key, value) => {
         setConfig((p) => {
             const next = { ...p, [key]: value };
-            // Persistir en Firestore para que todos los dispositivos lo vean
             if (dbReady) {
                 setDoc(
-                    doc(db, "empresas", EMPRESA_ID, "datos", "config_global"),
+                    doc(db, "empresas", empresaIdRef.current, "datos", "config_global"),
                     { config: next, updatedAt: new Date().toISOString() }
                 ).catch(err => console.error("updateConfig Firestore:", err));
             }
@@ -307,7 +318,7 @@ export function AppDataProvider({ children, uid }) {
         setPlanState(nuevoPlan);
         try {
             await setDoc(
-                doc(db, "empresas", EMPRESA_ID, "datos", "plan_global"),
+                doc(db, "empresas", empresaIdRef.current, "datos", "plan_global"),
                 { objetivos: nuevoPlan, updatedAt: new Date().toISOString() }
             );
         } catch (err) {
@@ -328,7 +339,7 @@ export function AppDataProvider({ children, uid }) {
         setPlanesSuper(nuevos);
         try {
             await setDoc(
-                doc(db, "empresas", EMPRESA_ID, "datos", "planes_super"),
+                doc(db, "empresas", empresaIdRef.current, "datos", "planes_super"),
                 { planes: nuevos, updatedAt: new Date().toISOString() }
             );
         } catch (err) {
@@ -390,7 +401,7 @@ export function AppDataProvider({ children, uid }) {
 
     // ── Jornadas ──────────────────────────────────────────────────────────────
     const iniciarJornada = (datos) => {
-        const j = { ...datos, estado: "activa", actividades: [], creadaEn: new Date().toISOString(), empresaId: EMPRESA_ID };
+        const j = { ...datos, estado: "activa", actividades: [], creadaEn: new Date().toISOString(), empresaId: empresaIdRef.current };
         setJornadaActiva(j);
         return j;
     };
@@ -421,7 +432,7 @@ export function AppDataProvider({ children, uid }) {
         if (!jornadaActiva) return;
         const cerrada = {
             ...jornadaActiva, ...datosCierre,
-            estado: "cerrada", cerradaEn: new Date().toISOString(), empresaId: EMPRESA_ID,
+            estado: "cerrada", cerradaEn: new Date().toISOString(), empresaId: empresaIdRef.current,
         };
         try {
             const ref = await addDoc(collection(db, "jornadas"), cerrada);
@@ -446,7 +457,7 @@ export function AppDataProvider({ children, uid }) {
         (async () => {
             try {
                 for (const j of pendientes) {
-                    await addDoc(collection(db, "jornadas"), { ...j, empresaId: EMPRESA_ID });
+                    await addDoc(collection(db, "jornadas"), { ...j, empresaId: empresaIdRef.current });
                 }
                 save("cyrano_jornadas_pendientes", []);
                 console.log("[Sync] Jornadas pendientes subidas:", pendientes.length);
@@ -475,7 +486,7 @@ export function AppDataProvider({ children, uid }) {
             iniciarActividad, finalizarActividad, cancelarActividad, cerrarJornada,
             resetSesion, limpiarSimulados,
             dbReady, dbError,
-            empresaId: EMPRESA_ID,
+            empresaId: empresaIdRef.current,
             empresaLogos,
             empresaNombre,
             empresaModulos,

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import ShieldLogo from "../components/ShieldLogo";
 import { generarHojaSupervision } from "../utils/generarPDF";
-import "../styles/SendModal.css";
+import "./SendModal.css";
 
 // ── EmailJS config ─────────────────────────────────────────────────────────────
 const EJS_SERVICE  = "Service_bsotr9p";

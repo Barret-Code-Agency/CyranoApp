@@ -1,8 +1,8 @@
 // src/screens/AdminScreen.jsx
 import { useState } from "react";
 import { useAppData } from "../context/AppDataContext";
-import DashboardScreen      from "./DashboardScreen";
-import PlanSupervisorScreen from "./PlanSupervisorScreen";
+import DashboardScreen      from "./gerencia/DashboardScreen";
+import PlanSupervisorScreen from "./supervisor/PlanSupervisorScreen";
 import UsersScreen          from "./UsersScreen";
 import VehiculosScreen      from "./VehiculosScreen";
 import ConfigPanel          from "./admin/ConfigPanel";

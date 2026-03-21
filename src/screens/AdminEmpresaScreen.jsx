@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { ROLE_LABELS, ROLE_ICONS } from "../config/roles";
-import "../styles/AdminEmpresaScreen.css";
+import "./AdminEmpresaScreen.css";
 
 const SECCIONES = [
     {

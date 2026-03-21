@@ -1,6 +1,6 @@
 // src/screens/MenuScreen.jsx
 import { useAppData } from "../context/AppDataContext";
-import "../styles/MenuScreen.css";
+import "./MenuScreen.css";
 
 // key = phase name en App.jsx, tipo = valor guardado en actividadActiva.tipo
 const MENU_ITEMS = [

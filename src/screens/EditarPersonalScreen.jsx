@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { collection, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAppData } from "../context/AppDataContext";
-import "../styles/EditarPersonalScreen.css";
+import "./EditarPersonalScreen.css";
 
 const CAMPOS = [
     { key: "nombre",       label: "Nombre completo",                  type: "text"   },

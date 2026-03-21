@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { nowTime, todayDate } from "../utils/helpers";
 import { useAppData } from "../context/AppDataContext";
-import "../styles/CapacitacionScreen.css";
+import "./CapacitacionScreen.css";
 
 export default function CapacitacionScreen({ onBack }) {
     const { iniciarActividad, finalizarActividad, actividadActiva, cancelarActividad } = useAppData();

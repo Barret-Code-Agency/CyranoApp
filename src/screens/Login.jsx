@@ -1,7 +1,7 @@
 // src/screens/Login.jsx — Firebase Auth
 import { useState } from "react";
 import { useAuth }  from "../context/AuthContext";
-import "../styles/Login.css";
+import "./Login.css";
 
 const ROLE_LABELS = {
     super_admin:   { label: "Super Administrador",      icon: "⚙️",  variant: "super"    },

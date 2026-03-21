@@ -1,7 +1,7 @@
 // src/screens/VehiculosScreen.jsx
 import { useState, useMemo } from "react";
 import { useAppData } from "../context/AppDataContext";
-import "../styles/VehiculosScreen.css";
+import "./VehiculosScreen.css";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const TIPOS = ["Service", "Reparación", "Revisión", "Cambio de aceite", "Neumáticos", "Otro"];
