@@ -1,0 +1,321 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isAuth() && (
+        // Chequeo robusto: si el doc no existe, usa el display name del token
+        (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) && me().rol == 'super_admin') ||
+        request.auth.token.email == 'supervision.brinks@gmail.com'
+      );
+    }
+
+    function miEmpresaId() {
+      return me().empresaId;
+    }
+
+    function esDeEmpresa(empresaId) {
+      return isAuth() && miEmpresaId() == empresaId;
+    }
+
+    function esAdmin() {
+      return isAuth() && me().rol in ['admin_contrato', 'super_admin'];
+    }
+
+    function esAdminDeEmpresa(empresaId) {
+      return esAdmin() && miEmpresaId() == empresaId;
+    }
+
+    // ── Usuarios ─────────────────────────────────────────────────────────────
+    match /usuarios/{uid} {
+      allow read: if isAuth() && (
+        request.auth.uid == uid ||
+        isSuperAdmin() ||
+        (esAdmin() && get(/databases/$(database)/documents/usuarios/$(uid)).data.empresaId == miEmpresaId())
+      );
+      // Cualquier usuario autenticado puede crear su propio doc (bootstrap super_admin)
+      allow create: if isAuth() && (
+        request.auth.uid == uid ||
+        isSuperAdmin() ||
+        (esAdmin() && request.resource.data.empresaId == miEmpresaId())
+      );
+      allow update: if isAuth() && (
+        isSuperAdmin() ||
+        request.auth.uid == uid ||
+        esAdminDeEmpresa(resource.data.empresaId)
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── Empresas ─────────────────────────────────────────────────────────────
+    match /empresas/{empresaId} {
+      allow read:  if isAuth() && (isSuperAdmin() || miEmpresaId() == empresaId);
+      allow write: if isSuperAdmin();
+
+      // Sub-colecciones: config_global, plan_global, planes_super, etc.
+      match /{document=**} {
+        allow read:  if isAuth() && (isSuperAdmin() || miEmpresaId() == empresaId);
+        allow write: if isAuth() && (isSuperAdmin() || esAdminDeEmpresa(empresaId));
+      }
+    }
+
+    // ── Jornadas ─────────────────────────────────────────────────────────────
+    match /jornadas/{id} {
+      allow read: if isAuth() && (
+        isSuperAdmin() ||
+        resource.data.empresaId == miEmpresaId()
+      );
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() ||
+        (resource.data.empresaId == miEmpresaId() && esAdmin())
+      );
+    }
+
+    // ── Legajos ──────────────────────────────────────────────────────────────
+    match /legajos/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Programación de servicios ─────────────────────────────────────────────
+    match /programacionServicios/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Objetivos ────────────────────────────────────────────────────────────
+    match /objetivos/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Rondas ───────────────────────────────────────────────────────────────
+    match /rondas/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    match /plantillasRonda/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Informes ─────────────────────────────────────────────────────────────
+    match /informes/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || resource.data.empresaId == miEmpresaId()
+      );
+    }
+
+    // ── Comunicaciones ───────────────────────────────────────────────────────
+    match /comunicaciones/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || resource.data.empresaId == miEmpresaId()
+      );
+    }
+
+    // ── Procedimientos y capacitaciones ──────────────────────────────────────
+    match /procedimientos/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    match /capacitaciones/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Clientes (empresas contratantes del servicio) ─────────────────────────
+    match /clientes/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Diagramas 14x14 ───────────────────────────────────────────────────────
+    match /diagramas14x14/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Personal operativo ────────────────────────────────────────────────────
+    match /conductores/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    match /encargados/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    match /supervisores/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    match /vehiculos/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    match /admins/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Ingresos de turno y plan de capacitación ──────────────────────────────
+    match /ingresosTurno/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    match /planCapacitacion/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Condiciones / actos inseguros ─────────────────────────────────────────
+    match /condicionesInseguras/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId));
+    }
+
+    // ── Rondas de ejecución y plantillas ─────────────────────────────────────
+    match /rondas_ejecucion/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresa == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresa == miEmpresaId();
+      allow update: if isAuth() && (isSuperAdmin() || resource.data.empresa == miEmpresaId());
+    }
+
+    match /plantillas_ronda/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresa == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresa == miEmpresaId();
+      allow update, delete: if isAuth() && (isSuperAdmin() || esAdminDeEmpresa(resource.data.empresa));
+    }
+
+    // ── Alertas de pánico ─────────────────────────────────────────────────────
+    match /alertasPanico/{id} {
+      allow read:   if isAuth() && (isSuperAdmin() || esAdmin());
+      allow create: if isAuth();
+      allow update: if isAuth() && (isSuperAdmin() || esAdmin());
+    }
+
+    // ── Tokens — saldo por usuario ────────────────────────────────────────────
+    match /tokens/{uid} {
+      allow read: if isAuth() && (request.auth.uid == uid || isSuperAdmin() || esAdmin());
+      // Solo admins pueden modificar saldo; los canjes se registran en tokensMovimientos
+      allow write: if isSuperAdmin() || esAdmin();
+    }
+
+    // ── Movimientos de tokens ─────────────────────────────────────────────────
+    match /tokensMovimientos/{id} {
+      allow read: if isAuth() && (
+        isSuperAdmin() ||
+        esAdmin() ||
+        resource.data.uid == request.auth.uid
+      );
+      allow create: if isAuth() && request.resource.data.uid != null;
+    }
+
+    // ── Premios (catálogo) ────────────────────────────────────────────────────
+    match /premios/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId));
+    }
+
+    // ── Canjes (solicitudes) ──────────────────────────────────────────────────
+    match /canjes/{id} {
+      allow read: if isAuth() && (
+        isSuperAdmin() ||
+        (esAdmin() && resource.data.empresaId == miEmpresaId()) ||
+        resource.data.uid == request.auth.uid
+      );
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuth() && (isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId));
+    }
+
+    // ── Tipos de actividad (para OtraActividad) ──────────────────────────────
+    match /tiposActividad/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Lugares adicionales (para OtraActividad) ─────────────────────────────
+    match /lugaresAdicionales/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Denegación por defecto — todo lo no listado explícitamente ────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

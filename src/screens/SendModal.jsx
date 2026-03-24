@@ -244,7 +244,7 @@ export default function SendModal({ session, onClose }) {
                             </a>
                         )}
                         <button className="btn btn-primary" onClick={onClose}>
-                            Volver al inicio →
+                            Volver al menú →
                         </button>
                     </div>
                 )}

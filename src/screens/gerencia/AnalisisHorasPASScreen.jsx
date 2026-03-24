@@ -3,13 +3,11 @@ import { useEffect, useState, useMemo } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
+import { MESES_ES } from "../../utils/periodoUtils";
 import "./AnalisisHorasPASScreen.css";
 
 // ── Colecciones Firestore ─────────────────────────────────────────────────────
 const COL_PROG = "programacionServicios";
-
-const MESES_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-                  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 const DIAS_MES = (año, mes) => new Date(año, mes, 0).getDate();
 
@@ -47,12 +45,12 @@ function BarraCobertura({ pct, meta = 100 }) {
 }
 
 export default function AnalisisHorasPASScreen({ año, mes }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
     const [docs,     setDocs]     = useState([]);
     const [cargando, setCargando] = useState(true);
 
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         setCargando(true);
         const esSantaCruz = d =>
             /santa\s*cruz/i.test(d.clienteNombre || "") ||
@@ -62,15 +60,15 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
 
         getDocs(query(
             collection(db, COL_PROG),
-            where("empresa", "==", empresaNombre),
-            where("año",     "==", año),
-            where("mes",     "==", mes)
+            where("empresaId", "==", empresaId)
         )).then(snap => {
-            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const data = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter(d => d.año === año && d.mes === mes);
             setDocs(data.filter(esSantaCruz));
         }).catch(console.error)
           .finally(() => setCargando(false));
-    }, [empresaNombre, año, mes]);
+    }, [empresaId, año, mes]);
 
     const avance   = avanceMes(año, mes);
     const avancePct = (avance * 100).toFixed(1);

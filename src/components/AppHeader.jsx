@@ -5,23 +5,28 @@ import { useAppData } from "../context/AppDataContext";
 import ShieldLogo     from "./ShieldLogo";
 import "./AppHeader.css";
 
-export default function AppHeader({ onLogout }) {
+export default function AppHeader({ onLogout, subline }) {
     const { user }                           = useAuth();
     const { empresaLogos, empresaNombre }    = useAppData();
 
     return (
-        <header className="app-header">
-            <div className="app-header-left">
-                {empresaLogos?.panel
-                    ? <img src={empresaLogos.panel} alt="Logo" className="app-header-logo" />
-                    : <ShieldLogo size={36} className="app-header-shield" />
-                }
-                <div>
-                    <div className="app-header-empresa">{empresaNombre}</div>
-                    <div className="app-header-user">{user?.name}</div>
+        <>
+            <header className="app-header">
+                <div className="app-header-left">
+                    {empresaLogos?.panel
+                        ? <img src={empresaLogos.panel} alt="Logo" className="app-header-logo" />
+                        : <ShieldLogo size={36} className="app-header-shield" />
+                    }
+                    <div>
+                        <div className="app-header-empresa">{empresaNombre}</div>
+                        <div className="app-header-user">{user?.name}</div>
+                    </div>
                 </div>
-            </div>
-            <button className="app-header-logout" onClick={onLogout} title="Cerrar sesión">🚪</button>
-        </header>
+                <button className="app-header-logout" onClick={onLogout} title="Cerrar sesión">🚪</button>
+            </header>
+            {subline !== undefined && (
+                <div className="app-header-subline">{subline}</div>
+            )}
+        </>
     );
 }

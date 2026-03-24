@@ -2,7 +2,7 @@
 // Pantalla de inicio del Vigilador — muestra sus módulos disponibles.
 // Los módulos se irán implementando en etapas posteriores.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth }    from "../../context/AuthContext";
 import { useAppData } from "../../context/AppDataContext";
 import { tieneAcceso } from "../../config/roles";
@@ -13,28 +13,24 @@ import VerInformesScreen from "../../forms/VerInformesScreen";
 import VerComunicacionesScreen from "../../forms/VerComunicacionesScreen";
 import MisTurnosVigScreen from "./MisTurnosVigScreen";
 import ControlVehicularScreen from "./ControlVehicularScreen";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, getDocs, query, where } from "firebase/firestore";
+import { OPCIONES, MESES_CORTO as MESES_ES } from "../../utils/periodoUtils";
+import { useWhatsApp } from "../../hooks/useWhatsApp";
+import { buildResumenDiario } from "../../utils/whatsapp";
 import { db } from "../../firebase";
 import { useClientesData } from "../../hooks/useClientesData";
+import { fmtObjetivo } from "../../utils/formatters";
+import ReporteCondicionInseguraScreen from "../../forms/ReporteCondicionInseguraScreen";
+import TokensScreen from "./TokensScreen";
+import PedidoInsumosScreen from "../shared/PedidoInsumosScreen";
 import AppHeader from "../../components/AppHeader";
 import "../../styles/VigHome.css";
 import "../../styles/SupervisorHome.css";
 
-const TURNOS = [
-    "06:00 – 14:00",
-    "14:00 – 22:00",
-    "22:00 – 06:00",
-    "06:00 – 18:00",
-    "18:00 – 06:00",
-    "07:00 – 19:00",
-    "19:00 – 07:00",
-    "05:00 – 17:00",
-    "17:00 – 05:00",
-    "08:00 – 20:00",
-    "10:00 – 18:00",
-    "06:00 – 16:00",
-    "07:00 – 17:00",
-];
+// Turnos disponibles para check-in: misma fuente que ProgramacionServiciosScreen
+const TURNOS = OPCIONES
+    .filter(o => o.cls === "dia" || o.cls === "tard" || o.cls === "noch" || o.cls === "g24")
+    .map(o => o.val);
 
 // ── Selector de vehículo antes del checklist ──────────────────────────────────
 function SelectorVehiculo({ vehiculos = [], supervisor, onBack }) {
@@ -101,68 +97,78 @@ const MODULOS = [
 
 // ── Calendario semanal ─────────────────────────────────────────────────────────
 const DIAS_ES  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 function fmtKey(d) { return d.toISOString().slice(0, 10); }
 
-function CalendarioSemanal({ actividades = {} }) {
+function CalendarioSemanal({ actividades = {}, legajos = [] }) {
     const hoy    = new Date();
     const hoyKey = fmtKey(hoy);
     const [selKey, setSelKey] = useState(hoyKey);
+    const [sending, setSending] = useState(false);
+    const [waSent,  setWaSent]  = useState(false);
+    const { configurado, enviar } = useWhatsApp();
 
-    // 7 días desde hoy
     const dias = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(hoy);
         d.setDate(hoy.getDate() + i);
         return d;
     });
 
+    const cumplesPorKey = {};
+    legajos.forEach(p => {
+        if (!p.nacimiento) return;
+        const [dd, mm] = p.nacimiento.split("/").map(Number);
+        dias.forEach(d => {
+            if (d.getDate() === dd && d.getMonth() + 1 === mm) {
+                const key = fmtKey(d);
+                const ap = (p.nombre || "").trim().split(" ")[0];
+                cumplesPorKey[key] = [...(cumplesPorKey[key] || []), ap];
+            }
+        });
+    });
+
     const selDate  = new Date(selKey + "T12:00:00");
     const selActs  = actividades[selKey] ?? [];
+    const selCumps = cumplesPorKey[selKey] ?? [];
 
     return (
         <div className="vh-calendario">
             <div className="vh-cal-title">📅 Actividades de la semana</div>
 
-            {/* Tira de 7 días */}
             <div className="vh-cal-strip">
                 {dias.map(d => {
-                    const key      = fmtKey(d);
-                    const esHoy    = key === hoyKey;
-                    const esSel    = key === selKey;
-                    const tieneAct = (actividades[key] ?? []).length > 0;
+                    const key  = fmtKey(d);
                     const acts = actividades[key] ?? [];
                     return (
                         <button
                             key={key}
-                            className={`vh-cal-dia ${esHoy ? "vh-cal-dia--hoy" : ""} ${esSel ? "vh-cal-dia--sel" : ""}`}
+                            className={`vh-cal-dia ${key === hoyKey ? "vh-cal-dia--hoy" : ""} ${key === selKey ? "vh-cal-dia--sel" : ""}`}
                             onClick={() => setSelKey(key)}
                         >
                             <span className="vh-cal-dayname">{DIAS_ES[d.getDay()]}</span>
                             <span className="vh-cal-daynum">{d.getDate()}</span>
                             <div className="vh-cal-dia-acts">
-                                {acts.length === 0
-                                    ? <span className="vh-cal-dia-empty">—</span>
-                                    : acts.map((a, i) => (
-                                        <span key={i} className={`vh-cal-dia-chip vh-cal-dia-chip--${a.tipo ?? "default"}`}>
-                                            {a.label}
-                                        </span>
-                                    ))
-                                }
+                                {acts.map((a, i) => (
+                                    <span key={i} className={`vh-cal-dia-chip vh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.label}</span>
+                                ))}
+                                {(cumplesPorKey[key] || []).map((ap, i) => (
+                                    <span key={`c${i}`} className="vh-cal-dia-chip vh-cal-dia-chip--cumple">🎂 {ap}</span>
+                                ))}
+                                {acts.length === 0 && !cumplesPorKey[key] && (
+                                    <span className="vh-cal-dia-empty">—</span>
+                                )}
                             </div>
                         </button>
                     );
                 })}
             </div>
 
-            {/* Detalle del día seleccionado */}
             <div className="vh-cal-detail">
                 <div className="vh-cal-detail-fecha">
                     {DIAS_ES[selDate.getDay()]} {selDate.getDate()} de {MESES_ES[selDate.getMonth()]}
                     {selKey === hoyKey && <span className="vh-cal-hoy-badge">Hoy</span>}
                 </div>
-
-                {selActs.length === 0 ? (
+                {selActs.length === 0 && selCumps.length === 0 ? (
                     <div className="vh-cal-empty">Sin actividades programadas</div>
                 ) : (
                     <div className="vh-cal-acts">
@@ -172,7 +178,29 @@ function CalendarioSemanal({ actividades = {} }) {
                                 <span className="vh-cal-act-label">{a.label}</span>
                             </div>
                         ))}
+                        {selCumps.map((ap, i) => (
+                            <div key={`c${i}`} className="vh-cal-act vh-cal-act--cumple">
+                                <span className="vh-cal-act-hora">🎂</span>
+                                <span className="vh-cal-act-label">Cumpleaños de {ap}</span>
+                            </div>
+                        ))}
                     </div>
+                )}
+                {configurado && (
+                    <button
+                        className="vh-cal-wa-btn"
+                        disabled={sending || waSent}
+                        onClick={async () => {
+                            setSending(true);
+                            const selDate = new Date(selKey + "T12:00:00");
+                            const texto = buildResumenDiario(selDate, selActs, selCumps);
+                            await enviar(texto);
+                            setSending(false); setWaSent(true);
+                            setTimeout(() => setWaSent(false), 4000);
+                        }}
+                    >
+                        {waSent ? "✅ Enviado" : sending ? "Enviando…" : "📱 Enviar por WhatsApp"}
+                    </button>
                 )}
             </div>
         </div>
@@ -226,11 +254,15 @@ function PanelInformes({ onBack }) {
         return <VerInformesScreen onBack={() => setVista(null)} soloPropio={true} />;
     }
 
+    if (vista === "reporte_condiciones") {
+        return <ReporteCondicionInseguraScreen onBack={() => setVista(null)} />;
+    }
+
     if (vista) {
         const op = OPCIONES_INFORMES.find(o => o.id === vista);
         return (
             <div className="vh-subpanel">
-                <button className="vh-back" onClick={() => setVista(null)}>← Volver</button>
+                <button className="vh-back" onClick={() => setVista(null)}>← Volver al panel</button>
                 <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
                 <div className="vh-coming-soon">Próximamente</div>
             </div>
@@ -274,7 +306,7 @@ function PanelPlanillas({ onBack }) {
         const op = OPCIONES_PLANILLAS.find(o => o.id === vista);
         return (
             <div className="vh-subpanel">
-                <button className="vh-back" onClick={() => setVista(null)}>← Volver</button>
+                <button className="vh-back" onClick={() => setVista(null)}>← Volver al panel</button>
                 <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
                 <div className="vh-coming-soon">Próximamente</div>
             </div>
@@ -304,17 +336,21 @@ function PanelPlanillas({ onBack }) {
 // ── Sub-pantalla Capacitación ─────────────────────────────────────────────────
 const OPCIONES_CAPACITACION = [
     { id: "repositorio",    icon: "📚", titulo: "Ingresar al repositorio",  desc: "Accedé a los materiales y cursos disponibles" },
-    { id: "ver_tokens",     icon: "🎟️", titulo: "Ver tokens",               desc: "Consultá los tokens de capacitación disponibles" },
-    { id: "cambiar_tokens", icon: "🔄", titulo: "Cambiar tokens",           desc: "Canjeá o actualizá tus tokens de capacitación" },
+    { id: "cambiar_tokens", icon: "🎟️", titulo: "Mis Tokens",              desc: "Consultá tu saldo y canjeá premios con tus tokens" },
 ];
 
 function PanelCapacitacion({ onBack }) {
     const [vista, setVista] = useState(null);
+
+    if (vista === "cambiar_tokens") {
+        return <TokensScreen onBack={() => setVista(null)} />;
+    }
+
     if (vista) {
         const op = OPCIONES_CAPACITACION.find(o => o.id === vista);
         return (
             <div className="vh-subpanel">
-                <button className="vh-back" onClick={() => setVista(null)}>← Volver</button>
+                <button className="vh-back" onClick={() => setVista(null)}>← Volver al panel</button>
                 <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
                 <div className="vh-coming-soon">Próximamente</div>
             </div>
@@ -354,7 +390,7 @@ function PanelInventarios({ onBack }) {
         const op = OPCIONES_INVENTARIOS.find(o => o.id === vista);
         return (
             <div className="vh-subpanel">
-                <button className="vh-back" onClick={() => setVista(null)}>← Volver</button>
+                <button className="vh-back" onClick={() => setVista(null)}>← Volver al panel</button>
                 <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
                 <div className="vh-coming-soon">Próximamente</div>
             </div>
@@ -479,7 +515,7 @@ function PlanillaInsumos({ onBack }) {
                 <div style={{ color: "var(--color-muted)", marginTop: "var(--space-2)", fontSize: "var(--text-sm)" }}>
                     Tu supervisor recibirá el pedido de insumos.
                 </div>
-                <button className="vh-back" style={{ marginTop: "var(--space-6)" }} onClick={onBack}>Volver al panel</button>
+                <button className="vh-back" style={{ marginTop: "var(--space-6)" }} onClick={onBack}>← Volver al panel</button>
             </div>
         );
     }
@@ -591,7 +627,7 @@ function PlanillaInsumos({ onBack }) {
 }
 
 // ── Modal de check-in de turno ─────────────────────────────────────────────────
-function ModalCheckin({ user, puestos, onConfirmar }) {
+function ModalCheckin({ user, puestos, empresaId, onConfirmar }) {
     const [turno,   setTurno]   = useState("");
     const [puesto,  setPuesto]  = useState("");
     const [guardando, setGuardando] = useState(false);
@@ -607,6 +643,7 @@ function ModalCheckin({ user, puestos, onConfirmar }) {
                 nombre:    user?.name || null,
                 turno,
                 puesto,
+                empresaId: empresaId  || null,
                 fecha:     serverTimestamp(),
             });
         } catch (e) {
@@ -663,8 +700,8 @@ function ModalCheckin({ user, puestos, onConfirmar }) {
 // ── Pantalla principal ─────────────────────────────────────────────────────────
 export default function VigHome({ onLogout, user: propUser }) {
     const { user: authUser, logout } = useAuth();
-    const { empresaLogos, data, empresaModulos, empresaNombre } = useAppData();
-    const { objetivos } = useClientesData(empresaNombre);
+    const { empresaLogos, data, empresaModulos, empresaNombre, empresaId, userZona } = useAppData();
+    const { objetivos } = useClientesData(empresaId);
     const [seccion,  setSeccion]  = useState(null);
     const [checkin,  setCheckin]  = useState(null); // null = pendiente, objeto = completado
 
@@ -674,14 +711,49 @@ export default function VigHome({ onLogout, user: propUser }) {
 
     const handleLogout = async () => { await logout(); onLogout?.(); };
 
+    const [legajos, setLegajos] = useState([]);
+    useEffect(() => {
+        if (!empresaId) return;
+        getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId)))
+            .then(snap => setLegajos(snap.docs.map(d => d.data())))
+            .catch(err => console.error("Error cargando legajos:", err));
+    }, [empresaId]);
+
+    const [vehiculosFS, setVehiculosFS] = useState([]);
+    const [cargandoVehiculos, setCargandoVehiculos] = useState(false);
+    useEffect(() => {
+        if (!empresaId || seccion !== "control_vehicular") return;
+        setCargandoVehiculos(true);
+        const qVeh = userZona
+            ? query(collection(db, "vehiculos"), where("empresaId", "==", empresaId), where("zona", "==", userZona))
+            : query(collection(db, "vehiculos"), where("empresaId", "==", empresaId));
+        getDocs(qVeh)
+            .then(snap => {
+                const lista = snap.docs
+                    .map(d => d.data())
+                    .filter(v => v.patente)
+                    .map(v => v.marca && v.modelo ? `${v.patente} - ${v.marca} ${v.modelo}` : v.patente);
+                setVehiculosFS(lista);
+            })
+            .catch(() => {})
+            .finally(() => setCargandoVehiculos(false));
+    }, [empresaId, seccion, userZona]);
+
     const handleModulo = (id) => { setSeccion(id); };
 
-    const headerJSX = <AppHeader onLogout={handleLogout} />;
+    const modActivo = MODULOS.find(m => m.id === seccion);
+    const subline   = seccion
+        ? `${modActivo?.icon ?? ""} ${modActivo?.titulo ?? seccion}`.trim()
+        : "👷 Vigilador";
+    const headerJSX = <AppHeader onLogout={handleLogout} subline={subline} />;
 
     // ── Check-in obligatorio al iniciar sesión ──────────────────
-    const puestosDisponibles = objetivos
-        .map(o => [o.proyecto, o.nombre].filter(Boolean).join(" - "))
-        .filter(Boolean)
+    const puestosDisponibles = [...new Set(
+        objetivos
+            .filter(o => o.cCosto || o.numProyecto || o.codigo)
+            .map(o => fmtObjetivo(o))
+            .filter(Boolean)
+    )]
         .sort();
     if (!checkin) {
         return (
@@ -690,6 +762,7 @@ export default function VigHome({ onLogout, user: propUser }) {
                 <ModalCheckin
                     user={user}
                     puestos={puestosDisponibles}
+                    empresaId={empresaId}
                     onConfirmar={datos => setCheckin(datos)}
                 />
             </div>
@@ -700,7 +773,7 @@ export default function VigHome({ onLogout, user: propUser }) {
     if (seccion === "planillas")         return <div className="vh-root">{headerJSX}<PanelPlanillas     onBack={() => setSeccion(null)} /></div>;
     if (seccion === "capacitacion")      return <div className="vh-root">{headerJSX}<PanelCapacitacion  onBack={() => setSeccion(null)} /></div>;
     if (seccion === "inventarios")       return <div className="vh-root">{headerJSX}<PanelInventarios   onBack={() => setSeccion(null)} /></div>;
-    if (seccion === "pedido_insumos")    return <div className="vh-root">{headerJSX}<PlanillaInsumos    onBack={() => setSeccion(null)} /></div>;
+    if (seccion === "pedido_insumos")    return <div className="vh-root">{headerJSX}<PedidoInsumosScreen onBack={() => setSeccion(null)} /></div>;
     if (seccion === "muro_comunicacion") return <div className="vh-root">{headerJSX}<VerComunicacionesScreen onBack={() => setSeccion(null)} /></div>;
     if (seccion === "turnos_ver")        return <div className="vh-root">{headerJSX}<MisTurnosVigScreen  onBack={() => setSeccion(null)} /></div>;
     if (seccion === "realizar_ronda")    return <div className="vh-root">{headerJSX}<RondasVigScreen     onBack={() => setSeccion(null)} onNovedad={() => setSeccion("informes")} /></div>;
@@ -723,27 +796,31 @@ export default function VigHome({ onLogout, user: propUser }) {
         );
     }
     if (seccion === "control_vehicular") {
-        const vehiculos = data?.vehiculos ?? [];
-        if (vehiculos.length === 0) {
-            return (
-                <div className="vh-root">
-                    {headerJSX}
+        const vehiculosConfig = data?.vehiculos ?? [];
+        const vehiculos = [...new Set([...vehiculosConfig, ...vehiculosFS])];
+        const sinVehiculos = vehiculos.length === 0;
+        return (
+            <div className="vh-root">
+                {headerJSX}
+                {cargandoVehiculos && sinVehiculos ? (
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">🚗 Control de Vehículo</div>
+                        <div className="vh-coming-soon">Cargando vehículos...</div>
+                    </div>
+                ) : sinVehiculos ? (
                     <div className="vh-subpanel">
                         <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
                         <div className="vh-subpanel-title">🚗 Control de Vehículo</div>
                         <div className="vh-coming-soon">No hay vehículos configurados para este objetivo</div>
                     </div>
-                </div>
-            );
-        }
-        return (
-            <div className="vh-root">
-                {headerJSX}
-                <SelectorVehiculo
-                    vehiculos={vehiculos}
-                    supervisor={user?.name ?? ""}
-                    onBack={() => setSeccion(null)}
-                />
+                ) : (
+                    <SelectorVehiculo
+                        vehiculos={vehiculos}
+                        supervisor={user?.name ?? ""}
+                        onBack={() => setSeccion(null)}
+                    />
+                )}
             </div>
         );
     }
@@ -751,9 +828,7 @@ export default function VigHome({ onLogout, user: propUser }) {
     return (
         <div className="vh-root">
             {headerJSX}
-            <div className="vh-role-badge"><span>👷</span> Vigilador</div>
-
-            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} />
+            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} legajos={legajos} />
 
             <div className="sh-grid">
                 {MODULOS.map(m => {

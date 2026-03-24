@@ -55,7 +55,12 @@ export function AuthProvider({ children }) {
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
-                const data = await fetchUserData(firebaseUser.uid);
+                let data = await fetchUserData(firebaseUser.uid);
+                // Bootstrap super_admin sin doc en Firestore
+                if (!data && firebaseUser.email === "supervision.brinks@gmail.com") {
+                    data = { nombre: "Super Admin", email: firebaseUser.email, rol: "super_admin", activo: true };
+                    await setDoc(getUserDoc(firebaseUser.uid), { ...data, creadoEn: serverTimestamp(), ultimoAcceso: null });
+                }
                 if (data && data.activo !== false) {
                     setUser(buildUser(firebaseUser.uid, firebaseUser.email, data));
                 } else {
@@ -73,7 +78,20 @@ export function AuthProvider({ children }) {
     // ── Login ──────────────────────────────────────────────────────────────────
     const login = async (email, password) => {
         const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-        const data = await fetchUserData(cred.user.uid);
+        let data = await fetchUserData(cred.user.uid);
+
+        // Bootstrap super_admin: si no tiene doc en usuarios, lo crea automáticamente
+        if (!data && cred.user.email === "supervision.brinks@gmail.com") {
+            data = {
+                nombre:       "Super Admin",
+                email:        cred.user.email,
+                rol:          "super_admin",
+                activo:       true,
+                creadoEn:     serverTimestamp(),
+                ultimoAcceso: null,
+            };
+            await setDoc(getUserDoc(cred.user.uid), data);
+        }
 
         if (!data) throw new Error("Usuario no configurado. Contactá al administrador.");
         if (data.activo === false) {
@@ -100,6 +118,7 @@ export function AuthProvider({ children }) {
         empresaId    = null,
         contratoIds  = [],
         permisosOverride = {},
+        zona         = null,
     }) => {
         const { initializeApp }                                  = await import("firebase/app");
         const { getAuth, createUserWithEmailAndPassword: crear } = await import("firebase/auth");
@@ -120,6 +139,7 @@ export function AuthProvider({ children }) {
                 contratoIds,
                 permisosOverride,
                 activo:          true,
+                zona:            zona || null,
                 creadoEn:        serverTimestamp(),
                 ultimoAcceso:    null,
             });

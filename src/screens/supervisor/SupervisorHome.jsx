@@ -1,7 +1,12 @@
 // src/screens/SupervisorHome.jsx
 // Pantalla de inicio del Supervisor — menú de acceso a sus módulos.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "../../firebase";
+import { MESES_CORTO as MESES_ES } from "../../utils/periodoUtils";
+import { useWhatsApp } from "../../hooks/useWhatsApp";
+import { buildResumenDiario } from "../../utils/whatsapp";
 import { useAuth }              from "../../context/AuthContext";
 import { useAppData }           from "../../context/AppDataContext";
 import { tieneAcceso }          from "../../config/roles";
@@ -22,6 +27,7 @@ import { VistaTurnos }          from "../shared/ProgramacionServiciosScreen";
 import ControlClienteScreen     from "../shared/ControlClienteScreen";
 import ConsolidadoScreen        from "../shared/ConsolidadoScreen";
 import Diagramas14x14Screen     from "../shared/Diagramas14x14Screen";
+import PedidoInsumosScreen      from "../shared/PedidoInsumosScreen";
 import AppHeader from "../../components/AppHeader";
 import "../../styles/ConsolidadoScreen.css";
 import "../../styles/SupervisorHome.css";
@@ -58,13 +64,15 @@ function PeriodoCard({ icono, titulo, onVer }) {
         </div>
     );
 }
-const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 function fmtKey(d) { return d.toISOString().slice(0, 10); }
 
-function CalendarioSemanal({ actividades = {} }) {
+function CalendarioSemanal({ actividades = {}, legajos = [] }) {
     const hoy    = new Date();
     const hoyKey = fmtKey(hoy);
     const [selKey, setSelKey] = useState(hoyKey);
+    const [sending, setSending] = useState(false);
+    const [waSent,  setWaSent]  = useState(false);
+    const { configurado, enviar } = useWhatsApp();
 
     const dias = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(hoy);
@@ -72,8 +80,22 @@ function CalendarioSemanal({ actividades = {} }) {
         return d;
     });
 
-    const selDate = new Date(selKey + "T12:00:00");
-    const selActs = actividades[selKey] ?? [];
+    const cumplesPorKey = {};
+    legajos.forEach(p => {
+        if (!p.nacimiento) return;
+        const [dd, mm] = p.nacimiento.split("/").map(Number);
+        dias.forEach(d => {
+            if (d.getDate() === dd && d.getMonth() + 1 === mm) {
+                const key = fmtKey(d);
+                const ap = (p.nombre || "").trim().split(" ")[0];
+                cumplesPorKey[key] = [...(cumplesPorKey[key] || []), ap];
+            }
+        });
+    });
+
+    const selDate  = new Date(selKey + "T12:00:00");
+    const selActs  = actividades[selKey] ?? [];
+    const selCumps = cumplesPorKey[selKey] ?? [];
 
     return (
         <div className="sh-calendario">
@@ -91,14 +113,15 @@ function CalendarioSemanal({ actividades = {} }) {
                             <span className="sh-cal-dayname">{DIAS_ES[d.getDay()]}</span>
                             <span className="sh-cal-daynum">{d.getDate()}</span>
                             <div className="sh-cal-dia-acts">
-                                {acts.length === 0
-                                    ? <span className="sh-cal-dia-empty">—</span>
-                                    : acts.map((a, i) => (
-                                        <span key={i} className={`sh-cal-dia-chip sh-cal-dia-chip--${a.tipo ?? "default"}`}>
-                                            {a.label}
-                                        </span>
-                                    ))
-                                }
+                                {acts.map((a, i) => (
+                                    <span key={i} className={`sh-cal-dia-chip sh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.label}</span>
+                                ))}
+                                {(cumplesPorKey[key] || []).map((ap, i) => (
+                                    <span key={`c${i}`} className="sh-cal-dia-chip sh-cal-dia-chip--cumple">🎂 {ap}</span>
+                                ))}
+                                {acts.length === 0 && !cumplesPorKey[key] && (
+                                    <span className="sh-cal-dia-empty">—</span>
+                                )}
                             </div>
                         </button>
                     );
@@ -109,7 +132,7 @@ function CalendarioSemanal({ actividades = {} }) {
                     {DIAS_ES[selDate.getDay()]} {selDate.getDate()} de {MESES_ES[selDate.getMonth()]}
                     {selKey === hoyKey && <span className="sh-cal-hoy-badge">Hoy</span>}
                 </div>
-                {selActs.length === 0 ? (
+                {selActs.length === 0 && selCumps.length === 0 ? (
                     <div className="sh-cal-empty">Sin actividades programadas</div>
                 ) : (
                     <div className="sh-cal-acts">
@@ -119,7 +142,28 @@ function CalendarioSemanal({ actividades = {} }) {
                                 <span className="sh-cal-act-label">{a.label}</span>
                             </div>
                         ))}
+                        {selCumps.map((ap, i) => (
+                            <div key={`c${i}`} className="sh-cal-act sh-cal-act--cumple">
+                                <span className="sh-cal-act-hora">🎂</span>
+                                <span className="sh-cal-act-label">Cumpleaños de {ap}</span>
+                            </div>
+                        ))}
                     </div>
+                )}
+                {configurado && (
+                    <button
+                        className="sh-cal-wa-btn"
+                        disabled={sending || waSent}
+                        onClick={async () => {
+                            setSending(true);
+                            const selDate = new Date(selKey + "T12:00:00");
+                            await enviar(buildResumenDiario(selDate, selActs, selCumps));
+                            setSending(false); setWaSent(true);
+                            setTimeout(() => setWaSent(false), 4000);
+                        }}
+                    >
+                        {waSent ? "✅ Enviado" : sending ? "Enviando…" : "📱 Enviar por WhatsApp"}
+                    </button>
                 )}
             </div>
         </div>
@@ -147,14 +191,14 @@ const SUB_MODULOS_ACTIVIDADES = [
     { id: "planillas",             icon: "📊", titulo: "Ver Planillas",               desc: "Consultá las planillas operativas del puesto"           },
     { id: "ver_libro_actas",       icon: "📖", titulo: "Ver Libro de Actas",          desc: "Consultá el libro de actas digital de los puestos"      },
     { id: "ver_control_vehicular", icon: "🚗", titulo: "Ver Controles de Vehículos",  desc: "Consultá los controles vehiculares registrados"          },
-    { id: "ver_pedido_insumos",    icon: "📦", titulo: "Ver Pedido de Insumos",       desc: "Consultá los pedidos de insumos del puesto"             },
+    { id: "ver_pedido_insumos",    icon: "📦", titulo: "Pedido de Insumos",           desc: "Creá o consultá pedidos de insumos del puesto"          },
     { id: "ver_inventarios",       icon: "🗃️", titulo: "Ver Inventarios",             desc: "Consultá el inventario de los puestos"                  },
     { id: "ver_informes",          icon: "📄", titulo: "Ver Informes",                desc: "Consultá los informes redactados"                       },
 ];
 
 export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
     const { logout }        = useAuth();
-    const { empresaModulos, data } = useAppData();
+    const { empresaModulos, data, empresaNombre, empresaId, userZona } = useAppData();
     const [seccion,    setSeccion]    = useState(null);
     const [subSeccion, setSubSeccion] = useState(null);
     const [subSub,     setSubSub]     = useState(null);
@@ -162,11 +206,23 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
 
     const handleLogout = async () => { await logout(); onExit?.(); };
 
-    const renderHeader = () => <AppHeader onLogout={handleLogout} />;
+    const [legajos, setLegajos] = useState([]);
+    useEffect(() => {
+        if (!empresaId) return;
+        getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId)))
+            .then(snap => setLegajos(snap.docs.map(d => d.data())))
+            .catch(err => console.error("Error cargando legajos:", err));
+    }, [empresaId]);
+
+    const modActivo   = MODULOS.find(m => m.id === seccion);
+    const subline     = seccion
+        ? `${modActivo?.icon ?? ""} ${modActivo?.titulo ?? seccion}`.trim()
+        : "🔍 Supervisor / Encargado";
+    const renderHeader = () => <AppHeader onLogout={handleLogout} subline={subline} />;
 
     const volverBtn = (onClick) => (
         <div style={{ padding: "1rem 1.5rem 0" }}>
-            <button className="sh-back-btn" onClick={onClick}>← Volver</button>
+            <button className="sh-back-btn" onClick={onClick}>← Volver al panel</button>
         </div>
     );
 
@@ -181,7 +237,13 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
         if (subSeccion === "ver_informes") return (
             <div className="sh-supervision-wrapper">
                 {renderHeader()}
-                <VerInformesScreen onBack={() => setSubSeccion(null)} />
+                <VerInformesScreen onBack={() => setSubSeccion(null)} zonaFija={userZona} />
+            </div>
+        );
+        if (subSeccion === "ver_pedido_insumos") return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <PedidoInsumosScreen onBack={() => setSubSeccion(null)} />
             </div>
         );
         if (subSeccion) {
@@ -238,8 +300,8 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
 
     // Muro de comunicación → submenú ver / crear
     if (seccion === "muro_comunicacion") {
-        if (subSub === "ver")   return <><AppHeader onLogout={handleLogout} /><VerComunicacionesScreen  onBack={() => setSubSub(null)} /></>;
-        if (subSub === "crear") return <><AppHeader onLogout={handleLogout} /><CrearComunicacionScreen  onBack={() => setSubSub(null)} /></>;
+        if (subSub === "ver")   return <div className="sh-root"><AppHeader onLogout={handleLogout} subline={subline} /><VerComunicacionesScreen  onBack={() => setSubSub(null)} /></div>;
+        if (subSub === "crear") return <div className="sh-root"><AppHeader onLogout={handleLogout} subline={subline} /><CrearComunicacionScreen  onBack={() => setSubSub(null)} /></div>;
         const MURO_MENUS = [
             { id: "ver",   icon: "📋", titulo: "Ver novedades y comunicaciones", desc: "Consultá las comunicaciones publicadas para el personal" },
             { id: "crear", icon: "✏️", titulo: "Crear comunicación",             desc: "Publicá una comunicación o novedad para todo el personal" },
@@ -247,18 +309,21 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
         return (
             <div className="sh-root">
                 {renderHeader()}
-                {volverBtn(() => setSeccion(null))}
-                <div className="sh-grid">
-                    {MURO_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSub(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info">
-                                <strong>{m.titulo}</strong>
-                                <small>{m.desc}</small>
-                            </div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">📢 Muro de Comunicación y Novedades</div>
+                    <div className="sh-grid">
+                        {MURO_MENUS.map(m => (
+                            <button key={m.id} className="sh-modulo" onClick={() => setSubSub(m.id)}>
+                                <span className="sh-modulo-icon">{m.icon}</span>
+                                <div className="sh-modulo-info">
+                                    <strong>{m.titulo}</strong>
+                                    <small>{m.desc}</small>
+                                </div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -266,8 +331,8 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
 
     // Muro de procedimientos → submenú ver / subir
     if (seccion === "muro_procedimientos") {
-        if (subSub === "ver")   return <><AppHeader onLogout={handleLogout} /><VerProcedimientosScreen  onBack={() => setSubSub(null)} /></>;
-        if (subSub === "subir") return <><AppHeader onLogout={handleLogout} /><SubirProcedimientoScreen onBack={() => setSubSub(null)} /></>;
+        if (subSub === "ver")   return <><AppHeader onLogout={handleLogout} subline={subline} /><VerProcedimientosScreen  onBack={() => setSubSub(null)} /></>;
+        if (subSub === "subir") return <><AppHeader onLogout={handleLogout} subline={subline} /><SubirProcedimientoScreen onBack={() => setSubSub(null)} /></>;
         const PROC_MENUS = [
             { id: "ver",   icon: "📋", titulo: "Ver procedimientos",   desc: "Consultá los procedimientos operativos vigentes" },
             { id: "subir", icon: "📤", titulo: "Subir procedimiento",  desc: "Publicá un nuevo procedimiento para el personal"  },
@@ -291,10 +356,10 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
 
     // Capacitación → submenú ver / subir
     if (seccion === "capacitacion") {
-        if (subSub === "ver")   return <><AppHeader onLogout={handleLogout} /><VerCapacitacionesScreen  onBack={() => setSubSub(null)} /></>;
-        if (subSub === "subir") return <><AppHeader onLogout={handleLogout} /><SubirCapacitacionScreen  onBack={() => setSubSub(null)} /></>;
+        if (subSub === "ver")   return <><AppHeader onLogout={handleLogout} subline={subline} /><VerCapacitacionesScreen  onBack={() => setSubSub(null)} /></>;
+        if (subSub === "subir") return <><AppHeader onLogout={handleLogout} subline={subline} /><SubirCapacitacionScreen  onBack={() => setSubSub(null)} /></>;
         const CAP_MENUS = [
-            { id: "ver",   icon: "📋", titulo: "Cursos disponibles",    desc: "Consultá los cursos y materiales de formación" },
+            { id: "ver",   icon: "📚", titulo: "Ingresar al repositorio", desc: "Accedé a los materiales y cursos disponibles" },
             { id: "subir", icon: "📤", titulo: "Subir capacitación",    desc: "Publicá un nuevo curso o material de entrenamiento" },
         ];
         return (
@@ -316,8 +381,8 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
 
     // Redactar informe → submenú sencillo / gravedad
     if (seccion === "redactar_informe") {
-        if (subSub === "sencillo")  return <><AppHeader onLogout={handleLogout} /><InformeSencilloScreen onBack={() => setSubSub(null)} /></>;
-        if (subSub === "gravedad")  return <><AppHeader onLogout={handleLogout} /><InformeNovedadScreen  onBack={() => setSubSub(null)} /></>;
+        if (subSub === "sencillo")  return <><AppHeader onLogout={handleLogout} subline={subline} /><InformeSencilloScreen onBack={() => setSubSub(null)} /></>;
+        if (subSub === "gravedad")  return <><AppHeader onLogout={handleLogout} subline={subline} /><InformeNovedadScreen  onBack={() => setSubSub(null)} /></>;
         const CREAR_MENUS = [
             { id: "sencillo", icon: "📝", titulo: "Informe sencillo",   desc: "Redactá un informe no urgente de tu turno o puesto" },
             { id: "gravedad", icon: "🚨", titulo: "Informe de gravedad", desc: "Registrá un incidente con daños a personas o bienes" },
@@ -356,7 +421,7 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
         return (
             <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
-                <DashboardPersonalScreen onBack={() => setSeccion(null)} />
+                <DashboardPersonalScreen onBack={() => setSeccion(null)} zonaFija={userZona} />
             </div>
         );
     }
@@ -388,7 +453,7 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
                 <div className="sh-supervision-wrapper sh-fullscreen">
                     {renderHeader()}
                     {volverBtn(volverPeriodo)}
-                    <VistaTurnos año={año} mes={mes} />
+                    <VistaTurnos año={año} mes={mes} zonaFija={userZona} />
                 </div>
             );
             if (subSeccion === "diagramas14") return (
@@ -402,7 +467,7 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
                 <div className="sh-supervision-wrapper sh-fullscreen">
                     {renderHeader()}
                     {volverBtn(volverPeriodo)}
-                    <ControlClienteScreen año={año} mes={mes} />
+                    <ControlClienteScreen año={año} mes={mes} zonaFija={userZona} />
                 </div>
             );
         }
@@ -410,7 +475,7 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
         if (subSeccion === "consolidado") return (
             <div className="sh-supervision-wrapper sh-fullscreen">
                 {renderHeader()}
-                <ConsolidadoScreen onBack={() => setSubSeccion(null)} />
+                <ConsolidadoScreen onBack={() => setSubSeccion(null)} zonaFija={userZona} />
             </div>
         );
 
@@ -452,11 +517,9 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
 
     return (
         <div className="sh-root">
-            <AppHeader onLogout={handleLogout} />
+            <AppHeader onLogout={handleLogout} subline={subline} />
 
-            <div className="sh-role-badge">🔍 Supervisor / Encargado</div>
-
-            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} />
+            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} legajos={legajos} />
 
             <div className="sh-grid">
                 {MODULOS.map(m => {

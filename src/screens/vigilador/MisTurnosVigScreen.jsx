@@ -88,7 +88,7 @@ function GrillaCalendario({ dias, programado, hoyKey }) {
 // ── Pantalla principal ────────────────────────────────────────────────────────
 export default function MisTurnosVigScreen({ onBack }) {
     const { user }          = useAuth();
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
 
     const hoy    = new Date();
     const hoyKey = hoy.toISOString().slice(0, 10);
@@ -102,7 +102,7 @@ export default function MisTurnosVigScreen({ onBack }) {
     const [sinLegajo,    setSinLegajo]    = useState(false);
 
     useEffect(() => {
-        if (!empresaNombre || !user) return;
+        if (!empresaId || !user) return;
         setLoading(true);
         setError(null);
         setSinLegajo(false);
@@ -112,7 +112,7 @@ export default function MisTurnosVigScreen({ onBack }) {
                 // 1. Encontrar el legajo del vigilador por nombre en la empresa
                 const legajosSnap = await getDocs(query(
                     collection(db, "legajos"),
-                    where("empresa", "==", empresaNombre)
+                    where("empresaId", "==", empresaId)
                 ));
                 const miLegajoDoc = legajosSnap.docs
                     .map(d => d.data())
@@ -130,7 +130,7 @@ export default function MisTurnosVigScreen({ onBack }) {
                 // 2. Buscar programaciones del mes que contengan al vigilador
                 const progSnap = await getDocs(query(
                     collection(db, "programacionServicios"),
-                    where("empresa", "==", empresaNombre),
+                    where("empresaId", "==", empresaId),
                     where("año", "==", año),
                     where("mes", "==", mes)
                 ));
@@ -157,7 +157,7 @@ export default function MisTurnosVigScreen({ onBack }) {
         };
 
         cargar();
-    }, [empresaNombre, user, año, mes]);
+    }, [empresaId, user, año, mes]);
 
     const cambiarMes = (dir) => {
         if (dir === -1) {
@@ -179,9 +179,10 @@ export default function MisTurnosVigScreen({ onBack }) {
 
     return (
         <div className="mtv-root">
-            <header className="mtv-header">
-                <span className="mtv-header-title">🕐 Mis Turnos</span>
-            </header>
+            <div className="mtv-subpanel-top">
+                <button className="mtv-back" onClick={onBack}>← Volver al panel</button>
+                <div className="mtv-titulo">🕐 Mis Turnos</div>
+            </div>
 
             {/* Navegación de mes */}
             <div className="mtv-nav">
@@ -250,7 +251,6 @@ export default function MisTurnosVigScreen({ onBack }) {
                 )}
             </div>
 
-            <button className="mtv-float-back" onClick={onBack}>← Volver</button>
         </div>
     );
 }

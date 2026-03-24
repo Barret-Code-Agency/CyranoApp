@@ -21,10 +21,10 @@ function TipoBadge({ tipo }) {
 function DetalleView({ item, onBack }) {
     return (
         <div className="vc-root">
-            <button className="vh-back vc-back-top" onClick={onBack}>← Volver</button>
-            <header className="vc-header">
-                <span className="vc-header-title">📢 Comunicación</span>
-            </header>
+            <div className="vc-subpanel-top">
+                <button className="vc-back" onClick={onBack}>← Volver</button>
+                <div className="vc-titulo">📢 Comunicación</div>
+            </div>
 
             <div className="vc-detail-wrap">
                 <div className="vc-detail-card">
@@ -35,6 +35,9 @@ function DetalleView({ item, onBack }) {
                         </div>
                     )}
                     <div className="vc-detail-empresa">{item.empresa}</div>
+                    {item.numero && (
+                        <div className="vc-detail-numero">{item.numero}</div>
+                    )}
 
                     <TipoBadge tipo={item.tipo} />
 
@@ -57,36 +60,41 @@ function DetalleView({ item, onBack }) {
 
 // ── Vista principal ─────────────────────────────────────────────────────────
 export default function VerComunicacionesScreen({ onBack }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId, userZona } = useAppData();
     const [items,   setItems]   = useState([]);
     const [loading, setLoading] = useState(true);
     const [error,   setError]   = useState(null);
     const [selItem, setSelItem] = useState(null);
 
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         const q = query(
             collection(db, "comunicaciones"),
-            where("empresa", "==", empresaNombre)
+            where("empresaId", "==", empresaId)
         );
         getDocs(q)
             .then(snap => {
-                const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // Filtrar por zona: mostrar globales (sin zona) + las de la zona del usuario
+                if (userZona) {
+                    docs = docs.filter(d => !d.zona || d.zona === userZona);
+                }
+                // Ordenar por fecha descendente
                 docs.sort((a, b) => (b.creadoEn?.seconds ?? 0) - (a.creadoEn?.seconds ?? 0));
                 setItems(docs);
             })
             .catch(e  => setError(e.message))
             .finally(()=> setLoading(false));
-    }, [empresaNombre]);
+    }, [empresaId, userZona]);
 
     if (selItem) return <DetalleView item={selItem} onBack={() => setSelItem(null)} />;
 
     return (
         <div className="vc-root">
-            <button className="vh-back vc-back-top" onClick={onBack}>← Volver al panel</button>
-            <header className="vc-header">
-                <span className="vc-header-title">📢 Muro de Comunicación y Novedades</span>
-            </header>
+            <div className="vc-subpanel-top">
+                <button className="vc-back" onClick={onBack}>← Volver al panel</button>
+                <div className="vc-titulo">📢 Muro de Comunicación y Novedades</div>
+            </div>
 
             <div className="vc-body">
                 {loading && <div className="vc-empty">Cargando comunicaciones...</div>}

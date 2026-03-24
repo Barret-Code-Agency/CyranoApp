@@ -12,7 +12,7 @@ import {
     PieChart, Pie, Cell,
 } from "recharts";
 import "../../styles/ConsolidadoScreen.css";
-import { getDias, fmtKey, DIAS_ES, MESES_ES } from "../../utils/periodoUtils";
+import { getDias, fmtKey, DIAS_ES, MESES_ES, AUS_CODES, horasDeValor, normalizarTurno } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 
 // ── Colecciones Firestore ─────────────────────────────────────────────────────
@@ -22,27 +22,23 @@ const COL_LEGAJOS = "legajos";
 // ── Constantes ───────────────────────────────────────────────────────────────
 // DIAS_ES, MESES_ES, getDias, fmtKey, FERIADOS_ARG importados desde utils
 
-const AUS_SIN_VAC = ["Enf","Art","Asa","Aca","Sus","Lic"];
+const ZONAS_FIJAS = [
+    "CABA Norte",
+    "CABA Centro",
+    "CABA Sur",
+    "GBA Norte",
+    "GBA Sur",
+    "Buenos Aires Interior",
+    "Santa Cruz",
+];
+
+// AUS_CODES importado de periodoUtils (incluye "Vac"); AUS_SIN_VAC para conteo diferenciado
+const AUS_SIN_VAC = AUS_CODES.filter(c => c !== "Vac");
 
 const REGIMENES = ["", "4 x 2 x 12", "6 x 1 x 8", "5 x 2 x 12", "200", "12 x 36", "14 x 14 x 12", "14 x 14 x 8"];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-// getDias, fmtKey importados desde ../utils/periodoUtils
-
-// horasDeValor local: versión extendida (maneja number, más códigos de ausentismo)
-function horasDeValor(val) {
-    if (typeof val === "number") return val;
-    if (!val) return 0;
-    if (["Fco","Com","FER","Lic","Vac","Enf","Art","Asa","Aca","Sus"].includes(val)) return 0;
-    const partes = val.split(/\s*[-\u2013\u2014]\s*/);
-    if (partes.length !== 2) return 0;
-    const [h1, m1] = partes[0].split(":").map(Number);
-    const [h2, m2] = partes[1].split(":").map(Number);
-    if (isNaN(h1) || isNaN(h2)) return 0;
-    const ini = h1 * 60 + (m1 || 0);
-    const fin = h2 * 60 + (m2 || 0);
-    return (fin > ini ? fin - ini : fin + 1440 - ini) / 60;
-}
+// getDias, fmtKey, AUS_CODES, horasDeValor importados desde periodoUtils
 
 // Calcula solo las horas que caen en ventana nocturna 21:00–06:00
 function horasNocturnas(val) {
@@ -73,9 +69,13 @@ function fmtHs(n) {
 function valorCelda(val) {
     if (typeof val === "number") return val > 0 ? fmtHs(val) : "";
     if (!val) return "";
-    const hrs = horasDeValor(val);
+    // Normalizar formato antes de parsear (cubre "06-14", "06/14", variantes)
+    const hrs = horasDeValor(normalizarTurno(val));
     if (hrs > 0) return fmtHs(hrs);
-    return val;
+    // Mostrar códigos cortos (Fco, Vac, Enf, etc. son ≤ 3 caracteres)
+    if (val.length <= 3) return val;
+    // Turno en formato no reconocido → ocultar en lugar de mostrar el string crudo
+    return "";
 }
 
 // ── Selector de período ──────────────────────────────────────────────────────
@@ -118,8 +118,8 @@ function SelectorPeriodo({ onSelect }) {
 }
 
 // ── Grilla ───────────────────────────────────────────────────────────────────
-function ConsolidadoGrilla({ config, onBack }) {
-    const { empresaNombre } = useAppData();
+function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
+    const { empresaNombre, empresaId } = useAppData();
     const [rawDocs,      setRawDocs]      = useState([]);
     const [todoPersonal, setTodoPersonal] = useState([]);
     const [zonaMap,      setZonaMap]      = useState({});
@@ -131,9 +131,11 @@ function ConsolidadoGrilla({ config, onBack }) {
     const [francosMap,   setFrancosMap]   = useState({}); // grupo → Set<"YYYY-MM-DD">
     const [excluidos,    setExcluidos]    = useState(new Set());
     const [cargando,     setCargando]     = useState(true);
-    const [vista,      setVista]      = useState("programado");
-    const [filtroBusq, setFiltroBusq] = useState("");
-    const [showGraf,   setShowGraf]   = useState(false);
+    const [errorCarga,   setErrorCarga]   = useState("");
+    const [vista,       setVista]      = useState("real");
+    const [filtroBusq,  setFiltroBusq] = useState("");
+    const [filtroZona,  setFiltroZona] = useState("");
+    const [showGraf,    setShowGraf]   = useState(false);
 
     const dias = getDias(config.año, config.mes);
     const mesAnterior = config.mes === 1 ? 12 : config.mes - 1;
@@ -141,20 +143,25 @@ function ConsolidadoGrilla({ config, onBack }) {
 
     // Carga todo de una vez
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         (async () => {
             setCargando(true);
             try {
-                const [progSnap, legSnap, diagSnap] = await Promise.all([
+                const [progSnap, legSnap, diagSnapResult] = await Promise.all([
                     getDocs(query(collection(db, COL_PROG),
-                                  where("empresa", "==", empresaNombre),
-                                  where("año", "==", config.año),
-                                  where("mes", "==", config.mes))),
+                                  where("empresaId", "==", empresaId))),
                     getDocs(query(collection(db, COL_LEGAJOS),
-                                  where("empresa", "==", empresaNombre))),
-                    getDocs(collection(db, "diagramas14x14")),
+                                  where("empresaId", "==", empresaId))),
+                    getDocs(query(collection(db, "diagramas14x14"),
+                                  where("empresaId", "==", empresaId)))
+                        .catch(() => ({ docs: [] })), // diagramas son opcionales
                 ]);
-                setRawDocs(progSnap.docs.map(d => d.data()));
+                const diagSnap = diagSnapResult;
+                // Filtrar año y mes en el cliente (evita índice compuesto en Firestore)
+                const docsDelPeriodo = progSnap.docs
+                    .map(d => d.data())
+                    .filter(d => d.año === config.año && d.mes === config.mes);
+                setRawDocs(docsDelPeriodo);
 
                 const TAREAS_EXCLUIR = new Set(["Jefe", "Supervisor (FC)"]);
                 const zm  = {};
@@ -226,11 +233,12 @@ function ConsolidadoGrilla({ config, onBack }) {
                 setTodoPersonal(pers);
             } catch (e) {
                 console.error("ConsolidadoGrilla:", e);
+                setErrorCarga(e.message || "Error al cargar datos");
             } finally {
                 setCargando(false);
             }
         })();
-    }, [empresaNombre, config.año, config.mes]);
+    }, [empresaId, config.año, config.mes]);
 
     // Una fila por persona, sumando horas de todos sus objetivos por día
     const todasFilas = useMemo(() => {
@@ -261,10 +269,10 @@ function ConsolidadoGrilla({ config, onBack }) {
                         legajo: leg,
                         nombre: p.nombre || "",
                         cc, proyecto,
-                        zona:    zonaMap[leg]    || "",
+                        zona:    zonaMap[leg] || doc.zona || doc.proyectoNombre || "",
                         regimen: regimenMap[leg] || "",
-                        rawDias: {},      // dateKey → [val, val, ...]
-                        nocDias: {},      // dateKey → horas nocturnas acumuladas
+                        rawDias: {},
+                        nocDias: {},
                         horasPorDows: [],
                     };
                 }
@@ -286,7 +294,8 @@ function ConsolidadoGrilla({ config, onBack }) {
             // Mergear días: sumar horas, o tomar código de ausencia si no hay horas
             const data = {};
             Object.entries(r.rawDias).forEach(([key, vals]) => {
-                const totalHs = vals.reduce((s, v) => s + horasDeValor(v), 0);
+                // Normalizar formato antes de sumar (cubre "06-14", "06/14", variantes)
+                const totalHs = vals.reduce((s, v) => s + horasDeValor(normalizarTurno(v)), 0);
                 if (totalHs > 0) {
                     data[key] = totalHs; // número → fmtHs lo renderiza
                 } else {
@@ -328,14 +337,25 @@ function ConsolidadoGrilla({ config, onBack }) {
         return resultado;
     }, [rawDocs, todoPersonal, zonaMap, regimenMap, excluidos, vista]);
 
+    const zonasDisponibles = useMemo(() => {
+        // Zonas fijas predefinidas + cualquier zona extra que venga del data
+        const delData = new Set(todasFilas.map(f => f.zona || "").filter(Boolean));
+        const fijasNorm = new Set(ZONAS_FIJAS.map(z => z.toLowerCase()));
+        const extras = [...delData].filter(z => !fijasNorm.has(z.toLowerCase()));
+        return [...ZONAS_FIJAS, ...extras.sort()];
+    }, [todasFilas]);
+
     const filas = useMemo(() => {
-        if (!filtroBusq.trim()) return todasFilas;
+        let base = todasFilas;
+        if (zonaFija) base = base.filter(f => (f.zona || "") === zonaFija);
+        if (filtroZona) base = base.filter(f => (f.zona || "") === filtroZona);
+        if (!filtroBusq.trim()) return base;
         const q = filtroBusq.toLowerCase();
-        return todasFilas.filter(f =>
+        return base.filter(f =>
             f.nombre.toLowerCase().includes(q) ||
             String(f.legajo).includes(q)
         );
-    }, [todasFilas, filtroBusq]);
+    }, [todasFilas, filtroBusq, filtroZona, zonaFija]);
 
     const calcExtras = (data, regimen, grupoTurno14) => {
         let ext50 = 0, ext100 = 0;
@@ -492,38 +512,42 @@ function ConsolidadoGrilla({ config, onBack }) {
         <div className="con-root">
 
             {/* ── Header ── */}
-            <header className="con-header">
+            <div className="con-header">
                 <div className="con-header-left">
-                    <button className="con-back" onClick={onBack}>← Volver</button>
-                    <div>
-                        <div className="con-header-title">
-                            Consolidado — {MESES_ES[config.mes - 1]} {config.año}
-                        </div>
-                        <div className="con-header-sub">
-                            24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior}
-                            &nbsp;—&nbsp;
-                            23/{String(config.mes).padStart(2,"0")}/{config.año}
-                            &nbsp;·&nbsp;{todasFilas.length} personas
-                        </div>
+                    <div className="con-header-titulo">
+                        Consolidado de Horas — {MESES_ES[config.mes - 1]} {config.año}
+                    </div>
+                    <div className="con-header-periodo">
+                        Del 24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior} al 23/{String(config.mes).padStart(2,"0")}/{config.año}
+                        &nbsp;·&nbsp;{dias.length} días
                     </div>
                 </div>
                 <div className="con-header-right">
-                    <input
-                        className="con-busq"
-                        placeholder="Filtrar..."
-                        value={filtroBusq}
-                        onChange={e => setFiltroBusq(e.target.value)}
-                    />
-                    <div className="con-tabs">
-                        <button className={`con-tab ${vista === "programado" ? "con-tab--on" : ""}`}
-                            onClick={() => setVista("programado")}>Programado</button>
-                        <button className={`con-tab ${vista === "real" ? "con-tab--on" : ""}`}
-                            onClick={() => setVista("real")}>Real</button>
-                        <button className={`con-tab con-tab--graf ${showGraf ? "con-tab--on" : ""}`}
-                            onClick={() => setShowGraf(v => !v)}>📊 Gráficos</button>
+                    <div className="con-filtros-grupo">
+                        <input
+                            className="con-busq"
+                            placeholder="Buscar..."
+                            value={filtroBusq}
+                            onChange={e => setFiltroBusq(e.target.value)}
+                        />
+                        <select
+                            className="con-select-zona"
+                            value={filtroZona}
+                            onChange={e => setFiltroZona(e.target.value)}
+                        >
+                            <option value="">Todas las zonas</option>
+                            {zonasDisponibles.map(z => (
+                                <option key={z} value={z}>{z}</option>
+                            ))}
+                        </select>
+                        <button
+                            className={`con-btn-graf ${showGraf ? "con-btn-graf--on" : ""}`}
+                            onClick={() => setShowGraf(v => !v)}
+                            title="Ver gráficos"
+                        >📊</button>
                     </div>
                 </div>
-            </header>
+            </div>
 
             {/* ── Panel de gráficos ── */}
             {showGraf && todasFilas.length > 0 && (() => {
@@ -587,7 +611,7 @@ function ConsolidadoGrilla({ config, onBack }) {
                             const data = grafPersonas.slice().sort((a,b) => b.ext50 - a.ext50).slice(0,20);
                             return (
                                 <div className="con-graf-card">
-                                    <div className="con-graf-card-title">Top 20 — Ext 50%</div>
+                                    <div className="con-graf-card-title">20 mayores — Ext 50%</div>
                                     <div className="con-graf-scroll-inner">
                                     <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
                                         <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 0 }}>
@@ -608,7 +632,7 @@ function ConsolidadoGrilla({ config, onBack }) {
                             const data = grafPersonas.slice().sort((a,b) => b.ext100 - a.ext100).slice(0,10);
                             return (
                                 <div className="con-graf-card">
-                                    <div className="con-graf-card-title">Top 10 — Ext 100%</div>
+                                    <div className="con-graf-card-title">10 mayores — Ext 100%</div>
                                     <div className="con-graf-scroll-inner">
                                     <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
                                         <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 0 }}>
@@ -699,10 +723,15 @@ function ConsolidadoGrilla({ config, onBack }) {
             );
             })()}
 
-            {todasFilas.length === 0 ? (
+            {errorCarga ? (
+                <div className="con-empty con-empty--error">
+                    Error al cargar: {errorCarga}<br />
+                    <small>Verificá tu conexión o permisos en Firebase.</small>
+                </div>
+            ) : todasFilas.length === 0 ? (
                 <div className="con-empty">
-                    No hay planillas cargadas para este período.<br />
-                    <small>Cargá datos desde Gestión de horas → Programación.</small>
+                    No hay personal ni planillas cargadas para este período.<br />
+                    <small>Verificá que existan legajos y planillas para {MESES_ES[config.mes - 1]} {config.año}.</small>
                 </div>
             ) : (
                 <div className="con-table-wrap">
@@ -796,7 +825,8 @@ function ConsolidadoGrilla({ config, onBack }) {
                                                     val === "Asa"                  ? "con-celda--asa"  : "",
                                                     val === "Aca"                  ? "con-celda--aca"  : "",
                                                     val === "Sus"                  ? "con-celda--sus"  : "",
-                                                    hs > 0                         ? "con-celda--hs"   : "",
+                                                    hs > 0                         ? "con-celda--hs"    : "",
+                                                    !val                           ? "con-celda--empty" : "",
                                                 ].join(" ")}>
                                                     {valorCelda(val)}
                                                 </td>
@@ -1180,28 +1210,17 @@ function ConsolidadoGrilla({ config, onBack }) {
 }
 
 // ── Export ───────────────────────────────────────────────────────────────────
-export default function ConsolidadoScreen({ onBack }) {
+export default function ConsolidadoScreen({ onBack, zonaFija = null, onEnterGrilla, onExitGrilla }) {
     const [config, setConfig] = useState(null);
-    const { user }                                   = useAuth();
-    const { empresaLogos, empresaNombre }             = useAppData();
 
-    if (config) return <ConsolidadoGrilla config={config} onBack={() => setConfig(null)} />;
+    const handleSelect = (cfg) => { setConfig(cfg); onEnterGrilla?.(); };
+    const handleBack   = ()    => { setConfig(null); onExitGrilla?.();  };
+
+    if (config) return <ConsolidadoGrilla config={config} onBack={handleBack} zonaFija={zonaFija} />;
 
     return (
-        <div className="sh-root">
-            <header className="sh-header">
-                <div className="sh-header-left">
-                    {empresaLogos?.panel && (
-                        <img src={empresaLogos.panel} alt="Logo" className="sh-empresa-logo" />
-                    )}
-                    <div>
-                        <div className="sh-header-title">Mi Panel — {empresaNombre}</div>
-                        <div className="sh-header-sub">{user?.name}</div>
-                    </div>
-                </div>
-                <button className="sh-back-btn sh-back-btn--header" onClick={onBack}>← Volver al panel</button>
-            </header>
-            <SelectorPeriodo onSelect={setConfig} />
+        <div style={{ width: "100%", padding: "var(--space-4)" }}>
+            <SelectorPeriodo onSelect={handleSelect} />
         </div>
     );
 }

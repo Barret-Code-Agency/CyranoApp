@@ -2,8 +2,6 @@
 
 .gu-root {
     padding: 1.5rem;
-    max-width: 900px;
-    margin: 0 auto;
     font-family: var(--font-body, sans-serif);
 }
 
@@ -48,6 +46,13 @@
     transition: opacity 0.15s;
 }
 .gu-btn-nuevo:hover { opacity: 0.85; }
+
+.gu-btn-nuevo--top {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+}
 
 .gu-btn-back {
     background: none;
@@ -197,6 +202,15 @@
     color: var(--color-muted, #64748b);
 }
 
+.gu-zona-tag {
+    font-size: 0.72rem;
+    background: #1e3a5f;
+    color: #93c5fd;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+}
+
 .gu-inactivo-tag {
     font-size: 0.72rem;
     background: #450a0a;
@@ -204,6 +218,13 @@
     padding: 2px 8px;
     border-radius: 20px;
     font-weight: 700;
+}
+
+.gu-card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex-shrink: 0;
 }
 
 .gu-btn-editar {
@@ -216,21 +237,42 @@
     cursor: pointer;
     white-space: nowrap;
     transition: all 0.15s;
-    flex-shrink: 0;
 }
 .gu-btn-editar:hover {
     border-color: var(--color-primary, #3b82f6);
     color: var(--color-primary, #3b82f6);
 }
 
+.gu-btn-reset {
+    background: none;
+    border: 1px solid #334155;
+    color: #f59e0b;
+    border-radius: 8px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+.gu-btn-reset:hover { border-color: #f59e0b; }
+.gu-btn-reset:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gu-user-acceso {
+    font-size: 0.72rem;
+    color: var(--color-muted, #64748b);
+    margin-top: 4px;
+}
+
 /* ── Formulario de edición ── */
 .gu-form {
     border-top: 1px solid var(--color-border, #334155);
-    padding: 1rem;
+    padding: 1.25rem 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
     background: var(--color-surface2, #0f172a);
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .gu-form-row {
@@ -304,11 +346,36 @@
     color: #fff;
 }
 
-/* Módulos */
+/* Módulos agrupados */
+.gu-modulos-grupos {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+}
+
+.gu-modulos-grupo {
+    border: 1px solid var(--color-border, #334155);
+    border-radius: var(--radius-md, 8px);
+    overflow: hidden;
+}
+
+.gu-modulos-grupo-titulo {
+    background: var(--color-surface2, #1e293b);
+    color: var(--color-muted, #94a3b8);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--color-border, #334155);
+}
+
 .gu-mods-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 0.4rem;
+    padding: 0.5rem;
 }
 
 .gu-mod-check {

@@ -38,17 +38,17 @@ function DetalleView({ item, onBack }) {
 }
 
 export default function VerProcedimientosScreen({ onBack }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
     const [items,   setItems]   = useState([]);
     const [loading, setLoading] = useState(true);
     const [error,   setError]   = useState(null);
     const [selItem, setSelItem] = useState(null);
 
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         const q = query(
             collection(db, "procedimientos"),
-            where("empresa", "==", empresaNombre)
+            where("empresaId", "==", empresaId)
         );
         getDocs(q)
             .then(snap => {
@@ -58,16 +58,12 @@ export default function VerProcedimientosScreen({ onBack }) {
             })
             .catch(e  => setError(e.message))
             .finally(()=> setLoading(false));
-    }, [empresaNombre]);
+    }, [empresaId]);
 
     if (selItem) return <DetalleView item={selItem} onBack={() => setSelItem(null)} />;
 
     return (
         <div className="vc-root">
-            <header className="vc-header">
-                <button className="vc-back" onClick={onBack}>← Volver</button>
-                <span className="vc-header-title">📌 Muro de Procedimientos</span>
-            </header>
             <div className="vc-body">
                 {loading && <div className="vc-empty">Cargando procedimientos...</div>}
                 {error   && <div className="vc-error">{error}</div>}

@@ -1171,6 +1171,62 @@
     display: block;
 }
 
+.sa-modal {
+    background: var(--color-white);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-xl);
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    overflow: hidden;
+}
+
+.sa-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-5) var(--space-6);
+    border-bottom: 2px solid var(--color-border);
+}
+
+.sa-modal-header .sa-modal-title {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.sa-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: var(--color-muted);
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: var(--radius-md);
+}
+.sa-modal-close:hover { background: var(--color-bg); }
+
+.sa-modal-body {
+    padding: var(--space-5) var(--space-6);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.sa-modal-footer {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-6);
+    border-top: 1px solid var(--color-border);
+}
+
 /* ═══════════════════════════════════════════════
    PANEL USUARIOS
 ═══════════════════════════════════════════════ */
@@ -1346,13 +1402,29 @@
 /* Formulario inline */
 .sa-ur-form {
     width: 100%;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: var(--space-3);
     padding-top: var(--space-4);
     border-top: 1px solid var(--color-border);
     margin-top: var(--space-1);
-    align-items: end;
+}
+
+.sa-ur-form-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-3);
+}
+
+.sa-ur-form-bottom .sa-ur-form-row {
+    flex: 1 1 160px;
+    max-width: 220px;
+}
+
+.sa-ur-form-bottom .sa-ur-form-actions {
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .sa-ur-form-row {
@@ -1414,6 +1486,7 @@
 
 .sa-ur-btn-save {
     flex: 1;
+    min-width: 140px;
     height: 40px;
     background: var(--color-primary);
     color: var(--color-white);

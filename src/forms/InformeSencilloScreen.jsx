@@ -2,7 +2,7 @@
 // Formulario de informe sencillo — replica el formato oficial.
 // Una vez guardado en Firestore queda inmutable (estado: "firmado").
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth }    from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -35,11 +35,20 @@ function Seccion({ numero, titulo, children }) {
 
 export default function InformeSencilloScreen({ onBack }) {
     const { user }                       = useAuth();
-    const { empresaNombre, empresaLogos } = useAppData();
+    const { empresaNombre, empresaLogos, empresaId } = useAppData();
 
     const now = new Date();
     const fechaConfeccion = now.toLocaleDateString("es-AR");
     const horaConfeccion  = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+
+    const numeroInforme = useMemo(() => {
+        const hoy = new Date();
+        const yyyy = hoy.getFullYear();
+        const mm = String(hoy.getMonth()+1).padStart(2,"0");
+        const dd = String(hoy.getDate()).padStart(2,"0");
+        const rand = String(Math.floor(Math.random()*9000)+1000);
+        return `IS-${yyyy}${mm}${dd}-${rand}`;
+    }, []);
 
     const [form, setForm] = useState({
         fechaHecho:         now.toISOString().split("T")[0],
@@ -58,7 +67,7 @@ export default function InformeSencilloScreen({ onBack }) {
     const [guardadoCodigo,setGuardadoCodigo]= useState(null);
     const [error,         setError]         = useState(null);
 
-    const { clientes, objetivos } = useClientesData(empresaNombre);
+    const { clientes, objetivos } = useClientesData(empresaId);
 
     const objetivosFiltrados = objetivos.filter(o => o.clienteId === selCliente);
     const clienteObj         = clientes.find(c => c.id === selCliente);
@@ -141,6 +150,7 @@ export default function InformeSencilloScreen({ onBack }) {
             const docRef = await addDoc(collection(db, "informes"), {
                 tipo:               "sencillo",
                 codigo,
+                numero:             numeroInforme,
                 clienteId:          selCliente,
                 clienteNombre:      clienteObj?.nombre      || "",
                 objetivoId:         selObjetivo,
@@ -218,59 +228,54 @@ export default function InformeSencilloScreen({ onBack }) {
     // ── Formulario ───────────────────────────────────────────────
     return (
         <div className="is-root">
-            <header className="is-header">
-                <button className="is-back" onClick={onBack}>← Volver</button>
-                <span className="is-header-title">📝 Informe Sencillo</span>
-            </header>
+            <div className="is-subpanel-top">
+                <button className="is-back" onClick={onBack}>← Volver al panel</button>
+                <div className="is-titulo">📝 Informe Sencillo</div>
+            </div>
 
             <div className="is-body">
+
+                <div className="is-id-card">
+                    <div className="is-id-row">
+                        <span className="is-id-label">Nro. de informe</span>
+                        <span className="is-id-val is-id-val--num">{numeroInforme}</span>
+                    </div>
+                    <div className="is-id-row">
+                        <span className="is-id-label">Fecha</span>
+                        <span className="is-id-val">{fechaConfeccion}</span>
+                    </div>
+                    <div className="is-id-row">
+                        <span className="is-id-label">Creado por</span>
+                        <span className="is-id-val">{user?.name || "—"}</span>
+                    </div>
+                    <div className="is-id-row">
+                        <span className="is-id-label">Cliente</span>
+                        <select className="is-id-select" value={selCliente}
+                            onChange={e => { setSelCliente(e.target.value); setSelObjetivo(""); }}>
+                            <option value="">— Seleccioná —</option>
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.codigo ? `${c.codigo} · ` : ""}{c.nombre}</option>)}
+                        </select>
+                    </div>
+                    <div className="is-id-row">
+                        <span className="is-id-label">Objetivo</span>
+                        <select className="is-id-select" value={selObjetivo}
+                            onChange={e => setSelObjetivo(e.target.value)}
+                            disabled={!selCliente}>
+                            <option value="">— Seleccioná —</option>
+                            {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{fmtObjetivo(o)}</option>)}
+                        </select>
+                    </div>
+                </div>
 
                 <div className="is-doc-title">I N F O R M E</div>
                 <div className="is-empresa-sub">{empresaNombre}</div>
 
                 {/* ── 1. Datos generales ── */}
                 <Seccion numero="1" titulo="Datos generales">
-                    <div className="is-confeccion-row">
-                        <div className="is-confeccion-field">
-                            <span className="is-label">Producido por</span>
-                            <span className="is-readonly-val">{user?.name || "—"}</span>
-                        </div>
-                        <div className="is-confeccion-field">
-                            <span className="is-label">Fecha de confección</span>
-                            <span className="is-readonly-val">{fechaConfeccion}</span>
-                        </div>
-                        <div className="is-confeccion-field">
-                            <span className="is-label">Hora</span>
-                            <span className="is-readonly-val">{horaConfeccion}</span>
-                        </div>
-                    </div>
-
-                    <div className="is-field">
-                        <label className="is-label">Cliente</label>
-                        <select className="is-input is-select"
-                            value={selCliente}
-                            onChange={e => { setSelCliente(e.target.value); setSelObjetivo(""); }}>
-                            <option value="">— Seleccioná cliente —</option>
-                            {clientes.map(c => <option key={c.id} value={c.id}>{c.codigo ? `${c.codigo} · ` : ""}{c.nombre}</option>)}
-                        </select>
-                    </div>
-
-                    <div className="is-row2">
-                        <div className="is-field is-field--grow">
-                            <label className="is-label">Objetivo / Servicio</label>
-                            <select className="is-input is-select"
-                                value={selObjetivo}
-                                onChange={e => setSelObjetivo(e.target.value)}
-                                disabled={!selCliente}>
-                                <option value="">— Seleccioná objetivo —</option>
-                                {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{fmtObjetivo(o)}</option>)}
-                            </select>
-                        </div>
-                        <div className="is-field is-field--date">
-                            <label className="is-label">Fecha del hecho</label>
-                            <input className="is-input" type="date" value={form.fechaHecho}
-                                onChange={e => set("fechaHecho", e.target.value)} />
-                        </div>
+                    <div className="is-field is-field--date">
+                        <label className="is-label">Fecha del hecho</label>
+                        <input className="is-input" type="date" value={form.fechaHecho}
+                            onChange={e => set("fechaHecho", e.target.value)} />
                     </div>
 
                     {objetivoObj && (

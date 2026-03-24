@@ -117,6 +117,10 @@
     border: 2px solid var(--color-border2);
 }
 
+.vh-root--full {
+    max-width: 100%;
+}
+
 @media (max-width: 900px) {
     .vh-root { max-width: calc(100% - var(--space-6)); }
 }
@@ -391,6 +395,25 @@
 .vh-cal-dia-chip--informe      { background: var(--color-warn-ghost);    color: var(--color-warn);    }
 .vh-cal-dia-chip--turno        { background: var(--color-surface2);      color: var(--color-muted);   }
 .vh-cal-dia-chip--default      { background: var(--color-surface2);      color: var(--color-muted);   }
+.vh-cal-dia-chip--cumple       { background: #fde68a;                    color: #92400e;              }
+.vh-cal-act--cumple            { background: #fffbeb; border-color: #fcd34d; }
+
+.vh-cal-wa-btn {
+    align-self: flex-start;
+    margin-top: var(--space-1);
+    background: #25D366;
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: filter 0.15s;
+}
+.vh-cal-wa-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.vh-cal-wa-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Detalle del día */
 .vh-cal-detail {
@@ -476,6 +499,7 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     padding: var(--space-2) var(--space-4);
+    margin-bottom: 20px;
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--color-primary);

@@ -16,7 +16,7 @@ export const FERIADOS_ARG = {
     "2025-06-20": "Paso a la Inmortalidad del Gral. Belgrano",
     "2025-07-09": "Día de la Independencia",
     "2025-08-18": "Paso a la Inmortalidad del Gral. San Martín",
-    "2025-10-13": "Día del Respeto a la Diversidad Cultural",
+    "2025-10-10": "Día del Respeto a la Diversidad Cultural",
     "2025-11-21": "Día de la Soberanía Nacional",
     "2025-12-08": "Inmaculada Concepción de María",
     "2025-12-25": "Navidad",

@@ -15,11 +15,12 @@ const TIPOS = [
     { id: "todos",    label: "Todos" },
     { id: "sencillo", label: "Sencillo" },
     { id: "novedad",  label: "Novedad" },
+    { id: "condicion", label: "⚠️ Cond. Insegura" },
 ];
 
-export default function VerInformesScreen({ onBack, soloPropio = false }) {
+export default function VerInformesScreen({ onBack, soloPropio = false, zonaFija = null }) {
     const { user }                       = useAuth();
-    const { empresaNombre, empresaLogos } = useAppData();
+    const { empresaNombre, empresaId, empresaLogos } = useAppData();
 
     const [informes,  setInformes]  = useState([]);
     const [cargando,  setCargando]  = useState(true);
@@ -36,21 +37,48 @@ export default function VerInformesScreen({ onBack, soloPropio = false }) {
     const cargar = async () => {
         setCargando(true);
         try {
-            let q = query(
-                collection(db, "informes"),
-                where("empresa", "==", empresaNombre || ""),
-                orderBy("creadoEn", "desc")
-            );
-            if (soloPropio && user?.uid) {
-                q = query(
-                    collection(db, "informes"),
-                    where("empresa", "==", empresaNombre || ""),
+            const eid = empresaId || "";
+
+            // ── Informes (sencillo + novedad) ──
+            const qInformes = soloPropio && user?.uid
+                ? query(collection(db, "informes"),
+                    where("empresaId", "==", eid),
                     where("producidoPorId", "==", user.uid),
-                    orderBy("creadoEn", "desc")
-                );
-            }
-            const snap = await getDocs(q);
-            setInformes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    orderBy("creadoEn", "desc"))
+                : query(collection(db, "informes"),
+                    where("empresaId", "==", eid),
+                    orderBy("creadoEn", "desc"));
+
+            // ── Condiciones inseguras ──
+            const qCond = soloPropio && user?.uid
+                ? query(collection(db, "condicionesInseguras"),
+                    where("empresaId", "==", eid),
+                    where("uid", "==", user.uid),
+                    orderBy("creadoEn", "desc"))
+                : query(collection(db, "condicionesInseguras"),
+                    where("empresaId", "==", eid),
+                    orderBy("creadoEn", "desc"));
+
+            const [snapInf, snapCond] = await Promise.all([
+                getDocs(qInformes).catch(() => ({ docs: [] })),
+                getDocs(qCond).catch(() => ({ docs: [] })),
+            ]);
+
+            let docs = [
+                ...snapInf.docs.map(d => ({ id: d.id, ...d.data() })),
+                ...snapCond.docs.map(d => ({ id: d.id, tipo: "condicion", ...d.data() })),
+            ];
+
+            if (zonaFija) docs = docs.filter(d => !d.zona || d.zona === zonaFija);
+
+            // Ordenar por fecha descendente
+            docs.sort((a, b) => {
+                const ta = a.creadoEn?.toMillis?.() ?? 0;
+                const tb = b.creadoEn?.toMillis?.() ?? 0;
+                return tb - ta;
+            });
+
+            setInformes(docs);
         } catch (e) {
             console.error("Error cargando informes:", e);
         } finally {
@@ -106,11 +134,19 @@ export default function VerInformesScreen({ onBack, soloPropio = false }) {
 
         const cliente = inf.tipo === "novedad"
             ? (inf.datos?.cliente || "")
-            : (inf.objetivo || "");
-        const texto   = [inf.codigo, cliente, inf.producidoPor, inf.ref].join(" ").toLowerCase();
+            : inf.tipo === "condicion"
+                ? (inf.clienteNombre || "")
+                : (inf.clienteNombre || inf.objetivo || "");
+        const texto = [
+            inf.codigo, inf.numero, cliente,
+            inf.producidoPor, inf.nombreReportante,
+            inf.ref, inf.lugar,
+        ].join(" ").toLowerCase();
         if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
 
-        const fechaDoc = inf.tipo === "novedad" ? inf.datos?.fecha : inf.fecha;
+        const fechaDoc = inf.tipo === "novedad" ? inf.datos?.fecha
+            : inf.tipo === "condicion" ? inf.fecha
+            : inf.fecha;
         if (fechaDesde && fechaDoc && fechaDoc < fechaDesde) return false;
         if (fechaHasta && fechaDoc && fechaDoc > fechaHasta) return false;
 
@@ -120,11 +156,13 @@ export default function VerInformesScreen({ onBack, soloPropio = false }) {
     // ── Render ────────────────────────────────────────────────
     return (
         <div className="vi-root">
-            <button className="vh-back vi-back-top" onClick={onBack}>← Volver al panel</button>
-            <header className="vi-header">
-                <span className="vi-header-title">🗂 Ver Informes</span>
-                <button className="vi-refresh" onClick={cargar} title="Actualizar">↺</button>
-            </header>
+            <div className="vi-subpanel-top">
+                <button className="vi-back" onClick={onBack}>← Volver al panel</button>
+                <div className="vi-titulo-row">
+                    <div className="vi-titulo">🗂 Ver Informes</div>
+                    <button className="vi-refresh" onClick={cargar} title="Actualizar">↺</button>
+                </div>
+            </div>
 
             {/* Filtros */}
             <div className="vi-filtros">
@@ -166,40 +204,53 @@ export default function VerInformesScreen({ onBack, soloPropio = false }) {
                     </div>
                 ) : (
                     filtrados.map(inf => {
-                        const cliente  = inf.tipo === "novedad"
-                            ? (inf.datos?.cliente || "—")
-                            : (inf.objetivo || "—");
-                        const fechaDoc = inf.tipo === "novedad"
-                            ? inf.datos?.fecha
-                            : inf.fecha;
+                        const esCond   = inf.tipo === "condicion";
+                        const esNoVed  = inf.tipo === "novedad";
+
+                        const cliente  = esCond  ? (inf.clienteNombre || "—")
+                            : esNoVed ? (inf.datos?.cliente || inf.clienteNombre || "—")
+                            : (inf.clienteNombre || inf.objetivo || "—");
+
+                        const objetivo = esCond  ? (inf.objetivoNombre || "")
+                            : esNoVed ? (inf.objetivoNombre || "")
+                            : (inf.objetivoNombre || "");
+
+                        const fechaDoc = esNoVed ? inf.datos?.fecha : inf.fecha;
                         const horaStr  = inf.creadoEn?.toDate
                             ? inf.creadoEn.toDate().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
                             : "";
+                        const autor    = esCond ? (inf.nombreReportante || "—") : (inf.producidoPor || "—");
+                        const codigo   = inf.numero || inf.codigo || "—";
+                        const badgeLabel = esCond ? "⚠️ Cond. Insegura" : esNoVed ? "🚨 Novedad" : "📝 Sencillo";
 
                         return (
                             <div key={inf.id} className="vi-item">
                                 <div className="vi-item-top">
                                     <span className={`vi-tipo-badge vi-tipo-badge--${inf.tipo}`}>
-                                        {inf.tipo === "novedad" ? "🚨 Novedad" : "📝 Sencillo"}
+                                        {badgeLabel}
                                     </span>
-                                    <span className="vi-codigo">{inf.codigo || "—"}</span>
+                                    <span className="vi-codigo">{codigo}</span>
                                 </div>
                                 <div className="vi-item-main">
                                     <span className="vi-cliente">{cliente}</span>
-                                    {inf.ref && <span className="vi-ref">REF: {inf.ref}</span>}
+                                    {objetivo && <span className="vi-ref">{objetivo}</span>}
+                                    {inf.ref   && <span className="vi-ref">REF: {inf.ref}</span>}
+                                    {inf.lugar && <span className="vi-ref">📍 {inf.lugar}</span>}
                                 </div>
                                 <div className="vi-item-meta">
                                     <span>📅 {fechaDoc || "—"}</span>
                                     {horaStr && <span>🕐 {horaStr}</span>}
-                                    <span>👤 {inf.producidoPor || "—"}</span>
+                                    <span>👤 {autor}</span>
                                 </div>
-                                <button
-                                    className="vi-download-btn"
-                                    onClick={() => handleDescargar(inf)}
-                                    disabled={descargando === inf.id}
-                                >
-                                    {descargando === inf.id ? "Generando..." : "📄 Descargar PDF"}
-                                </button>
+                                {!esCond && (
+                                    <button
+                                        className="vi-download-btn"
+                                        onClick={() => handleDescargar(inf)}
+                                        disabled={descargando === inf.id}
+                                    >
+                                        {descargando === inf.id ? "Generando..." : "📄 Descargar PDF"}
+                                    </button>
+                                )}
                             </div>
                         );
                     })

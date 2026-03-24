@@ -1,12 +1,12 @@
 // src/data/seedDiagramas14x14.js
-// Datos de francos para régimen 14x14 — Grupos 3 y 4
+// Datos de francos para régimen 14x14 — Grupos A y B
 // Extraídos del diagrama oficial. Período: 24/02/2026 – 23/06/2028
 
 export const GRUPOS_14x14 = [
     {
-        id:     "grupo_3",
-        grupo:  "3",
-        nombre: "Grupo 3",
+        id:     "grupo_A",
+        grupo:  "A",
+        nombre: "Grupo A",
         francos: [
             // ── 2026 ──
             "2026-02-24","2026-02-25","2026-02-26","2026-02-27","2026-02-28",
@@ -73,9 +73,9 @@ export const GRUPOS_14x14 = [
         ],
     },
     {
-        id:     "grupo_4",
-        grupo:  "4",
-        nombre: "Grupo 4",
+        id:     "grupo_B",
+        grupo:  "B",
+        nombre: "Grupo B",
         francos: [
             // ── 2026 ──
             "2026-03-06","2026-03-07","2026-03-08","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-14","2026-03-15","2026-03-16","2026-03-17","2026-03-18","2026-03-19",
@@ -139,7 +139,7 @@ export const GRUPOS_14x14 = [
 
 // Personas asignadas por grupo (del diagrama oficial)
 export const PERSONAS_POR_GRUPO = {
-    "3": [
+    "A": [
         "ZUÑIGA ROLANDO ALFONSO","AEDO CINTHIA ANAHI","AGULLO RODRIGUEZ LUCIANO ADRIAN",
         "AVILA ALEJANDRO MAURICIO","CACERES ROCIO BELEN","CEJAS MARIA PAULA","COPA ANA PAULA",
         "DIAZ JONATHAN JAVIER","FUNES GABRIELA EDITH","LEDESMA MATIAS EZEQUIEL",
@@ -152,7 +152,7 @@ export const PERSONAS_POR_GRUPO = {
         "AGÜERO FARIAS MARIA ELIZABETH","RIVAROLA LUCAS FERNANDO","NUÑEZ FRANCISCO DIEGO",
         "KUC PAULO ENAMUEL",
     ],
-    "4": [
+    "B": [
         "AGUIRRE ENRIQUE ANDRES","CARPIO GLORIA VICTORIA","MARTINEZ DAVID","MARCIAL ERICA MARCELA",
         "DUARTE TIAGO MARCELO EZEQUIEL","ROMERO SEBASTIAN EDUARDO","PEDRAZA JUAN MANUEL",
         "MONTIVERO EMANUEL ANTONIO","ARIAS MARCELO FABIAN","ZUÑIGA NERY AGUSTIN",

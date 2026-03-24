@@ -87,7 +87,7 @@ function CustomTooltip({ active, payload, label, suffix = "hs" }) {
 
 // ── Pantalla principal ────────────────────────────────────────────────────────
 export default function DashboardsGestionScreen({ onBack }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
     const [loading,       setLoading]       = useState(true);
     const [progDocs,      setProgDocs]      = useState([]);
     const [legajos,       setLegajos]       = useState([]);
@@ -98,43 +98,42 @@ export default function DashboardsGestionScreen({ onBack }) {
     const meses = useMemo(() => ultimos6Meses(), []);
 
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         const cargar = async () => {
             setLoading(true);
             try {
-                // Programación últimos 6 meses
-                const progPromises = meses.map(({ año, mes }) =>
-                    getDocs(query(
-                        collection(db, "programacionServicios"),
-                        where("empresa", "==", empresaNombre),
-                        where("año", "==", año),
-                        where("mes", "==", mes)
-                    ))
-                );
-                const snaps = await Promise.all(progPromises);
-                const docs = snaps.flatMap((snap, i) =>
-                    snap.docs.map(d => ({ ...d.data(), _mes: meses[i] }))
-                );
+                // Programación últimos 6 meses (filtro año+mes en cliente para evitar índice compuesto)
+                const allProgSnap = await getDocs(query(
+                    collection(db, "programacionServicios"),
+                    where("empresaId", "==", empresaId)
+                ));
+                const docs = allProgSnap.docs
+                    .map(d => d.data())
+                    .filter(d => meses.some(m => m.año === d.año && m.mes === d.mes))
+                    .map(d => {
+                        const m = meses.find(m => m.año === d.año && m.mes === d.mes);
+                        return { ...d, _mes: m };
+                    });
                 setProgDocs(docs);
 
                 // Legajos
                 const legSnap = await getDocs(query(
                     collection(db, "legajos"),
-                    where("empresa", "==", empresaNombre)
+                    where("empresaId", "==", empresaId)
                 ));
                 setLegajos(legSnap.docs.map(d => d.data()));
 
                 // Capacitaciones
                 const capSnap = await getDocs(query(
                     collection(db, "capacitaciones"),
-                    where("empresa", "==", empresaNombre)
+                    where("empresaId", "==", empresaId)
                 ));
                 setCapacitaciones(capSnap.docs.map(d => d.data()));
 
                 // Objetivos
                 const objSnap = await getDocs(query(
                     collection(db, "objetivos"),
-                    where("empresa", "==", empresaNombre)
+                    where("empresaId", "==", empresaId)
                 ));
                 setObjetivos(objSnap.docs.map(d => d.data()));
             } finally {
@@ -142,7 +141,7 @@ export default function DashboardsGestionScreen({ onBack }) {
             }
         };
         cargar();
-    }, [empresaNombre]);
+    }, [empresaId]);
 
     // Zonas derivadas de legajos (campo zona)
     const zonas = useMemo(() =>

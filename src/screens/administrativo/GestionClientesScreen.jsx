@@ -13,8 +13,8 @@ import { fmtObjetivo }    from "../../utils/formatters";
 import "./GestionClientesScreen.css";
 
 export default function GestionClientesScreen({ onBack }) {
-    const { empresaNombre } = useAppData();
-    const { clientes, objetivos, cargando, recargar } = useClientesData(empresaNombre);
+    const { empresaId, empresaNombre } = useAppData();
+    const { clientes, objetivos, cargando, recargar } = useClientesData(empresaId);
 
     const [nivelCliente, setNivelCliente] = useState(null);
     const [editando,     setEditando]     = useState(null);
@@ -30,9 +30,10 @@ export default function GestionClientesScreen({ onBack }) {
         try {
             for (const c of SEED_CLIENTES) {
                 await setDoc(doc(db, "clientes", c.id), {
-                    nombre:    c.nombre,
-                    empresa:   empresaNombre,
-                    creadoEn:  serverTimestamp(),
+                    nombre:     c.nombre,
+                    empresa:    empresaNombre,
+                    empresaId:  empresaId,
+                    creadoEn:   serverTimestamp(),
                 }, { merge: true });
             }
             for (const o of SEED_OBJETIVOS) {
@@ -53,6 +54,7 @@ export default function GestionClientesScreen({ onBack }) {
                     horasDomingo:  o.horasDomingo,
                     horasFeriados: o.horasFeriados,
                     empresa:       empresaNombre,
+                    empresaId:     empresaId,
                     creadoEn:      serverTimestamp(),
                 }, { merge: true });
             }
@@ -72,7 +74,7 @@ export default function GestionClientesScreen({ onBack }) {
             const { tipo, id, campos } = editando;
 
             if (tipo === "cliente") {
-                const data = { nombre: campos.nombre, empresa: empresaNombre };
+                const data = { nombre: campos.nombre, empresa: empresaNombre, empresaId };
                 if (id) await updateDoc(doc(db, "clientes", id), data);
                 else    await addDoc(collection(db, "clientes"), { ...data, creadoEn: serverTimestamp() });
             }
@@ -83,9 +85,11 @@ export default function GestionClientesScreen({ onBack }) {
                     proyecto:      campos.proyecto || "",
                     nombre:        campos.nombre,
                     domicilio:     campos.domicilio || "",
+                    zona:          campos.zona     || "",
                     clienteId:     nivelCliente,
                     clienteNombre: cl?.nombre || "",
                     empresa:       empresaNombre,
+                    empresaId:     empresaId,
                 };
                 if (id) await updateDoc(doc(db, "objetivos", id), data);
                 else    await addDoc(collection(db, "objetivos"), { ...data, creadoEn: serverTimestamp() });
@@ -147,6 +151,9 @@ export default function GestionClientesScreen({ onBack }) {
                             <label className="gc-label">Domicilio</label>
                             <input className="gc-input" value={campos.domicilio || ""}
                                 onChange={e => setC("domicilio", e.target.value)} placeholder="Dirección del objetivo..." />
+                            <label className="gc-label">Zona</label>
+                            <input className="gc-input" value={campos.zona || ""}
+                                onChange={e => setC("zona", e.target.value)} placeholder="Ej: Santa Cruz, Buenos Aires…" />
                         </>
                     )}
 

@@ -3,26 +3,49 @@ import { useState, useEffect, useMemo } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
-import { LEGAJOS_SEED } from "../../data/legajosSeed";
 import "./DashboardPersonalScreen.css";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function calcAntiguedad(fecha) {
+// Parsea fechas en múltiples formatos: "DD/MM/YYYY", "YYYY-MM-DD", Firestore Timestamp, número serial Excel
+function parseFecha(fecha) {
     if (!fecha) return null;
-    const [d, m, y] = fecha.split("/").map(Number);
-    if (!y) return null;
-    const diff = (Date.now() - new Date(y, m - 1, d)) / (1000 * 60 * 60 * 24 * 365.25);
-    return isNaN(diff) ? null : diff;
+    if (fecha?.toDate) return fecha.toDate();          // Firestore Timestamp
+    // Número serial de Excel (días desde 01/01/1900, con bug de año bisiesto 1900)
+    if (typeof fecha === "number") {
+        const ms = (fecha - 25569) * 86400000;         // 25569 = días entre 1900 y Unix epoch
+        const d = new Date(ms);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof fecha !== "string") return null;
+    // Si viene como string de número (Excel importado como texto)
+    const num = Number(fecha);
+    if (!isNaN(num) && num > 20000 && num < 60000) {
+        const ms = (num - 25569) * 86400000;
+        const d = new Date(ms);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    if (fecha.includes("/")) {
+        const [d, m, y] = fecha.split("/").map(Number);
+        if (!y || y < 1900) return null;
+        return new Date(y, m - 1, d);
+    }
+    const d = new Date(fecha);                         // ISO u otro formato
+    return isNaN(d.getTime()) ? null : d;
+}
+function calcAntiguedad(fecha) {
+    const d = parseFecha(fecha);
+    if (!d) return null;
+    const diff = (Date.now() - d) / (1000 * 60 * 60 * 24 * 365.25);
+    return isNaN(diff) || diff < 0 ? null : diff;
 }
 function calcEdad(fecha) {
-    if (!fecha) return null;
-    const [d, m, y] = fecha.split("/").map(Number);
-    if (!y) return null;
-    const diff = (Date.now() - new Date(y, m - 1, d)) / (1000 * 60 * 60 * 24 * 365.25);
-    return isNaN(diff) ? null : Math.floor(diff);
+    const d = parseFecha(fecha);
+    if (!d) return null;
+    const diff = (Date.now() - d) / (1000 * 60 * 60 * 24 * 365.25);
+    return isNaN(diff) || diff < 0 ? null : Math.floor(diff);
 }
 function normalizarTarea(t = "") {
-    const v = t.trim().toLowerCase();
+    const v = (t ?? "").trim().toLowerCase();
     if (v.includes("conductor") || v.includes("conducor")) return "Conductor";
     if (v.includes("operador")) return "Operador";
     if (v.includes("encargado")) return "Encargado";
@@ -32,14 +55,17 @@ function normalizarTarea(t = "") {
     if (v.includes("vigilador")) return "Vigilador";
     return t || "Otro";
 }
+// Devuelve el campo de rol/función del legajo (campo "rol" nuevo, "tarea" legacy)
+function getRol(p) { return p.rol || p.tarea || ""; }
 function countBy(arr, fn) {
     const map = {};
     arr.forEach(x => { const k = fn(x); map[k] = (map[k] || 0) + 1; });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
 }
 function getGeneracion(nacimiento) {
-    if (!nacimiento) return null;
-    const y = parseInt(nacimiento.split("/")[2]);
+    const d = parseFecha(nacimiento);
+    if (!d) return null;
+    const y = d.getFullYear();
     if (!y || y < 1900) return null;
     if (y <= 1945) return "Silenciosa";
     if (y <= 1964) return "Baby Boomers";
@@ -81,9 +107,10 @@ function rangosEdad(legajos) {
 function ingresosPorAnio(legajos) {
     const map = {};
     legajos.forEach(p => {
-        if (!p.fechaIngreso) return;
-        const y = p.fechaIngreso.split("/")[2];
-        if (!y || y.length !== 4 || parseInt(y) < 2013) return;
+        const d = parseFecha(p.fechaIngreso);
+        if (!d) return;
+        const y = String(d.getFullYear());
+        if (parseInt(y) < 2013) return;
         map[y] = (map[y] || 0) + 1;
     });
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
@@ -91,7 +118,7 @@ function ingresosPorAnio(legajos) {
 function antiguedadPorFuncion(legajos) {
     const map = {};
     legajos.forEach(p => {
-        const fn = normalizarTarea(p.tarea);
+        const fn = normalizarTarea(getRol(p));
         const a  = calcAntiguedad(p.fechaIngreso);
         if (a === null) return;
         if (!map[fn]) map[fn] = { sum: 0, count: 0 };
@@ -115,9 +142,9 @@ function buildStats(legajos) {
         ? Math.round(edades.reduce((s, e) => s + e, 0) / edades.length) : "—";
     const conHijos   = legajos.filter(p => parseInt(p.hijos) > 0).length;
     const totalHijos = legajos.reduce((s, p) => s + (parseInt(p.hijos) || 0), 0);
-    const tareas    = countBy(legajos, p => normalizarTarea(p.tarea));
+    const tareas    = countBy(legajos, p => normalizarTarea(getRol(p)));
     const proyectos = countBy(legajos, p => p.proyecto || "Sin proyecto");
-    const servicios = countBy(legajos, p => p.servicio || "Sin servicio");
+    const servicios = countBy(legajos, p => p.centroCosto || "Sin CC");
     const hijosDistr = countBy(legajos, p => {
         const h = parseInt(p.hijos);
         if (isNaN(h) || p.hijos === "") return "S/D";
@@ -134,16 +161,17 @@ function buildStats(legajos) {
         .filter(p => { const e = calcEdad(p.nacimiento); return e !== null && e >= 60; })
         .sort((a, b) => (calcEdad(b.nacimiento) || 0) - (calcEdad(a.nacimiento) || 0));
 
-    // Encuadre: Fuera de convenio = Jefes/Supervisores FC, el resto = Convenio
-    const fueraConv = legajos.filter(p => {
-        const t = normalizarTarea(p.tarea);
-        return t === "Jefe" || (p.encuadre || "").toLowerCase().includes("fuera");
-    }).length;
-    const convenio = legajos.length - fueraConv;
+    // Encuadre: Fuera de convenio se determina por el campo cargo
+    const activos     = legajos.filter(p => !p.estado || p.estado === "Activo").length;
+    const bajas       = legajos.filter(p => p.estado === "Baja").length;
+    const suspendidos = legajos.filter(p => p.estado === "Suspendido").length;
 
-    // Contrato: Efectivo vs Prueba (usa campo tipoContrato si existe, sino cuenta efectivos)
-    const prueba    = legajos.filter(p => (p.tipoContrato || "").toLowerCase().includes("prueba")).length;
-    const efectivos = legajos.length - prueba;
+    // Contrato: Período de prueba = ingresó hace 6 meses o menos
+    const prueba    = legajos.filter(p => {
+        const antig = calcAntiguedad(p.fechaIngreso);
+        return antig !== null && antig <= 0.5;
+    }).length;
+    const efectivos = activos - prueba;
 
     // Generaciones
     const genMap = {};
@@ -159,13 +187,14 @@ function buildStats(legajos) {
     return {
         total: legajos.length, masc, fem, promAntig, promEdad,
         conHijos, totalHijos, tareas, proyectos, servicios, hijosDistr,
-        convenio, fueraConv, efectivos, prueba,
+        activos, bajas, suspendidos, efectivos, prueba,
         generaciones,
-        antiguedad: rangosAntiguedad(legajos),
-        edades: rangosEdad(legajos),
-        sucursales:           countBy(legajos, p => p.sucursal   || "Sin sucursal"),
+        antiguedad:           rangosAntiguedad(legajos),
+        edades:               rangosEdad(legajos),
+        zonas:                countBy(legajos, p => p.zona       || "Sin zona"),
         cargos:               countBy(legajos, p => p.cargo      || "Sin cargo"),
         centrosCosto:         countBy(legajos, p => p.centroCosto || "Sin CC"),
+        regimenes:            countBy(legajos, p => p.regimen    || "Sin régimen"),
         ingresosPorAnio:      ingresosPorAnio(legajos),
         antiguedadPorFuncion: antiguedadPorFuncion(legajos),
         proximosJubilacion,
@@ -218,57 +247,45 @@ function DonutSexo({ masc, fem }) {
 }
 
 // ── Calendario de cumpleaños ───────────────────────────────────────────────
-const DIAS_ES  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const MESES_LARGO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+function apellido(nombre = "") {
+    return nombre.trim().split(" ")[0] || nombre;
+}
 
 function CalendarioCumpleanos({ legajos }) {
-    const hoy = new Date();
-    const dias = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(hoy);
-        d.setDate(hoy.getDate() + i);
-        return d;
-    });
+    const hoy  = new Date();
+    const mes  = hoy.getMonth();     // 0-based
+    const año  = hoy.getFullYear();
+    const hoyD = hoy.getDate();
 
-    const cumplesPorDia = dias.map(d => {
-        const mes = d.getMonth() + 1;
-        const dia = d.getDate();
-        const personas = legajos.filter(p => {
-            if (!p.nacimiento) return false;
-            const parts = p.nacimiento.split("/");
-            return parseInt(parts[0]) === dia && parseInt(parts[1]) === mes;
-        });
-        return { fecha: d, personas };
-    });
+    // Recopilar cumpleañeros del mes, ordenados por día
+    const cumples = legajos
+        .filter(p => {
+            const d = parseFecha(p.nacimiento);
+            return d ? d.getMonth() === mes : false;
+        })
+        .map(p => {
+            const d = parseFecha(p.nacimiento);
+            return { dia: d ? d.getDate() : 0, nombre: p.nombre || "" };
+        })
+        .sort((a, b) => a.dia - b.dia);
 
     return (
         <div className="dp-cumple-wrap">
-            <div className="dp-cumple-titulo">🎂 Cumpleaños — próximos 7 días</div>
-            <div className="dp-cumple-strip">
-                {cumplesPorDia.map(({ fecha, personas }, i) => (
-                    <div
-                        key={i}
-                        className={[
-                            "dp-cumple-dia",
-                            i === 0          ? "dp-cumple-dia--hoy"   : "",
-                            personas.length  ? "dp-cumple-dia--tiene" : "",
-                        ].join(" ")}
-                    >
-                        <div className="dp-cumple-dayname">{DIAS_ES[fecha.getDay()]}</div>
-                        <div className="dp-cumple-daynum">{fecha.getDate()}</div>
-                        <div className="dp-cumple-mes">{MESES_ES[fecha.getMonth()]}</div>
-                        <div className="dp-cumple-lista">
-                            {personas.length === 0
-                                ? <span className="dp-cumple-vacio">—</span>
-                                : personas.map((p, j) => (
-                                    <span key={j} className="dp-cumple-nombre">
-                                        🎂 {p.nombre?.split(" ")[0]}
-                                    </span>
-                                ))
-                            }
+            <div className="dp-cumple-titulo">🎂 Cumpleaños — {MESES_LARGO[mes]} {año}</div>
+            {cumples.length === 0 ? (
+                <div className="dp-cumple-vacio-msg">Sin cumpleaños este mes</div>
+            ) : (
+                <div className="dp-cumple-lista-mes">
+                    {cumples.map((c, i) => (
+                        <div key={i} className={`dp-cumple-row${c.dia === hoyD ? " dp-cumple-row--hoy" : ""}`}>
+                            <span className="dp-cumple-row-dia">{c.dia}</span>
+                            <span className="dp-cumple-row-nombre">{apellido(c.nombre)}</span>
                         </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -310,16 +327,21 @@ function StatsPanel({ legajos, zona }) {
             <div className="dp-rrhh-row">
                 {/* Encuadre — ancho fijo */}
                 <div className="dp-card dp-rrhh-encuadre">
-                    <div className="dp-card-title">Encuadre</div>
+                    <div className="dp-card-title">Estado del personal</div>
                     <div className="dp-encuadre-row">
                         <div className="dp-encuadre-blk">
-                            <div className="dp-encuadre-val">{stats.convenio}</div>
-                            <div className="dp-encuadre-lbl">Convenio</div>
+                            <div className="dp-encuadre-val">{stats.activos}</div>
+                            <div className="dp-encuadre-lbl">Activos</div>
                         </div>
                         <div className="dp-encuadre-sep" />
                         <div className="dp-encuadre-blk dp-encuadre-blk--fc">
-                            <div className="dp-encuadre-val">{stats.fueraConv}</div>
-                            <div className="dp-encuadre-lbl">Fuera de convenio</div>
+                            <div className="dp-encuadre-val">{stats.bajas}</div>
+                            <div className="dp-encuadre-lbl">Bajas</div>
+                        </div>
+                        <div className="dp-encuadre-sep" />
+                        <div className="dp-encuadre-blk dp-encuadre-blk--prueba">
+                            <div className="dp-encuadre-val">{stats.suspendidos}</div>
+                            <div className="dp-encuadre-lbl">Suspendidos</div>
                         </div>
                         <div className="dp-encuadre-sep" />
                         <div className="dp-encuadre-blk dp-encuadre-blk--prueba">
@@ -327,7 +349,7 @@ function StatsPanel({ legajos, zona }) {
                             <div className="dp-encuadre-lbl">Efectivos</div>
                         </div>
                         <div className="dp-encuadre-sep" />
-                        <div className="dp-encuadre-blk dp-encuadre-blk--prueba">
+                        <div className="dp-encuadre-blk">
                             <div className="dp-encuadre-val">{stats.prueba}</div>
                             <div className="dp-encuadre-lbl">En prueba</div>
                         </div>
@@ -365,7 +387,7 @@ function StatsPanel({ legajos, zona }) {
             {/* Calendario cumpleaños */}
             <CalendarioCumpleanos legajos={legajos} />
 
-            {/* Fila 1 — función + cargo + sucursal */}
+            {/* Fila 1 — función + cargo + zona */}
             <div className="dp-row3">
                 <div className="dp-card">
                     <div className="dp-card-title">Por función</div>
@@ -376,24 +398,24 @@ function StatsPanel({ legajos, zona }) {
                     <BarChart data={stats.cargos} color="#7c3aed" total={stats.total} />
                 </div>
                 <div className="dp-card">
-                    <div className="dp-card-title">Por sucursal</div>
-                    <BarChart data={stats.sucursales} color="#0891b2" total={stats.total} />
+                    <div className="dp-card-title">Por zona</div>
+                    <BarChart data={stats.zonas} color="#0891b2" total={stats.total} />
                 </div>
             </div>
 
-            {/* Fila 2 — proyecto + objetivo + centro de costo */}
+            {/* Fila 2 — proyecto + centro de costo + régimen */}
             <div className="dp-row3">
                 <div className="dp-card">
                     <div className="dp-card-title">Por proyecto / contrato</div>
                     <BarChart data={stats.proyectos} color="var(--color-success)" total={stats.total} />
                 </div>
                 <div className="dp-card">
-                    <div className="dp-card-title">Por servicio / objetivo</div>
-                    <BarChart data={stats.servicios.slice(0, 10)} color="var(--color-warn)" total={stats.total} />
+                    <div className="dp-card-title">Por centro de costo</div>
+                    <BarChart data={stats.centrosCosto} color="var(--color-warn)" total={stats.total} />
                 </div>
                 <div className="dp-card">
-                    <div className="dp-card-title">Por centro de costo</div>
-                    <BarChart data={stats.centrosCosto} color="#059669" total={stats.total} />
+                    <div className="dp-card-title">Por régimen</div>
+                    <BarChart data={stats.regimenes} color="#059669" total={stats.total} />
                 </div>
             </div>
 
@@ -421,7 +443,7 @@ function StatsPanel({ legajos, zona }) {
                 </div>
                 <div className="dp-card">
                     <div className="dp-card-title">Ingresos por año</div>
-                    <BarChart data={stats.ingresosPorAnio} color="#d97706" total={stats.total} />
+                    <BarChart data={stats.ingresosPorAnio} color="#d97706" />
                 </div>
             </div>
 
@@ -459,8 +481,8 @@ function StatsPanel({ legajos, zona }) {
                                             <td className="dp-td-num dp-td-alert">{edad} a.</td>
                                             <td className="dp-td-num">{antig !== null ? `${antig.toFixed(1)} a.` : "—"}</td>
                                             <td>
-                                                <span className={`dp-tag dp-tag--${normalizarTarea(p.tarea).toLowerCase()}`}>
-                                                    {normalizarTarea(p.tarea)}
+                                                <span className={`dp-tag dp-tag--${normalizarTarea(getRol(p)).toLowerCase()}`}>
+                                                    {normalizarTarea(getRol(p))}
                                                 </span>
                                             </td>
                                             <td>{p.servicio || "—"}</td>
@@ -478,23 +500,26 @@ function StatsPanel({ legajos, zona }) {
 }
 
 // ── Componente principal ───────────────────────────────────────────────────
-const ZONAS = [
-    { key: "todas",        label: "🌐 Todo el personal" },
-    { key: "Buenos Aires", label: "🏙️ Buenos Aires"     },
-    { key: "Santa Cruz",   label: "⛏️ Santa Cruz"       },
-];
-
 export default function DashboardPersonalScreen({ onBack, zonaFija }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
     const [todosLegajos, setTodosLegajos] = useState([]);
     const [loading, setLoading]           = useState(true);
     const [zonaActiva, setZonaActiva]     = useState(zonaFija ?? "todas");
+
+    // Zonas dinámicas derivadas de los datos reales
+    const ZONAS = useMemo(() => {
+        const zonasUnicas = [...new Set(todosLegajos.map(p => p.zona).filter(Boolean))].sort();
+        return [
+            { key: "todas", label: "🌐 Todo el personal" },
+            ...zonasUnicas.map(z => ({ key: z, label: z })),
+        ];
+    }, [todosLegajos]);
 
     useEffect(() => {
         const cargar = async () => {
             try {
                 const snap = await getDocs(
-                    query(collection(db, "legajos"), where("empresa", "==", empresaNombre))
+                    query(collection(db, "legajos"), where("empresaId", "==", empresaId))
                 );
                 const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 // Deduplicar por legajo (el seed puede haberse cargado varias veces)
@@ -505,9 +530,9 @@ export default function DashboardPersonalScreen({ onBack, zonaFija }) {
                     vistos.add(key);
                     return true;
                 });
-                setTodosLegajos(unicos.length ? unicos : LEGAJOS_SEED);
-            } catch {
-                setTodosLegajos(LEGAJOS_SEED);
+                setTodosLegajos(unicos);
+            } catch (e) {
+                console.error("DashboardPersonalScreen error:", e);
             } finally {
                 setLoading(false);
             }
@@ -517,7 +542,7 @@ export default function DashboardPersonalScreen({ onBack, zonaFija }) {
 
     const legajosFiltrados = useMemo(() => {
         if (zonaActiva === "todas") return todosLegajos;
-        return todosLegajos.filter(p => (p.zona || p.sucursal || "") === zonaActiva);
+        return todosLegajos.filter(p => !p.zona || p.zona === zonaActiva);
     }, [todosLegajos, zonaActiva]);
 
     if (loading) return (
@@ -534,7 +559,7 @@ export default function DashboardPersonalScreen({ onBack, zonaFija }) {
         <div className="dp-root">
             {/* Header */}
             <div className="dp-header">
-                <button className="dp-back-btn" onClick={onBack}>← Volver</button>
+                <button className="dp-back-btn" onClick={onBack}>← Volver al panel</button>
                 <div className="dp-header-title">👥 Dashboard de Personal</div>
                 <div className="dp-header-sub">{empresaNombre} · {todosLegajos.length} personas en total</div>
             </div>

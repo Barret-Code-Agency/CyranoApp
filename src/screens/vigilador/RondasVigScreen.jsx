@@ -12,6 +12,7 @@ import {
     addDoc, updateDoc, doc, serverTimestamp,
 } from "firebase/firestore";
 import { distanciaMetros, formatearHora } from "../../utils/geoUtils";
+import { otorgarTokens, TOKENS } from "../../utils/tokenService";
 import ChecklistModal from "../ChecklistModal";
 import "./RondasVigScreen.css";
 
@@ -203,6 +204,9 @@ export default function RondasVigScreen({ onBack, onNovedad }) {
                 estado,
                 fin: serverTimestamp(),
             }).catch(console.error);
+        }
+        if (estado === "completa" && user?.uid && user?.empresaId) {
+            otorgarTokens(user.uid, user.empresaId, TOKENS.RONDA, "Ronda completada").catch(console.error);
         }
         setTerminada(true);
     };

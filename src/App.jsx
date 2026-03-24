@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useGeo } from "./utils/helpers";
 import { AppDataProvider, useAppData } from "./context/AppDataContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -13,9 +13,7 @@ import SuperAdminScreen    from "./screens/SuperAdminScreen";
 import VigHome             from "./screens/vigilador/VigHome";
 import LoadingScreen       from "./screens/LoadingScreen";
 import Login               from "./screens/Login";
-import AdminScreen         from "./screens/AdminScreen";
 import AdminContratoHome  from "./screens/gerencia/AdminContratoHome";
-import SupervisorDashboard   from "./screens/supervisor/SupervisorDashboard";
 import SupervisorHome        from "./screens/supervisor/SupervisorHome";
 import AdministrativoHome   from "./screens/administrativo/AdministrativoHome";
 import JornadaScreen       from "./screens/vigilador/JornadaScreen";
@@ -25,8 +23,8 @@ import OtraActividadScreen from "./screens/OtraActividadScreen";
 import ControlScreen       from "./screens/ControlScreen";
 import FinJornadaScreen    from "./screens/vigilador/FinJornadaScreen";
 import SendModal           from "./screens/SendModal";
-import ShieldLogo          from "./components/ShieldLogo";
-import AppHeader            from "./components/AppHeader";
+import AppHeader                from "./components/AppHeader";
+import SuscripcionVencidaScreen from "./screens/SuscripcionVencidaScreen";
 
 function AppContent() {
     const [phase, setPhase]             = useState("splash");
@@ -37,7 +35,7 @@ function AppContent() {
     const [pendingDest, setPendingDest] = useState(null);
     const [country, setCountry]         = useState(null);  // { name, src }
 
-    const { jornadaActiva, actividadActiva, dbReady } = useAppData();
+    const { jornadaActiva, actividadActiva, dbReady, empresaActiva } = useAppData();
     const { logout, user: authUser } = useAuth();
     const geo = useGeo();
 
@@ -103,9 +101,8 @@ function AppContent() {
     const handleLoadingDone    = () => goTo(pendingDest);
     const handleIniciarJornada = () => { jornadaActiva ? goTo("menu") : goTo("jornada"); };
     const handleJornadaStarted = () => goTo("menu");
-    const handleModalClose     = () => { setModal(null); setUser(null); goTo("splash"); };
+    const handleModalClose     = () => { setModal(null); goTo("supervisor_dash"); };
 
-    const isAdmin    = phase === "admin";
     // Pantallas con header propio — no mostrar el header global
     const showHeader = !["splash", "loading", "loading_post", "login",
                          "role_select", "super_admin", "vig_home",
@@ -140,6 +137,10 @@ function AppContent() {
                 goTo(loginRole === "super_admin" ? "splash" : "role_select");
             }}
         />;
+
+    // ── Bloqueo por suscripción vencida (no aplica a super_admin) ──────────
+    if (!empresaActiva && phase !== "super_admin" && !["splash","role_select","login","loading","loading_post"].includes(phase))
+        return <SuscripcionVencidaScreen />;
 
     // ── Pantallas de panel completo — fuera del wrapper .main ──────────────
     if (phase === "super_admin")

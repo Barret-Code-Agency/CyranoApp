@@ -1,0 +1,302 @@
+/* src/screens/shared/ImportarRealesPanel.css */
+
+.imp-root {
+    max-width: 860px;
+    margin: 1.5rem auto;
+    padding: 0 1rem 2rem;
+    font-family: inherit;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────────── */
+.imp-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0;
+}
+.imp-tab {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.5rem 1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    border-radius: 6px 6px 0 0;
+}
+.imp-tab:hover { color: #002d72; }
+.imp-tab--active { color: #002d72; border-bottom-color: #002d72; }
+.imp-tab--danger.imp-tab--active { color: #b91c1c; border-bottom-color: #b91c1c; }
+
+/* ── Encabezado ─────────────────────────────────────────────────────────── */
+.imp-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+.imp-periodo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #002d72;
+}
+.imp-sub {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+/* ── Error ──────────────────────────────────────────────────────────────── */
+.imp-error {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    color: #b91c1c;
+    border-radius: 8px;
+    padding: 0.65rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.88rem;
+}
+
+/* ── Dropzone ───────────────────────────────────────────────────────────── */
+.imp-dropzone {
+    border: 2px dashed #94a3b8;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+.imp-dropzone:hover {
+    border-color: #002d72;
+    background: #eff6ff;
+}
+.imp-dropzone-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+}
+.imp-dropzone-txt {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.4rem;
+}
+.imp-dropzone-hint {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+/* ── Preview ────────────────────────────────────────────────────────────── */
+.imp-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* Destino */
+.imp-dest-box {
+    background: #f0f7ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+}
+.imp-dest-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #1e3a8a;
+    margin-bottom: 0.75rem;
+}
+.imp-dest-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.imp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    flex: 1;
+    min-width: 200px;
+}
+.imp-field label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.imp-field select {
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.88rem;
+    background: #fff;
+    color: #1e293b;
+}
+
+/* Info archivos */
+.imp-files-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.imp-file-tag {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.82rem;
+    color: #334155;
+}
+
+/* Tabla */
+.imp-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    max-height: 360px;
+    overflow-y: auto;
+}
+.imp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.imp-table thead th {
+    position: sticky;
+    top: 0;
+    background: #002d72;
+    color: #fff;
+    text-align: left;
+    padding: 0.55rem 0.8rem;
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.imp-table tbody tr:nth-child(even) { background: #f8fafc; }
+.imp-table tbody tr:hover           { background: #eff6ff; }
+.imp-table td {
+    padding: 0.45rem 0.8rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+}
+.imp-td-legajo {
+    font-family: monospace;
+    font-weight: 700;
+    color: #002d72 !important;
+}
+.imp-td-num {
+    text-align: center;
+    font-weight: 700;
+    color: #16a34a !important;
+}
+
+/* ── Acciones ───────────────────────────────────────────────────────────── */
+.imp-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.imp-btn-pri {
+    background: #002d72;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.4rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.imp-btn-pri:hover:not(:disabled) { background: #1e40af; }
+.imp-btn-pri:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+}
+.imp-btn-sec {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.imp-btn-sec:hover { background: #e2e8f0; }
+
+/* ── Loading ────────────────────────────────────────────────────────────── */
+.imp-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 3rem 1rem;
+    color: #475569;
+    font-size: 0.95rem;
+}
+.imp-spinner {
+    width: 36px;
+    height: 36px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #002d72;
+    border-radius: 50%;
+    animation: imp-spin 0.7s linear infinite;
+}
+@keyframes imp-spin { to { transform: rotate(360deg); } }
+
+/* ── Borrar ─────────────────────────────────────────────────────────────── */
+.imp-borrar-box {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.imp-borrar-desc {
+    font-size: 0.88rem;
+    color: #475569;
+    background: #fef9c3;
+    border: 1px solid #fde047;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    line-height: 1.6;
+}
+.imp-btn-danger {
+    background: #b91c1c;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.4rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+    align-self: flex-start;
+}
+.imp-btn-danger:hover { background: #991b1b; }
+.imp-confirm-box {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    font-size: 0.88rem;
+    color: #7f1d1d;
+    line-height: 1.6;
+}
+
+/* ── Done ───────────────────────────────────────────────────────────────── */
+.imp-done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 3rem 1rem;
+    text-align: center;
+}
+.imp-done-icon   { font-size: 3rem; }
+.imp-done-title  { font-size: 1.2rem; font-weight: 700; color: #166534; }
+.imp-done-desc   { font-size: 0.9rem; color: #475569; }

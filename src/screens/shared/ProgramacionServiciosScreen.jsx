@@ -12,27 +12,16 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import "./ProgramacionServiciosScreen.css";
-import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES } from "../../utils/periodoUtils";
+import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES, AUS_CODES, HORAS_KEYS, esLaboral, horasDeValor, normalizarTurno } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
+import { fmtObjetivo } from "../../utils/formatters";
 
 // ── Colecciones Firestore ────────────────────────────────────────────────────────
 const COL_PROG   = "programacionServicios";
 const COL_LEGAJOS = "legajos";
 
-const AUS_CODES = ["Vac","Enf","Art","Asa","Aca","Sus","Lic"];
-
-// Índice 0=Dom, 1=Lun … 6=Sáb — igual que Date.getDay()
-const HORAS_KEYS = [
-    "horasDomingo","horasLunes","horasMartes","horasMiercoles",
-    "horasJueves","horasViernes","horasSabado",
-];
-
 // ── Helpers ─────────────────────────────────────────────────────────────────────
-// getDias, fmtKey importados desde ../utils/periodoUtils
-
-function esLaboral(val) {
-    return val && val !== "Fco" && val !== "Com" && val !== "FER" && val !== "Lic";
-}
+// AUS_CODES, HORAS_KEYS, esLaboral, horasDeValor, normalizarTurno, getDias, fmtKey importados desde periodoUtils
 
 // Renderiza el contenido de una celda: turnos horarios → dos líneas (entrada / salida)
 function CeldaContenido({ val, op }) {
@@ -49,23 +38,14 @@ function CeldaContenido({ val, op }) {
     return <>{op?.label ?? val}</>;
 }
 
-function horasDeValor(val) {
-    if (!esLaboral(val)) return 0;
-    // Separa por cualquier variante de guion (-, –, —) con espacios opcionales
-    const partes = val.split(/\s*[-\u2013\u2014]\s*/);
-    if (partes.length !== 2) return 0;
-    const [h1, m1] = partes[0].split(":").map(Number);
-    const [h2, m2] = partes[1].split(":").map(Number);
-    if (isNaN(h1) || isNaN(h2)) return 0;
-    const ini = h1 * 60 + (m1 || 0);
-    const fin = h2 * 60 + (m2 || 0);
-    return (fin > ini ? fin - ini : fin + 1440 - ini) / 60;
-}
 
 // ── Popup editor de celda ────────────────────────────────────────────────────────
-function CeldaPopup({ top, left, onSelect, onClose }) {
+function CeldaPopup({ top, left, valorActual, onSelect, onClose }) {
     const ref = useRef();
     const [pos, setPos] = useState({ top, left });
+
+    const esOpcion = OPCIONES.some(o => o.val === valorActual);
+    const [manual, setManual] = useState(() => (valorActual && !esOpcion) ? valorActual : "");
 
     useEffect(() => {
         const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -86,25 +66,48 @@ function CeldaPopup({ top, left, onSelect, onClose }) {
         setPos({ top: adjTop, left: adjLeft });
     }, [top, left]);
 
+    const confirmarManual = () => {
+        const norm = normalizarTurno(manual);
+        if (norm) { onSelect(norm); setManual(""); }
+    };
+
     return (
         <div className="ps-popup" style={{ top: pos.top, left: pos.left }} ref={ref}>
             {OPCIONES.map(op => (
                 <button
                     key={op.val}
-                    className={`ps-popup-opt ${op.cls ? `ps-popup-opt--${op.cls}` : "ps-popup-opt--vacio"}`}
+                    className={[
+                        "ps-popup-opt",
+                        op.cls ? `ps-popup-opt--${op.cls}` : "ps-popup-opt--vacio",
+                        valorActual === op.val ? "ps-popup-opt--activo" : "",
+                    ].join(" ")}
                     onClick={() => onSelect(op.val)}
                 >
                     {op.label}
                 </button>
             ))}
+            <div className="ps-popup-manual">
+                <input
+                    className="ps-popup-manual-input"
+                    placeholder="HH:MM – HH:MM"
+                    value={manual}
+                    onChange={e => setManual(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && manual.trim()) confirmarManual(); }}
+                />
+                <button
+                    className="ps-popup-manual-btn"
+                    disabled={!manual.trim()}
+                    onClick={confirmarManual}
+                >✓</button>
+            </div>
         </div>
     );
 }
 
 // ── Selector de servicio ─────────────────────────────────────────────────────────
 function SelectorServicio({ onSelect }) {
-    const { empresaNombre } = useAppData();
-    const { clientes, objetivos, cargando } = useClientesData(empresaNombre);
+    const { empresaNombre, empresaId } = useAppData();
+    const { clientes, objetivos, cargando } = useClientesData(empresaId);
     const hoy = new Date();
     const [año,        setAño]        = useState(hoy.getFullYear());
     const [mes,        setMes]        = useState(hoy.getMonth() + 1);
@@ -112,10 +115,14 @@ function SelectorServicio({ onSelect }) {
     const [objetivoId, setObjetivoId] = useState("");
 
     const clienteSel = clientes.find(c => c.id === clienteId);
-    const objFiltrados = objetivos.filter(o =>
-        o.clienteId === clienteId ||
-        (clienteSel?.nombre && o.clienteNombre === clienteSel.nombre)
-    );
+    const objFiltrados = objetivos.filter(o => {
+        if (o.clienteId === clienteId) return true;
+        if (!clienteSel?.nombre) return false;
+        const cn  = clienteSel.nombre.toLowerCase().trim();
+        const oid = String(o.clienteId ?? "").toLowerCase().trim();
+        const onm = String(o.clienteNombre ?? o.nombreProyecto ?? "").toLowerCase().trim();
+        return oid === cn || onm === cn;
+    });
     const objSel = objetivos.find(o => o.id === objetivoId);
     const valido = clienteId && objetivoId;
 
@@ -192,6 +199,7 @@ function SelectorServicio({ onSelect }) {
                     horasSabado:    objSel?.horasSabado    ?? null,
                     horasDomingo:   objSel?.horasDomingo   ?? null,
                     horasFeriados:  objSel?.horasFeriados  ?? null,
+                    zona:           objSel?.zona           || "",
                     año, mes,
                 })
             }>
@@ -618,19 +626,19 @@ function AusentismoModal({ persona, dias, vista, todoElPersonal, onAplicar, onCl
 
 // ── Grilla de servicio ───────────────────────────────────────────────────────────
 function GrillaServicio({ config, onBack }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
     const [todoElPersonal, setTodoElPersonal] = useState([]);
 
     useEffect(() => {
-        if (!empresaNombre) return;
-        getDocs(query(collection(db, COL_LEGAJOS), where("empresa", "==", empresaNombre)))
+        if (!empresaId) return;
+        getDocs(query(collection(db, COL_LEGAJOS), where("empresaId", "==", empresaId)))
             .then(snap => {
                 const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 docs.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
                 setTodoElPersonal(docs);
             })
             .catch(console.error);
-    }, [empresaNombre]);
+    }, [empresaId]);
 
     const [personal,   setPersonal]   = useState([]);
     const [vista,      setVista]      = useState("programado");
@@ -687,13 +695,15 @@ function GrillaServicio({ config, onBack }) {
         setGuardando(true);
         try {
             await setDoc(doc(db, "programacionServicios", docId), {
-                empresa: empresaNombre,
-                clienteId: config.clienteId,
-                clienteNombre: config.clienteNombre,
-                objetivoId: config.objetivoId,
+                empresa:        empresaNombre,
+                empresaId:      empresaId,
+                clienteId:      config.clienteId,
+                clienteNombre:  config.clienteNombre,
+                objetivoId:     config.objetivoId,
                 objetivoCodigo: config.objetivoCodigo || "",
                 objetivoNombre: config.objetivoNombre,
                 proyectoNombre: config.proyectoNombre,
+                zona:           config.zona || "",
                 año: config.año, mes: config.mes,
                 horasConfig: {
                     horasDomingo:    config.horasDomingo    ?? null,
@@ -805,7 +815,15 @@ function GrillaServicio({ config, onBack }) {
                 <div className="ps-header-right">
                     <div className="ps-tabs">
                         <button className={`ps-tab ${vista === "programado" ? "ps-tab--on" : ""}`} onClick={() => setVista("programado")}>Programado</button>
-                        <button className={`ps-tab ${vista === "real"       ? "ps-tab--on" : ""}`} onClick={() => setVista("real")}>Real</button>
+                        <button className={`ps-tab ${vista === "real"       ? "ps-tab--on" : ""}`} onClick={() => {
+                            // Al pasar a real: pre-carga desde programado para personas sin datos reales
+                            setPersonal(prev => prev.map(p => {
+                                const tieneReal = Object.keys(p.real || {}).length > 0;
+                                if (tieneReal) return p;
+                                return { ...p, real: { ...(p.programado || {}) } };
+                            }));
+                            setVista("real");
+                        }}>Real</button>
                     </div>
                     {diasNoLabNonHoliday.length > 0 && (
                         <button className="ps-btn-nolab" onClick={() => setModalNoLab(true)} title="Días no laborables">
@@ -910,7 +928,7 @@ function GrillaServicio({ config, onBack }) {
                                                 ].join(" ")}
                                                 onClick={e => {
                                                     const r = e.currentTarget.getBoundingClientRect();
-                                                    setPopup({ rowIdx, diaKey: key, top: r.bottom + 4, left: r.left });
+                                                    setPopup({ rowIdx, diaKey: key, top: r.bottom + 4, left: r.left, valorActual: val });
                                                 }}
                                             >
                                                 <CeldaContenido val={val} op={op} />
@@ -986,6 +1004,7 @@ function GrillaServicio({ config, onBack }) {
             {popup && (
                 <CeldaPopup
                     top={popup.top} left={popup.left}
+                    valorActual={popup.valorActual || ""}
                     onSelect={val => setCelda(popup.rowIdx, popup.diaKey, val)}
                     onClose={() => setPopup(null)}
                 />
@@ -1056,8 +1075,17 @@ function GrillaServicio({ config, onBack }) {
 
 // ── ObjetivoEditableCard — tabla editable para un objetivo del período ────────────
 function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos = [] }) {
-    const { empresaNombre } = useAppData();
-    const [personal,      setPersonal]   = useState(docInicial.personal || []);
+    const { empresaNombre, empresaId } = useAppData();
+    const [personal,      setPersonal]   = useState(() => {
+        const base = docInicial.personal || [];
+        // Si modo es "real", pre-cargar desde programado para personas sin datos reales
+        if (modo !== "real") return base;
+        return base.map(p => {
+            const tieneReal = Object.keys(p.real || {}).length > 0;
+            if (tieneReal) return p;
+            return { ...p, real: { ...(p.programado || {}) } };
+        });
+    });
     const [popup,         setPopup]      = useState(null);
     const [guardando,     setGuardando]  = useState(false);
     const [guardado,      setGuardado]   = useState(false);
@@ -1069,15 +1097,15 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
 
     // Cargar legajos cuando se abre el modal
     useEffect(() => {
-        if (!modalAdd || todosLegajos.length > 0 || !empresaNombre) return;
-        getDocs(query(collection(db, COL_LEGAJOS), where("empresa", "==", empresaNombre)))
+        if (!modalAdd || todosLegajos.length > 0 || !empresaId) return;
+        getDocs(query(collection(db, COL_LEGAJOS), where("empresaId", "==", empresaId)))
             .then(snap => {
                 const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 data.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
                 setTodosLegajos(data);
             })
             .catch(console.error);
-    }, [modalAdd, empresaNombre, todosLegajos.length]);
+    }, [modalAdd, empresaId, todosLegajos.length]);
 
     const agregarPersona = (v) => {
         if (personal.find(p => p.legajo === v.legajo)) return;
@@ -1140,7 +1168,12 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
             const ref = doc(db, "programacionServicios", docInicial.docId);
             const snap = await getDoc(ref);
             if (snap.exists()) {
-                await setDoc(ref, { ...snap.data(), personal, actualizadoEn: serverTimestamp() });
+                await setDoc(ref, {
+                    ...snap.data(),
+                    empresaId: snap.data().empresaId || empresaId,
+                    personal,
+                    actualizadoEn: serverTimestamp(),
+                });
             }
             setGuardado(true);
             setTimeout(() => setGuardado(false), 2500);
@@ -1229,7 +1262,7 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
                                                             ].join(" ")}
                                                             onClick={e => {
                                                                 const r = e.currentTarget.getBoundingClientRect();
-                                                                setPopup({ rowIdx, diaKey: key, top: r.bottom + 4, left: r.left });
+                                                                setPopup({ rowIdx, diaKey: key, top: r.bottom + 4, left: r.left, valorActual: val });
                                                             }}
                                                         >
                                                             <CeldaContenido val={val} op={op} />
@@ -1283,6 +1316,7 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
                         {popup && (
                             <CeldaPopup
                                 top={popup.top} left={popup.left}
+                                valorActual={popup.valorActual || ""}
                                 onSelect={val => setCelda(popup.rowIdx, popup.diaKey, val)}
                                 onClose={() => setPopup(null)}
                             />
@@ -1339,8 +1373,8 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
 
 // ── Programación — todos los objetivos del período, editables ─────────────────────
 export function ProgramacionTodos({ año, mes, modo = "programado" }) {
-    const { empresaNombre } = useAppData();
-    const { clientes, objetivos } = useClientesData(empresaNombre);
+    const { empresaNombre, empresaId } = useAppData();
+    const { clientes, objetivos } = useClientesData(empresaId);
     const [docs,        setDocs]        = useState([]);
     const [cargando,    setCargando]    = useState(false);
     const [modalNueva,  setModalNueva]  = useState(false);
@@ -1349,11 +1383,11 @@ export function ProgramacionTodos({ año, mes, modo = "programado" }) {
     const [creando,     setCreando]     = useState(false);
 
     const cargar = () => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         setCargando(true);
         getDocs(query(
             collection(db, COL_PROG),
-            where("empresa", "==", empresaNombre),
+            where("empresaId", "==", empresaId),
             where("año", "==", año),
             where("mes", "==", mes)
         ))
@@ -1370,8 +1404,16 @@ export function ProgramacionTodos({ año, mes, modo = "programado" }) {
 
     const dias = getDias(año, mes);
 
-    const objFiltrados = objetivos.filter(o => o.clienteId === clienteId || o.clienteNombre === clientes.find(c => c.id === clienteId)?.nombre);
     const clienteSel   = clientes.find(c => c.id === clienteId);
+    const objFiltrados = !clienteId ? [] : objetivos.filter(o => {
+        if (!clienteSel) return false;
+        const cn  = clienteSel.nombre.toLowerCase().trim();
+        const oid = String(o.clienteId ?? "").toLowerCase().trim();
+        const onm = String(o.clienteNombre ?? o.nombreProyecto ?? "").toLowerCase().trim();
+        return o.clienteId === clienteId   // ID Firestore exacto
+            || oid === cn                  // clienteId guarda el nombre exacto del cliente
+            || onm === cn;                 // clienteNombre / nombreProyecto exacto
+    });
     const objSel       = objetivos.find(o => o.id === objetivoId);
 
     const crearPlanilla = async () => {
@@ -1381,6 +1423,7 @@ export function ProgramacionTodos({ año, mes, modo = "programado" }) {
             const docId = `${empresaNombre}_${clienteId}_${objetivoId}_${año}-${String(mes).padStart(2,"0")}`;
             await setDoc(doc(db, "programacionServicios", docId), {
                 empresa:        empresaNombre,
+                empresaId,
                 clienteId,
                 clienteNombre:  clienteSel?.nombre || "",
                 objetivoId,
@@ -1454,7 +1497,7 @@ export function ProgramacionTodos({ año, mes, modo = "programado" }) {
                                 <option value="">— Seleccionar objetivo —</option>
                                 {objFiltrados.map(o => (
                                     <option key={o.id} value={o.id}>
-                                        {[o.codigo, o.proyecto, o.nombre].filter(Boolean).join("  ·  ")}
+                                        {fmtObjetivo(o)}
                                     </option>
                                 ))}
                             </select>
@@ -1475,28 +1518,29 @@ export function ProgramacionTodos({ año, mes, modo = "programado" }) {
 }
 
 // ── Vista de Turnos (solo lectura, todos los objetivos del período) ───────────────
-export function VistaTurnos({ año, mes }) {
-    const { empresaNombre } = useAppData();
+export function VistaTurnos({ año, mes, zonaFija = null }) {
+    const { empresaNombre, empresaId } = useAppData();
     const [docs, setDocs] = useState([]);
     const [cargando, setCargando] = useState(false);
 
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         setCargando(true);
         getDocs(query(
             collection(db, COL_PROG),
-            where("empresa", "==", empresaNombre),
+            where("empresaId", "==", empresaId),
             where("año", "==", año),
             where("mes", "==", mes)
         ))
             .then(snap => {
-                const data = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                let data = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                if (zonaFija) data = data.filter(d => !d.zona || d.zona === zonaFija);
                 data.sort((a, b) => (a.clienteNombre || "").localeCompare(b.clienteNombre || ""));
                 setDocs(data);
             })
             .catch(console.error)
             .finally(() => setCargando(false));
-    }, [empresaNombre, año, mes]);
+    }, [empresaId, año, mes, zonaFija]);
 
     const dias = getDias(año, mes);
     const mesAnterior = mes === 1 ? 12 : mes - 1;

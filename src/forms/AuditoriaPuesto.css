@@ -24,6 +24,19 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
+.ap-scorebar-codigo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-family: monospace;
+    color: #888;
+    letter-spacing: 0.05em;
+    background: #f4f6fb;
+    border: 1px solid #e0e3f0;
+    border-radius: 6px;
+    padding: 0.15rem 0.55rem;
+    white-space: nowrap;
+}
+
 .ap-scorebar-label {
     font-size: 0.75rem;
     font-weight: 600;
@@ -144,6 +157,24 @@
     transition: border-color 0.15s;
 }
 .ap-cab-input:focus { border-color: #1a237e; background: #fff; }
+
+.ap-cab-input--readonly {
+    background: #f0f2f8;
+    color: #666;
+    cursor: default;
+}
+
+.ap-cab-input--codigo {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    color: #1a237e;
+}
+
+.ap-cab-field--full {
+    grid-column: 1 / -1;
+}
 
 /* ── Resumen por categoría ─────────────────────────────────────── */
 .ap-cat-resumen {

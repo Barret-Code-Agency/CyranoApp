@@ -1,6 +1,6 @@
 // src/screens/gerencia/GestionUsuariosScreen.jsx
 // Gerencia: gestiona los usuarios de su empresa y sus permisos de módulos.
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth }    from "../../context/AuthContext";
 import { useAppData } from "../../context/AppDataContext";
 import {
@@ -18,15 +18,14 @@ function modulosDisponibles(empresaModulos, rol) {
     return grupo.modulos.filter(m => empresaModulos?.[m.key] !== false);
 }
 
-// Estado actual de permisos de un usuario (default: true si no bloqueado explícitamente)
+// Estado actual de permisos de un usuario — incluye TODOS los módulos de todos los perfiles
 function permisosActuales(u, empresaModulos) {
     const pm = u.permisosModulos ?? {};
-    const grupo = MODULOS_DEF.find(g => g.rol === (u.rol ?? "vigilador"));
-    const mods = grupo?.modulos ?? [];
+    const todosMods = MODULOS_DEF.flatMap(g => g.modulos);
     return Object.fromEntries(
-        mods
+        todosMods
             .filter(m => empresaModulos?.[m.key] !== false)
-            .map(m => [m.key, pm[m.key] !== false])
+            .map(m => [m.key, pm[m.key] === true])   // por defecto: desactivado salvo que esté explícitamente true
     );
 }
 
@@ -35,53 +34,30 @@ function FormEdicionUsuario({ u, empresaModulos, rolesCreables, onGuardar, onCan
     const rolActual  = u.rol ?? "vigilador";
     const [rol,      setRol]      = useState(rolActual);
     const [activo,   setActivo]   = useState(u.activo !== false);
+    const [zona,     setZona]     = useState(u.zona || "");
     const [permisos, setPermisos] = useState(() => permisosActuales(u, empresaModulos));
     const [guardando, setGuardando] = useState(false);
     const [msg,       setMsg]       = useState(null);
 
-    // Cuando cambia el rol, recalcular permisos
-    const cambiarRol = (nuevoRol) => {
-        setRol(nuevoRol);
-        const grupo = MODULOS_DEF.find(g => g.rol === nuevoRol);
-        const mods  = grupo?.modulos ?? [];
-        const pm    = u.permisosModulos ?? {};
-        setPermisos(Object.fromEntries(
-            mods
-                .filter(m => empresaModulos?.[m.key] !== false)
-                .map(m => [m.key, pm[m.key] !== false])
-        ));
-    };
-
-    const mods = modulosDisponibles(empresaModulos, rol);
-
     const toggleMod = (key) =>
         setPermisos(p => ({ ...p, [key]: !p[key] }));
-
-    const aplicarPerfil = (perfil) => {
-        const pm = perfil.modulos;
-        setPermisos(prev => {
-            const next = { ...prev };
-            for (const k of Object.keys(next)) {
-                if (pm[k] !== undefined && empresaModulos?.[k] !== false) {
-                    next[k] = pm[k];
-                }
-            }
-            return next;
-        });
-    };
-
-    const perfilesRol = PERFILES[rol] ?? [];
 
     const guardar = async () => {
         setGuardando(true);
         setMsg(null);
         try {
-            await onGuardar(u.uid, { rol, activo, permisosModulos: permisos });
+            await onGuardar(u.uid, { rol, activo, permisosModulos: permisos, zona: zona.trim() || null });
         } catch (e) {
             setMsg("❌ " + e.message);
             setGuardando(false);
         }
     };
+
+    // Todos los grupos de módulos habilitados por la empresa
+    const gruposVisibles = MODULOS_DEF.map(g => ({
+        ...g,
+        modulos: g.modulos.filter(m => empresaModulos?.[m.key] !== false),
+    })).filter(g => g.modulos.length > 0);
 
     return (
         <div className="gu-form">
@@ -92,43 +68,41 @@ function FormEdicionUsuario({ u, empresaModulos, rolesCreables, onGuardar, onCan
                     {rolesCreables.map(r => (
                         <label key={r} className={`gu-role-chip ${rol === r ? "gu-role-chip--on" : ""}`}>
                             <input type="radio" name={`rol_${u.uid}`} value={r}
-                                checked={rol === r} onChange={() => cambiarRol(r)} />
+                                checked={rol === r} onChange={() => setRol(r)} />
                             <span>{ROLE_ICONS[r]} {ROLE_LABELS[r]}</span>
                         </label>
                     ))}
                 </div>
             </div>
 
-            {/* Perfiles predefinidos */}
-            {perfilesRol.length > 0 && (
-                <div className="gu-form-row">
-                    <label className="gu-label">Perfil rápido</label>
-                    <div className="gu-perfiles">
-                        {perfilesRol.map(p => (
-                            <button key={p.id} className="gu-perfil-btn" onClick={() => aplicarPerfil(p)} title={p.desc}>
-                                {p.label}
-                            </button>
-                        ))}
-                    </div>
+            {/* Módulos — todos los perfiles agrupados */}
+            <div className="gu-form-row">
+                <label className="gu-label">Accesos</label>
+                <div className="gu-modulos-grupos">
+                    {gruposVisibles.map(g => (
+                        <div key={g.rol} className="gu-modulos-grupo">
+                            <div className="gu-modulos-grupo-titulo">{g.grupo}</div>
+                            <div className="gu-mods-grid">
+                                {g.modulos.map(m => (
+                                    <label key={m.key} className={`gu-mod-check ${permisos[m.key] ? "gu-mod-check--on" : ""}`}>
+                                        <input type="checkbox" checked={!!permisos[m.key]}
+                                            onChange={() => toggleMod(m.key)} />
+                                        <span className="gu-mod-icon">{m.icon}</span>
+                                        <span>{m.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            )}
+            </div>
 
-            {/* Módulos */}
-            {mods.length > 0 && (
-                <div className="gu-form-row">
-                    <label className="gu-label">Módulos</label>
-                    <div className="gu-mods-grid">
-                        {mods.map(m => (
-                            <label key={m.key} className={`gu-mod-check ${permisos[m.key] ? "gu-mod-check--on" : ""}`}>
-                                <input type="checkbox" checked={!!permisos[m.key]}
-                                    onChange={() => toggleMod(m.key)} />
-                                <span className="gu-mod-icon">{m.icon}</span>
-                                <span>{m.label}</span>
-                            </label>
-                        ))}
-                    </div>
-                </div>
-            )}
+            {/* Zona */}
+            <div className="gu-form-row">
+                <label className="gu-label">Zona</label>
+                <input className="gu-input" placeholder="Ej: Santa Cruz, Buenos Aires… (vacío = todas)"
+                    value={zona} onChange={e => setZona(e.target.value)} />
+            </div>
 
             {/* Estado */}
             <div className="gu-form-row gu-form-row--inline">
@@ -157,7 +131,7 @@ function FormEdicionUsuario({ u, empresaModulos, rolesCreables, onGuardar, onCan
 // ── Sub-componente: modal de nuevo usuario ────────────────────────────────────
 function ModalNuevoUsuario({ empresaId, empresaModulos, rolesCreables, onCrear, onCerrar }) {
     const [form, setForm] = useState({
-        nombre: "", email: "", password: "", rol: rolesCreables[0] ?? "vigilador",
+        nombre: "", email: "", password: "", rol: rolesCreables[0] ?? "vigilador", zona: "",
     });
     const [creando, setCreando] = useState(false);
     const [msg,     setMsg]     = useState(null);
@@ -176,6 +150,7 @@ function ModalNuevoUsuario({ empresaId, empresaModulos, rolesCreables, onCrear, 
                 email:    form.email.trim(),
                 password: form.password,
                 rol:      form.rol,
+                zona:     form.zona.trim() || null,
                 empresaId,
             });
             onCerrar();
@@ -221,6 +196,11 @@ function ModalNuevoUsuario({ empresaId, empresaModulos, rolesCreables, onCrear, 
                             ))}
                         </div>
                     </div>
+                    <div className="gu-form-row">
+                        <label className="gu-label">Zona</label>
+                        <input className="gu-input" placeholder="Ej: Santa Cruz (vacío = todas)"
+                            value={form.zona} onChange={e => upd("zona", e.target.value)} />
+                    </div>
 
                     {msg && <div className="gu-msg gu-msg--err">{msg}</div>}
                 </div>
@@ -238,14 +218,24 @@ function ModalNuevoUsuario({ empresaId, empresaModulos, rolesCreables, onCrear, 
 
 // ── Pantalla principal ────────────────────────────────────────────────────────
 export default function GestionUsuariosScreen({ onBack }) {
-    const { user, listarUsuarios, actualizarUsuario, crearUsuario, rolesCreables } = useAuth();
+    const { user, listarUsuarios, actualizarUsuario, crearUsuario, resetPassword, rolesCreables } = useAuth();
     const { empresaModulos } = useAppData();
 
     const [usuarios,     setUsuarios]     = useState([]);
     const [loading,      setLoading]      = useState(true);
-    const [editando,     setEditando]     = useState(null);   // uid en edición
+    const [editando,     setEditando]     = useState(null);
     const [msgGlobal,    setMsgGlobal]    = useState(null);
     const [modalNuevo,   setModalNuevo]   = useState(false);
+    const [reseteando,   setReseteando]   = useState(null);  // uid reseteando contraseña
+    const msgTimer = useRef(null);
+
+    const showMsg = useCallback((msg, ms = 2500) => {
+        if (msgTimer.current) clearTimeout(msgTimer.current);
+        setMsgGlobal(msg);
+        msgTimer.current = setTimeout(() => setMsgGlobal(null), ms);
+    }, []);
+
+    useEffect(() => () => { if (msgTimer.current) clearTimeout(msgTimer.current); }, []);
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -263,15 +253,26 @@ export default function GestionUsuariosScreen({ onBack }) {
         await actualizarUsuario(uid, datos);
         setUsuarios(prev => prev.map(u => u.uid === uid ? { ...u, ...datos } : u));
         setEditando(null);
-        setMsgGlobal({ ok: true, txt: "✅ Usuario actualizado" });
-        setTimeout(() => setMsgGlobal(null), 2500);
+        showMsg({ ok: true, txt: "✅ Usuario actualizado" });
+    };
+
+    const handleResetPassword = async (u) => {
+        if (!window.confirm(`¿Enviar email de reseteo de contraseña a ${u.email}?`)) return;
+        setReseteando(u.uid);
+        try {
+            await resetPassword(u.email);
+            showMsg({ ok: true, txt: `✅ Email de reseteo enviado a ${u.email}` }, 3000);
+        } catch (e) {
+            showMsg({ ok: false, txt: "❌ " + e.message });
+        } finally {
+            setReseteando(null);
+        }
     };
 
     const crearNuevo = async (datos) => {
         await crearUsuario(datos);
         await cargar();
-        setMsgGlobal({ ok: true, txt: "✅ Usuario creado correctamente" });
-        setTimeout(() => setMsgGlobal(null), 2500);
+        showMsg({ ok: true, txt: "✅ Usuario creado correctamente" });
     };
 
     const activos   = usuarios.filter(u => u.activo !== false);
@@ -285,27 +286,19 @@ export default function GestionUsuariosScreen({ onBack }) {
 
     return (
         <div className="gu-root">
+            {onBack && (
+                <button className="vh-back" onClick={onBack}>← Volver al panel</button>
+            )}
+            <button className="gu-btn-nuevo gu-btn-nuevo--top" onClick={() => setModalNuevo(true)}>
+                ➕ Agregar usuario
+            </button>
+
             <div className="gu-header">
                 <div>
                     <div className="gu-titulo">👤 Usuarios de la empresa</div>
                     <div className="gu-subtitulo">{usuarios.length} usuario{usuarios.length !== 1 ? "s" : ""} · {activos.length} activo{activos.length !== 1 ? "s" : ""}</div>
                 </div>
-                <div className="gu-header-actions">
-                    {rolesCreables.length > 0 && (
-                        <button className="gu-btn-nuevo" onClick={() => setModalNuevo(true)}>
-                            ➕ Nuevo usuario
-                        </button>
-                    )}
-                    {onBack && (
-                        <button className="gu-btn-back" onClick={onBack}>← Volver</button>
-                    )}
-                </div>
             </div>
-
-            <p className="gu-instruccion">
-                Gestioná los usuarios de tu empresa. Podés asignar roles, habilitar o deshabilitar módulos
-                individuales, y aplicar perfiles predefinidos. Los módulos disponibles dependen del plan contratado.
-            </p>
 
             {msgGlobal && (
                 <div className={`gu-msg-global ${msgGlobal.ok ? "gu-msg-global--ok" : "gu-msg-global--err"}`}>
@@ -345,16 +338,30 @@ export default function GestionUsuariosScreen({ onBack }) {
                                                     {habilitados}/{mods.length} módulos
                                                 </span>
                                             )}
+                                            {u.zona && (
+                                                <span className="gu-zona-tag">📍 {u.zona}</span>
+                                            )}
                                             {u.activo === false && (
                                                 <span className="gu-inactivo-tag">Inactivo</span>
                                             )}
                                         </div>
+                                        <div className="gu-user-acceso">
+                                            🕐 Último acceso: {u.ultimoAcceso?.toDate
+                                                ? u.ultimoAcceso.toDate().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+                                                : "Nunca"}
+                                        </div>
                                     </div>
                                     {!estaEditando && (
-                                        <button className="gu-btn-editar"
-                                            onClick={() => setEditando(u.uid)}>
-                                            ✏️ Editar
-                                        </button>
+                                        <div className="gu-card-actions">
+                                            <button className="gu-btn-editar" onClick={() => setEditando(u.uid)}>
+                                                ✏️ Editar
+                                            </button>
+                                            <button className="gu-btn-reset"
+                                                disabled={reseteando === u.uid}
+                                                onClick={() => handleResetPassword(u)}>
+                                                {reseteando === u.uid ? "Enviando…" : "🔑 Reset"}
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
 

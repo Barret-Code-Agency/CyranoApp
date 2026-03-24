@@ -10,35 +10,14 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import "./ProgramacionServiciosScreen.css";
 import "./ControlClienteScreen.css";
-import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES } from "../../utils/periodoUtils";
+import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES, AUS_CODES, HORAS_KEYS, horasDeValor, r1 } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 
 // ── Colecciones Firestore ─────────────────────────────────────────────────────
 const COL_PROG = "programacionServicios";
 
 // ── Constantes ───────────────────────────────────────────────────────────────────
-// DIAS_ES, MESES_ES, OPCIONES, getDias, fmtKey, FERIADOS_ARG importados desde utils
-
-const AUS_CODES = ["Enf","Art","Asa","Aca","Sus","Lic"];
-
-const HORAS_KEYS = [
-    "horasDomingo","horasLunes","horasMartes","horasMiercoles",
-    "horasJueves","horasViernes","horasSabado",
-];
-
-// ── Helpers ──────────────────────────────────────────────────────────────────────
-// horasDeValor local: difiere de periodoUtils (filtra códigos especiales explícitamente)
-function horasDeValor(val) {
-    if (!val || val === "Fco" || val === "Com" || val === "FER" || val === "Lic") return 0;
-    const partes = val.split(/\s*[-\u2013\u2014]\s*/);
-    if (partes.length !== 2) return 0;
-    const [h1, m1] = partes[0].split(":").map(Number);
-    const [h2, m2] = partes[1].split(":").map(Number);
-    if (isNaN(h1) || isNaN(h2)) return 0;
-    const ini = h1 * 60 + (m1 || 0);
-    const fin = h2 * 60 + (m2 || 0);
-    return (fin > ini ? fin - ini : fin + 1440 - ini) / 60;
-}
+// DIAS_ES, MESES_ES, OPCIONES, AUS_CODES, HORAS_KEYS, horasDeValor, r1, getDias, fmtKey importados desde periodoUtils
 
 function CeldaContenido({ val, op }) {
     if (!val) return <span className="ps-celda-vacio">—</span>;
@@ -49,33 +28,32 @@ function CeldaContenido({ val, op }) {
     return <>{op?.label ?? val}</>;
 }
 
-function r1(n) { return Math.round(n * 10) / 10; }
-
 // ── Componente principal ─────────────────────────────────────────────────────────
-export default function ControlClienteScreen({ año, mes }) {
-    const { empresaNombre } = useAppData();
-    const { objetivos }     = useClientesData(empresaNombre);
+export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
+    const { empresaId } = useAppData();
+    const { objetivos } = useClientesData(empresaId);
     const [docs, setDocs]         = useState([]);
     const [cargando, setCargando] = useState(false);
     const [descargando, setDescargando] = useState(false);
 
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         setCargando(true);
         getDocs(query(
             collection(db, COL_PROG),
-            where("empresa", "==", empresaNombre),
-            where("año",     "==", año),
-            where("mes",     "==", mes)
+            where("empresaId", "==", empresaId)
         ))
             .then(snap => {
-                const data = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                let data = snap.docs
+                    .map(d => ({ docId: d.id, ...d.data() }))
+                    .filter(d => d.año === año && d.mes === mes);
+                if (zonaFija) data = data.filter(d => d.zona === zonaFija);
                 data.sort((a, b) => (a.clienteNombre || "").localeCompare(b.clienteNombre || ""));
                 setDocs(data);
             })
             .catch(console.error)
             .finally(() => setCargando(false));
-    }, [empresaNombre, año, mes]);
+    }, [empresaId, año, mes]);
 
     const dias = getDias(año, mes);
     const mesAnterior = mes === 1 ? 12 : mes - 1;

@@ -82,10 +82,6 @@ export default function SubirProcedimientoScreen({ onBack }) {
 
     return (
         <div className="cc-root">
-            <header className="cc-header">
-                <button className="cc-back" onClick={onBack}>← Volver</button>
-                <span className="cc-header-title">📌 Subir Procedimiento</span>
-            </header>
 
             <div className="cc-body">
 

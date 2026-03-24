@@ -23,7 +23,7 @@ function DetalleView({ item, onBack }) {
     return (
         <div className="vc-root">
             <header className="vc-header">
-                <button className="vc-back" onClick={onBack}>← Volver</button>
+                <button className="vc-back" onClick={onBack}>← Volver al panel</button>
                 <span className="vc-header-title">🎓 Capacitación</span>
             </header>
             <div className="vc-detail-wrap">
@@ -61,17 +61,17 @@ function DetalleView({ item, onBack }) {
 }
 
 export default function VerCapacitacionesScreen({ onBack }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
     const [items,   setItems]   = useState([]);
     const [loading, setLoading] = useState(true);
     const [error,   setError]   = useState(null);
     const [selItem, setSelItem] = useState(null);
 
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         const q = query(
             collection(db, "capacitaciones"),
-            where("empresa", "==", empresaNombre)
+            where("empresaId", "==", empresaId)
         );
         getDocs(q)
             .then(snap => {
@@ -81,16 +81,13 @@ export default function VerCapacitacionesScreen({ onBack }) {
             })
             .catch(e  => setError(e.message))
             .finally(()=> setLoading(false));
-    }, [empresaNombre]);
+    }, [empresaId]);
 
     if (selItem) return <DetalleView item={selItem} onBack={() => setSelItem(null)} />;
 
     return (
         <div className="vc-root">
-            <header className="vc-header">
-                <button className="vc-back" onClick={onBack}>← Volver</button>
-                <span className="vc-header-title">🎓 Capacitación y Entrenamiento</span>
-            </header>
+
             <div className="vc-body">
                 {loading && <div className="vc-empty">Cargando capacitaciones...</div>}
                 {error   && <div className="vc-error">{error}</div>}

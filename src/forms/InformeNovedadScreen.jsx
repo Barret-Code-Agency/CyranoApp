@@ -2,7 +2,7 @@
 // Informe de Novedad — formato oficial BSC.
 // Inmutable una vez firmado y guardado.
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth }    from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -66,7 +66,7 @@ function Field({ label, children, small }) {
 // ── Main component ────────────────────────────────────────────────────────────
 export default function InformeNovedadScreen({ onBack }) {
     const { user }                       = useAuth();
-    const { empresaNombre, empresaLogos } = useAppData();
+    const { empresaNombre, empresaLogos, empresaId } = useAppData();
 
     // ── State ──────────────────────────────────────────────────
     const hoy = new Date().toISOString().split("T")[0];
@@ -74,6 +74,15 @@ export default function InformeNovedadScreen({ onBack }) {
     const nowIN = new Date();
     const fechaConfeccionIN = nowIN.toLocaleDateString("es-AR");
     const horaConfeccionIN  = nowIN.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+
+    const numeroInforme = useMemo(() => {
+        const hoy = new Date();
+        const yyyy = hoy.getFullYear();
+        const mm = String(hoy.getMonth()+1).padStart(2,"0");
+        const dd = String(hoy.getDate()).padStart(2,"0");
+        const rand = String(Math.floor(Math.random()*9000)+1000);
+        return `IN-${yyyy}${mm}${dd}-${rand}`;
+    }, []);
 
     const [datos, setDatos] = useState({
         fecha:     hoy,   // fecha del hecho
@@ -110,7 +119,7 @@ export default function InformeNovedadScreen({ onBack }) {
     const [guardadoCodigo, setGuardadoCodigo] = useState(null);
     const [error,          setError]          = useState(null);
 
-    const { clientes, objetivos } = useClientesData(empresaNombre);
+    const { clientes, objetivos } = useClientesData(empresaId);
 
     const objetivosFiltrados = objetivos.filter(o => o.clienteId === selCliente);
     const clienteObj         = clientes.find(c => c.id === selCliente);
@@ -195,6 +204,7 @@ export default function InformeNovedadScreen({ onBack }) {
             const ref = await addDoc(collection(db, "informes"), {
                 tipo:               "novedad",
                 codigo,
+                numero:             numeroInforme,
                 clienteId:          selCliente,
                 clienteNombre:      clienteObj?.nombre      || "",
                 objetivoId:         selObjetivo,
@@ -284,58 +294,53 @@ export default function InformeNovedadScreen({ onBack }) {
 
     return (
         <div className="in-root">
-            <header className="in-header">
-                <button className="in-back" onClick={onBack}>← Volver</button>
-                <span className="in-header-title">🚨 Informe de Novedad</span>
-            </header>
+            <div className="in-subpanel-top">
+                <button className="in-back" onClick={onBack}>← Volver al panel</button>
+                <div className="in-titulo">🚨 Informe de Novedad</div>
+            </div>
 
             <div className="in-body">
+                <div className="in-id-card">
+                    <div className="in-id-row">
+                        <span className="in-id-label">Nro. de informe</span>
+                        <span className="in-id-val in-id-val--num">{numeroInforme}</span>
+                    </div>
+                    <div className="in-id-row">
+                        <span className="in-id-label">Fecha</span>
+                        <span className="in-id-val">{fechaConfeccionIN}</span>
+                    </div>
+                    <div className="in-id-row">
+                        <span className="in-id-label">Creado por</span>
+                        <span className="in-id-val">{user?.name || "—"}</span>
+                    </div>
+                    <div className="in-id-row">
+                        <span className="in-id-label">Cliente</span>
+                        <select className="in-id-select" value={selCliente}
+                            onChange={e => { setSelCliente(e.target.value); setSelObjetivo(""); }}>
+                            <option value="">— Seleccioná —</option>
+                            {clientes.map(c => <option key={c.id} value={c.id}>{c.codigo ? `${c.codigo} · ` : ""}{c.nombre}</option>)}
+                        </select>
+                    </div>
+                    <div className="in-id-row">
+                        <span className="in-id-label">Objetivo</span>
+                        <select className="in-id-select" value={selObjetivo}
+                            onChange={e => setSelObjetivo(e.target.value)}
+                            disabled={!selCliente}>
+                            <option value="">— Seleccioná —</option>
+                            {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{fmtObjetivo(o)}</option>)}
+                        </select>
+                    </div>
+                </div>
+
                 <div className="in-doc-title">INFORME DE NOVEDAD</div>
                 <div className="in-empresa-sub">{empresaNombre}</div>
 
                 {/* ── 1. Datos generales ── */}
                 <Seccion numero="1" titulo="Datos generales">
-                    {/* Confección readonly */}
-                    <div className="in-confeccion-row">
-                        <div className="in-confeccion-field">
-                            <span className="in-label">Producido por</span>
-                            <span className="in-readonly-val">{user?.name || "—"}</span>
-                        </div>
-                        <div className="in-confeccion-field">
-                            <span className="in-label">Fecha confección</span>
-                            <span className="in-readonly-val">{fechaConfeccionIN}</span>
-                        </div>
-                        <div className="in-confeccion-field">
-                            <span className="in-label">Hora</span>
-                            <span className="in-readonly-val">{horaConfeccionIN}</span>
-                        </div>
-                    </div>
-
-                    {/* Cliente */}
-                    <Field label="Cliente">
-                        <select className="in-input in-select"
-                            value={selCliente}
-                            onChange={e => { setSelCliente(e.target.value); setSelObjetivo(""); setSelPuesto(""); }}>
-                            <option value="">— Seleccioná cliente —</option>
-                            {clientes.map(c => <option key={c.id} value={c.id}>{c.codigo ? `${c.codigo} · ` : ""}{c.nombre}</option>)}
-                        </select>
+                    <Field label="Fecha del hecho" small>
+                        <input className="in-input" type="date" value={datos.fecha}
+                            onChange={e => setDatos(d => ({ ...d, fecha: e.target.value }))} />
                     </Field>
-
-                    <div className="in-row2">
-                        <Field label="Servicio / Objetivo">
-                            <select className="in-input in-select"
-                                value={selObjetivo}
-                                onChange={e => setSelObjetivo(e.target.value)}
-                                disabled={!selCliente}>
-                                <option value="">— Seleccioná objetivo —</option>
-                                {objetivosFiltrados.map(o => <option key={o.id} value={o.id}>{fmtObjetivo(o)}</option>)}
-                            </select>
-                        </Field>
-                        <Field label="Fecha del hecho" small>
-                            <input className="in-input" type="date" value={datos.fecha}
-                                onChange={e => setDatos(d => ({ ...d, fecha: e.target.value }))} />
-                        </Field>
-                    </div>
 
                     {objetivoObj && (
                         <div className="in-row2">

@@ -23,11 +23,11 @@ const CAMPOS = [
     { key: "centroCosto",  label: "Centro de costo",                  type: "text"   },
     { key: "cuil",         label: "CUIL",                             type: "text"   },
     { key: "regimen",      label: "Régimen",                          type: "select", opts: ["", "4 x 2 x 12", "5 x 2 x 12", "6 x 1 x 8", "12 x 36", "14 x 14 x 12", "14 x 14 x 8", "200"] },
-    { key: "grupoTurno14", label: "Grupo Turno 14×14",                type: "select", opts: ["", "3", "4"] },
+    { key: "grupoTurno14", label: "Grupo Turno 14×14",                type: "select", opts: ["", "A", "B"] },
 ];
 
 export default function EditarPersonalScreen({ onBack }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
     const [todos,        setTodos]        = useState([]);
     const [loading,      setLoading]      = useState(true);
     const [busqueda,     setBusqueda]     = useState("");
@@ -40,7 +40,7 @@ export default function EditarPersonalScreen({ onBack }) {
         const cargar = async () => {
             try {
                 const snap = await getDocs(
-                    query(collection(db, "legajos"), where("empresa", "==", empresaNombre))
+                    query(collection(db, "legajos"), where("empresaId", "==", empresaId))
                 );
                 const docs = snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
                 // Dedup por legajo

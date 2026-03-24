@@ -3,6 +3,7 @@ import { useState } from "react";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import { MODULOS_DEF } from "../../config/roles";
+import { setupEmpresa } from "../../utils/setupEmpresa";
 
 export const MODULOS_DEFAULT = Object.fromEntries(
     MODULOS_DEF.flatMap(g => g.modulos.map(m => [m.key, true]))
@@ -25,10 +26,14 @@ export default function ModalNuevaEmpresa({ onCrear, onCerrar }) {
             const ref = doc(db, "empresas", id);
             await setDoc(ref, {
                 nombre,
-                activo:   true,
-                modulos:  MODULOS_DEFAULT,
-                creadoEn: serverTimestamp(),
+                activo:      true,
+                plan:        "starter",
+                vencimiento: null,
+                modulos:     MODULOS_DEFAULT,
+                creadoEn:    serverTimestamp(),
             });
+            // Inicializar estructura de datos vacía para la empresa
+            await setupEmpresa(id, nombre, MODULOS_DEFAULT);
             onCrear({ id, nombre, activo: true, modulos: MODULOS_DEFAULT });
         } catch (e) {
             setError("Error: " + e.message);

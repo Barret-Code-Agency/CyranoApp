@@ -1,6 +1,6 @@
 // src/screens/SuperAdminScreen.jsx
 import { useState, useEffect } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import PanelEmpresas      from "./superadmin/PanelEmpresas";
@@ -33,6 +33,23 @@ export default function SuperAdminScreen({ onExit }) {
     const [stats,       setStats]       = useState({
         empresas: "…", usuarios: "…", contratos: "…", alertas: 0,
     });
+
+    // Asegurar que el super_admin tenga doc en /usuarios
+    useEffect(() => {
+        if (!user?.uid) return;
+        getDoc(doc(db, "usuarios", user.uid)).then(snap => {
+            if (!snap.exists()) {
+                setDoc(doc(db, "usuarios", user.uid), {
+                    nombre:    user.name  || user.email || "Super Admin",
+                    email:     user.email || "",
+                    rol:       "super_admin",
+                    activo:    true,
+                    creadoEn:  serverTimestamp(),
+                    ultimoAcceso: null,
+                }).catch(() => {});
+            }
+        }).catch(() => {});
+    }, [user?.uid]);
 
     useEffect(() => {
         const fetchStats = async () => {

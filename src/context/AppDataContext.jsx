@@ -10,6 +10,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import { db } from "../firebase";
+import { otorgarTokens, tokensParaCapacitacion } from "../utils/tokenService";
 
 // ── localStorage helpers (solo para config y sesión activa) ──────────────────
 const load = (key, fallback) => {
@@ -31,98 +32,22 @@ export const clasificarControl = (horaInicio, fechaISO) => {
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 const DEFAULT_CONFIG = {
-    supervisorEmail: "supervisor@empresa.com",
-    vehiculos: [
-        "Prisma AC 349 CR","Prisma AC 349 CZ","Prisma AC 360 WC",
-        "Corolla OPR 557","Corolla AC 349 CQ","Corolla AC 349 CS",
-        "Hilux AF 373 JP","Hilux AF 967 YA","Hilux AF 295 SB","Hilux AG 220 JI",
-    ],
-    objetivos: [
-        "Reginald Lee Ranelagh General","Reginald Lee Lobos","Reginald Lee La Plata",
-        "Reginald Lee Mar del Plata","Reginald Lee Ranelagh Puesto 1",
-        "Reginald Lee Ranelagh Puesto 2","Reginald Lee Ranelagh Puesto 4",
-        "Reginald Lee Ranelagh Puesto 7","Reginald Lee Ranelagh Puesto 8",
-        "Reginald Lee Ranelagh Encargados","Reginald Lee Ranelagh Rondín",
-        "Pergamino","Móvil","Berón de Astrada",
-        "Ovnisa Berazategui","Cerro Moro",
-        "PAS Puesto 1","PAS Puesto 2","PAS Puesto 3","PAS Puesto 4",
-        "PAS Naty","PAS CCTV Gral.","PAS CCTV Fundicion",
-        "PAS Encargados","PAS Administrativa","PAS Supervisor",
-        "PAS Patrulla Chofer","PAS Patrulla Vehiculo",
-    ],
+    supervisorEmail: "",
+    vehiculos:       [],
+    objetivos:       [],
     tiposActividad: [
         "Reparaciones (taller)","Traslado de personal","Traslado de elementos",
         "Tareas administrativas","Análisis de vulnerabilidades","Análisis de riesgos",
-        "Atención de reclamos","Visita Gremial","Almuerzo/Cena","Otras actividades",
+        "Atención de reclamos","Reunión con cliente","Visita Gremial","Almuerzo/Cena","Otras actividades",
     ],
-    vigiladores: [
-        "Acevedo Fernando Matias","Acuña Nahuel Gonzalo","Aedo Cinthia Anahi","Aguirre Enrique Andres",
-        "Agullo Rodriguez Luciano Adrian","Agüero Farias Maria Elizabeth","Albarenga Braian Martin","Almada Cristian Daniel",
-        "Almiron Walter Dario","Amaya Cristian Armando","Arias Marcelo Fabian","Arnaudo Juan",
-        "Avila Alejandro Mauricio","Becerra Hector Rafael","Bello Gustavo Norberto","Benitez Gustavo",
-        "Blanco Claudio Lujan","Blanco Cristian Abraham","Bordon Soledad Del Valle","Bozzo Antonio",
-        "Busto Lucas Abraham","Caballero Adrian Marcelo","Caceres Juan Jose","Caceres Rocio Belen",
-        "Calvente Blas Leonardo","Campero Jose Damian","Campos Maximiliano Hernan","Campuzano Walter David",
-        "Canelas Damian","Carpio Gloria Victoria","Casas Carlos David","Castellano Sergio Armando",
-        "Castro Antonio Horacio","Cejas Maria Paula","Centeno Patricia Brenda","Chacoma Sergio Raul",
-        "Coman Julio Ismael","Constancio Damian Nahuel","Copa Ana Paula","Correa Daniel Sebastian",
-        "Coscueta Gustavo Walter","Cugliari Hernan Gabriel","Deramo Nicolas Mario","Dias Dana Lucia",
-        "Diaz Jonathan Javier","Dos Santos Claudio Hernan Anibal","Duarte Diego Martin","Duarte Tiago Marcelo Ezequiel",
-        "Espindola Sergio Walter","Fernandez Alejandro Daniel","Fernandez Cecilia","Fernandez Luis Martin",
-        "Funes Gabriela Edith","Garcia Miguel Angel","Godoy Fernando Miguel","Gonzalez Carla Jacqueline",
-        "Gonzalez Roberto Antonio","Gordillo Gerardo Agustin","Guiñez Duarte Cesar Daniel","Gutierrez Marcos Jose",
-        "Herrera Carlos Alejandro","Herrera Gonzalo Ezequiel","Jara Elio Matias","Juarez Luis Manuel",
-        "Julio Paola Gimena","Karbovniczek Jose Pedro","Kloster Rafael Alberto","Kuc Paulo Emanuel",
-        "Lagorio Brian","Ledesma Matias Ezequiel","Lencina Mario Antonio","Limenza Gelma Rodolfo Federico",
-        "Lobosco Cristian Ivan","Lopez Hugo Gerardo","Lopez Manuel Alejandro","Lopez Marcelo Daniel",
-        "Lopez Mario Vicente","Lopez Sergio Alberto","Luna Morales Mayra Liset","Marcial Erica Marcela",
-        "Marin Mario Javier","Martinez David","Martinez Sergio Ivan","Mata Raul Alberto",
-        "Medina Javier","Mercado Erick Leonardo","Messina Jessica Adriana","Montivero Emanuel Antonio",
-        "Morel Fabian Celestino","Morinigo Jose","Moro Cristian Eduardo","Navarro Manuel Francisco",
-        "Nieto Claudio Martin","Nuñez Alejo Ismael","Nuñez Francisco Diego","Ortiz Daniel",
-        "Oyarzo Sanchez Miguel Alejandro","Pedraza Juan Manuel","Pereira Carmen Gabriela","Petrucci Jose Ruben",
-        "Pintos Alexis Emmanuel","Quintana Victor Hugo","Quintas Horacio Gabriel","Quinteros Walter Omar",
-        "Quiroga Dana Micaela Yasmin","Racedo Julio Dante","Revilla Rodriguez Hugo Alexander","Reynoso Gustavo Alejandro",
-        "Rios Adriel Guillermo Oscar","Rios Francisco Daniel","Rivarola Lucas Fernando","Rivero Giuliana Daniela",
-        "Rodriguez Luciano Matias","Rodriguez Luis Alberto","Rodriguez Patricia Elizabet","Rojas Oscar Osvaldo",
-        "Rolon Santiago Ramon","Romero Ciccioli Daniel Matias Ezequiel","Romero Jorge Rafael","Romero Leandro Fabian",
-        "Romero Sebastian Eduardo","Ruiz Belen De Los Angeles","Ruiz Eber Juan","Santana Ezequiel Matias",
-        "Segura Diego Gabriel","Suano Javier Nestor","Torres Gustavo Adolfo","Troncoso Evelyn Beatriz",
-        "Tudesco Jose Luis Alberto","Ubillos Agustin Sebastian","Ugartemendia Nahuel Cruz","Varela Francisco Antonio",
-        "Vega Franco Eduardo","Velazquez Carlos Alberto","Velazquez Claudio Ernesto","Villa Alberto Matias",
-        "Villafañe Carlos Maximiliano","Villagra Emanuel Francisco","Vizgarra Marcelo Enrique","Zakovicz Jorge Ruben",
-        "Zuñiga Nery Agustin",
-    ],
-    supervisores: [
-        "Fernando Delgado","Juan Hrchan","Horacio Quintas",
-        "Rodolfo Girelli","Ignacio Alvarez","Rolando Zuñiga","Andres Aguirre",
-    ],
+    vigiladores:  [],
+    supervisores: [],
 };
 
-const DEFAULT_PLAN = [
-    { objetivo: "Pergamino",                          visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "Móvil",                              visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "Berón de Astrada",                   visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "Ovnisa Berazategui",                 visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "Reginald Lee Ranelagh General",      visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "Reginald Lee Ranelagh Rondín",       visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "Cerro Moro",                         visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Puesto 1",                       visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Puesto 2",                       visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Puesto 3",                       visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Puesto 4",                       visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Naty",                           visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS CCTV Gral.",                     visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS CCTV Fundicion",                 visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Encargados",                     visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Administrativa",                 visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Supervisor",                     visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Patrulla Chofer",                visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-    { objetivo: "PAS Patrulla Vehiculo",              visitasPorSemana: 1, restriccion: "1 fin de semana + 1 nocturna por mes" },
-];
+const DEFAULT_PLAN = [];
 
 // ── Fallback de empresa para usuarios sin empresaId asignado ─────────────────
-const EMPRESA_ID_FALLBACK = "brinks_ar";
+const EMPRESA_ID_FALLBACK = "default";
 
 const AppDataContext = createContext(null);
 
@@ -141,8 +66,10 @@ export function AppDataProvider({ children, uid }) {
     const [dbReady,       setDbReady]       = useState(false);
     const [dbError,       setDbError]       = useState(null);
     const [empresaLogos,   setEmpresaLogos]   = useState({ splash: null, panel: null });
-    const [empresaNombre,  setEmpresaNombre]  = useState("Brinks");
+    const [empresaNombre,  setEmpresaNombre]  = useState("");
     const [empresaModulos, setEmpresaModulos] = useState(null);
+    const [empresaActiva,  setEmpresaActiva]  = useState(true);  // false = suscripción vencida/desactivada
+    const [userZona,       setUserZona]       = useState(null); // null = sin restricción
 
     // Ref para que las funciones de escritura accedan al empresaId actual sin stale closure
     const empresaIdRef = useRef(EMPRESA_ID_FALLBACK);
@@ -166,13 +93,25 @@ export function AppDataProvider({ children, uid }) {
                 return;
             }
 
-            // Resolver empresaId del usuario antes de abrir suscripciones
-            getDoc(doc(db, "usuarios", firebaseUser.uid)).then(userSnap => {
+            // Suscripción en tiempo real al doc del usuario para detectar cambios de empresaId
+            let suscripcionIniciada = false;
+            const unsubUser = onSnapshot(doc(db, "usuarios", firebaseUser.uid), (userSnap) => {
                 const empresaId = userSnap.exists()
                     ? (userSnap.data().empresaId ?? EMPRESA_ID_FALLBACK)
                     : EMPRESA_ID_FALLBACK;
+                const zona = userSnap.exists() ? (userSnap.data().zona || null) : null;
+                setUserZona(zona);
+
+                // Si empresaId cambió (ej: migración externa), forzar recarga de suscripciones
+                if (suscripcionIniciada && empresaIdRef.current !== empresaId) {
+                    empresaIdRef.current = empresaId;
+                    // Recargar la página para reiniciar suscripciones con el nuevo empresaId
+                    window.location.reload();
+                    return;
+                }
 
                 empresaIdRef.current = empresaId;
+                suscripcionIniciada = true;
 
         const unsubs = [];
         let ready = 0;
@@ -194,6 +133,11 @@ export function AppDataProvider({ children, uid }) {
                     });
                     if (d.nombre)  setEmpresaNombre(d.nombre);
                     setEmpresaModulos(d.modulos ?? null);
+                    // Control de suscripción
+                    const vencida = d.vencimiento
+                        ? d.vencimiento.toDate?.() < new Date()
+                        : false;
+                    setEmpresaActiva(d.activo !== false && !vencida);
                 }
             ));
         } catch {
@@ -286,10 +230,11 @@ export function AppDataProvider({ children, uid }) {
         } catch (e) { /* usa DEFAULT_CONFIG */ }
 
             unsubs.forEach(u => u && unsubFirestore.push(u));
-            }).catch(err => {
-                console.error("[AppData] getDoc usuario:", err);
+            }, (err) => {
+                console.error("[AppData] onSnapshot usuario:", err);
                 setDbReady(true);
             });
+            unsubFirestore.push(unsubUser);
         });
 
         return () => {
@@ -424,6 +369,11 @@ export function AppDataProvider({ children, uid }) {
         const completa = { ...actividadActiva, ...datosFin, estado: "completada", finalizadaEn: new Date().toISOString() };
         setJornadaActiva((p) => ({ ...p, actividades: [...(p.actividades || []), completa] }));
         setActividadActiva(null);
+        // Otorgar tokens por capacitación completada
+        if (actividadActiva.tipo === "cap" && uid && empresaIdRef.current) {
+            const cantidad = tokensParaCapacitacion(actividadActiva.horaInicio, datosFin.horaFin);
+            otorgarTokens(uid, empresaIdRef.current, cantidad, "Capacitación completada").catch(console.error);
+        }
     };
 
     const cancelarActividad = () => setActividadActiva(null);
@@ -460,7 +410,6 @@ export function AppDataProvider({ children, uid }) {
                     await addDoc(collection(db, "jornadas"), { ...j, empresaId: empresaIdRef.current });
                 }
                 save("cyrano_jornadas_pendientes", []);
-                console.log("[Sync] Jornadas pendientes subidas:", pendientes.length);
             } catch (err) {
                 console.warn("[Sync] No se pudieron subir pendientes:", err);
             }
@@ -490,6 +439,8 @@ export function AppDataProvider({ children, uid }) {
             empresaLogos,
             empresaNombre,
             empresaModulos,
+            empresaActiva,
+            userZona,
         }}>
             {children}
         </AppDataContext.Provider>

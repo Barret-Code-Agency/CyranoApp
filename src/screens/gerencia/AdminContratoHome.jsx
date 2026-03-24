@@ -1,11 +1,14 @@
 // src/screens/gerencia/AdminContratoHome.jsx
 // Pantalla de inicio del Administrador de Contrato
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "../../firebase";
+import { MESES_ES, DIAS_ES, fmtKey } from "../../utils/periodoUtils";
+import { useWhatsApp } from "../../hooks/useWhatsApp";
+import { buildResumenDiario } from "../../utils/whatsapp";
 import { useAuth }             from "../../context/AuthContext";
 import { useAppData }          from "../../context/AppDataContext";
-import AdminScreen              from "../AdminScreen";
-import UsersScreen              from "../UsersScreen";
 import PlantillasRondaScreen   from "../shared/PlantillasRondaScreen";
 import MonitorRondasScreen     from "../shared/MonitorRondasScreen";
 import VerInformesScreen          from "../../forms/VerInformesScreen";
@@ -15,26 +18,123 @@ import VerProcedimientosScreen    from "../../forms/VerProcedimientosScreen";
 import SubirProcedimientoScreen   from "../../forms/SubirProcedimientoScreen";
 import VerCapacitacionesScreen    from "../../forms/VerCapacitacionesScreen";
 import SubirCapacitacionScreen    from "../../forms/SubirCapacitacionScreen";
-import GestionClientesScreen   from "../administrativo/GestionClientesScreen";
-import GestionPersonalScreen   from "../administrativo/GestionPersonalScreen";
 import DashboardPersonalScreen  from "../administrativo/DashboardPersonalScreen";
 import GestionDatosAdminScreen    from "../administrativo/GestionDatosAdminScreen";
 import DashboardsGestionScreen    from "./DashboardsGestionScreen";
 import PlanCapacitacionScreen          from "../shared/PlanCapacitacionScreen";
 import { VistaTurnos, ProgramacionTodos } from "../shared/ProgramacionServiciosScreen";
+import ImportarRealesPanel           from "../shared/ImportarRealesPanel";
 import ConsolidadoScreen             from "../shared/ConsolidadoScreen";
 import FacturacionScreen             from "./FacturacionScreen";
 import AnalisisHorasPASScreen        from "./AnalisisHorasPASScreen";
 import Diagramas14x14Screen          from "../shared/Diagramas14x14Screen";
 import ControlClienteScreen          from "../shared/ControlClienteScreen";
-import GestionUsuariosScreen         from "./GestionUsuariosScreen";
+import GestionPremiosScreen          from "./GestionPremiosScreen";
+import AdminScreen                   from "../AdminScreen";
 import { tieneAcceso }               from "../../config/roles";
 import AppHeader                     from "../../components/AppHeader";
 import "../../styles/SupervisorHome.css";
 import "../../styles/ConsolidadoScreen.css";
 
-const MESES_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-                  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+function CalendarioSemanal({ actividades = {}, legajos = [] }) {
+    const hoy    = new Date();
+    const hoyKey = fmtKey(hoy);
+    const [selKey, setSelKey] = useState(hoyKey);
+    const [sending, setSending] = useState(false);
+    const [waSent,  setWaSent]  = useState(false);
+    const { configurado, enviar } = useWhatsApp();
+
+    const dias = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(hoy); d.setDate(hoy.getDate() + i); return d;
+    });
+
+    const cumplesPorKey = {};
+    legajos.forEach(p => {
+        if (!p.nacimiento) return;
+        const [dd, mm] = p.nacimiento.split("/").map(Number);
+        dias.forEach(d => {
+            if (d.getDate() === dd && d.getMonth() + 1 === mm) {
+                const key = fmtKey(d);
+                const ap = (p.nombre || "").trim().split(" ")[0];
+                cumplesPorKey[key] = [...(cumplesPorKey[key] || []), ap];
+            }
+        });
+    });
+
+    const selDate  = new Date(selKey + "T12:00:00");
+    const selActs  = actividades[selKey] ?? [];
+    const selCumps = cumplesPorKey[selKey] ?? [];
+
+    return (
+        <div className="sh-calendario">
+            <div className="sh-cal-title">📅 Actividades de la semana</div>
+            <div className="sh-cal-strip">
+                {dias.map(d => {
+                    const key  = fmtKey(d);
+                    const acts = actividades[key] ?? [];
+                    return (
+                        <button key={key}
+                            className={`sh-cal-dia ${key === hoyKey ? "sh-cal-dia--hoy" : ""} ${key === selKey ? "sh-cal-dia--sel" : ""}`}
+                            onClick={() => setSelKey(key)}
+                        >
+                            <span className="sh-cal-dayname">{DIAS_ES[d.getDay()]}</span>
+                            <span className="sh-cal-daynum">{d.getDate()}</span>
+                            <div className="sh-cal-dia-acts">
+                                {acts.map((a, i) => (
+                                    <span key={i} className={`sh-cal-dia-chip sh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.label}</span>
+                                ))}
+                                {(cumplesPorKey[key] || []).map((ap, i) => (
+                                    <span key={`c${i}`} className="sh-cal-dia-chip sh-cal-dia-chip--cumple">🎂 {ap}</span>
+                                ))}
+                                {acts.length === 0 && !cumplesPorKey[key] && <span className="sh-cal-dia-empty">—</span>}
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+            <div className="sh-cal-detail">
+                <div className="sh-cal-detail-fecha">
+                    {DIAS_ES[selDate.getDay()]} {selDate.getDate()} de {MESES_ES[selDate.getMonth()]}
+                    {selKey === hoyKey && <span className="sh-cal-hoy-badge">Hoy</span>}
+                </div>
+                {selActs.length === 0 && selCumps.length === 0 ? (
+                    <div className="sh-cal-empty">Sin actividades programadas</div>
+                ) : (
+                    <div className="sh-cal-acts">
+                        {selActs.map((a, i) => (
+                            <div key={i} className={`sh-cal-act sh-cal-act--${a.tipo ?? "default"}`}>
+                                {a.hora && <span className="sh-cal-act-hora">{a.hora}</span>}
+                                <span className="sh-cal-act-label">{a.label}</span>
+                            </div>
+                        ))}
+                        {selCumps.map((ap, i) => (
+                            <div key={`c${i}`} className="sh-cal-act sh-cal-act--cumple">
+                                <span className="sh-cal-act-hora">🎂</span>
+                                <span className="sh-cal-act-label">Cumpleaños de {ap}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {configurado && (
+                    <button
+                        className="sh-cal-wa-btn"
+                        disabled={sending || waSent}
+                        onClick={async () => {
+                            setSending(true);
+                            const selDate = new Date(selKey + "T12:00:00");
+                            await enviar(buildResumenDiario(selDate, selActs, selCumps));
+                            setSending(false); setWaSent(true);
+                            setTimeout(() => setWaSent(false), 4000);
+                        }}
+                    >
+                        {waSent ? "✅ Enviado" : sending ? "Enviando…" : "📱 Enviar por WhatsApp"}
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
 
 function PeriodoCard({ icono, titulo, onVer }) {
     const hoy = new Date();
@@ -117,24 +217,10 @@ const MODULOS = [
         color:  "blue",
     },
     {
-        id:     "asig_personal",
-        icon:   "👥",
-        titulo: "Asignación de personal",
-        desc:   "Asigná vigiladores a los puestos del contrato",
-        color:  "blue",
-    },
-    {
         id:     "rondas_monitor",
         icon:   "📡",
         titulo: "Monitor de Rondas",
         desc:   "Ver resultados, mapa y cumplimiento en tiempo real",
-        color:  "blue",
-    },
-    {
-        id:     "gestion_clientes",
-        icon:   "🏢",
-        titulo: "Gestión de Clientes",
-        desc:   "Cargá clientes, objetivos y puestos con dirección y teléfono",
         color:  "blue",
     },
     {
@@ -173,35 +259,48 @@ const MODULOS = [
         color:  "gold",
     },
     {
-        id:     "gestion_usuarios",
-        icon:   "👤",
-        titulo: "Gestión de Usuarios",
-        desc:   "Alta, baja y permisos de los usuarios de la empresa",
+        id:     "gestion_premios",
+        icon:   "🎁",
+        titulo: "Premios y Tokens",
+        desc:   "Catálogo de premios y aprobación de canjes del personal",
         color:  "blue",
     },
 ];
 
 export default function AdminContratoHome({ onExit }) {
     const { user, logout }                              = useAuth();
-    const { empresaModulos } = useAppData();
-    const [seccion, setSeccion]           = useState(null);
-    const [subSeccion, setSubSeccion]     = useState(null);
-    const [periodoSel, setPeriodoSel]     = useState(null);
+    const { empresaModulos, empresaId, data, userZona } = useAppData();
+    const [seccion, setSeccion]               = useState(null);
+    const [subSeccion, setSubSeccion]         = useState(null);
+    const [periodoSel, setPeriodoSel]         = useState(null);
+    const [consolidadoFull, setConsolidadoFull] = useState(false);
 
     const handleLogout = async () => { await logout(); onExit?.(); };
 
-    const renderHeader = () => <AppHeader onLogout={handleLogout} />;
+    const [legajos, setLegajos] = useState([]);
+    useEffect(() => {
+        if (!empresaId) return;
+        getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId)))
+            .then(snap => setLegajos(snap.docs.map(d => d.data())))
+            .catch(err => console.error("Error cargando legajos:", err));
+    }, [empresaId]);
+
+    const modActivo   = MODULOS.find(m => m.id === seccion);
+    const subline     = seccion
+        ? `${modActivo?.icon ?? ""} ${modActivo?.titulo ?? seccion}`.trim()
+        : "🏢 Gerencia de Operaciones";
+    const renderHeader = () => <AppHeader onLogout={handleLogout} subline={subline} />;
 
     const volverBtn = (onClick) => (
         <div style={{ padding: "1rem 1.5rem 0" }}>
-            <button className="sh-back-btn" onClick={onClick}>← Volver</button>
+            <button className="sh-back-btn" onClick={onClick}>← Volver al panel</button>
         </div>
     );
 
     // Muro de comunicación → submenú ver / crear
     if (seccion === "muro_comunicacion") {
-        if (subSeccion === "ver")   return <><AppHeader onLogout={handleLogout} /><VerComunicacionesScreen onBack={() => setSubSeccion(null)} /></>;
-        if (subSeccion === "crear") return <><AppHeader onLogout={handleLogout} /><CrearComunicacionScreen onBack={() => setSubSeccion(null)} /></>;
+        if (subSeccion === "ver")   return <div className="sh-root">{renderHeader()}<VerComunicacionesScreen onBack={() => setSubSeccion(null)} /></div>;
+        if (subSeccion === "crear") return <div className="sh-root">{renderHeader()}<CrearComunicacionScreen onBack={() => setSubSeccion(null)} /></div>;
         const MURO_MENUS = [
             { id: "ver",   icon: "📋", titulo: "Ver novedades y comunicaciones", desc: "Consultá las comunicaciones publicadas para el personal" },
             { id: "crear", icon: "✏️", titulo: "Crear comunicación",             desc: "Publicá una comunicación o novedad para todo el personal" },
@@ -209,15 +308,18 @@ export default function AdminContratoHome({ onExit }) {
         return (
             <div className="sh-root">
                 {renderHeader()}
-                {volverBtn(() => setSeccion(null))}
-                <div className="sh-grid">
-                    {MURO_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">📢 Muro de Comunicación y Novedades</div>
+                    <div className="sh-grid">
+                        {MURO_MENUS.map(m => (
+                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon">{m.icon}</span>
+                                <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -225,49 +327,55 @@ export default function AdminContratoHome({ onExit }) {
 
     // Muro de procedimientos → submenú ver / subir
     if (seccion === "muro_procedimientos") {
-        if (subSeccion === "ver")   return <><AppHeader onLogout={handleLogout} /><VerProcedimientosScreen  onBack={() => setSubSeccion(null)} /></>;
-        if (subSeccion === "subir") return <><AppHeader onLogout={handleLogout} /><SubirProcedimientoScreen onBack={() => setSubSeccion(null)} /></>;
+        if (subSeccion === "ver")   return <div className="sh-root">{renderHeader()}<div className="vh-subpanel"><button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button><div className="vh-subpanel-title">📋 Ver Procedimientos</div></div><VerProcedimientosScreen  onBack={() => setSubSeccion(null)} /></div>;
+        if (subSeccion === "subir") return <div className="sh-root">{renderHeader()}<div className="vh-subpanel"><button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button><div className="vh-subpanel-title">📤 Subir Procedimiento</div></div><SubirProcedimientoScreen onBack={() => setSubSeccion(null)} /></div>;
         const PROC_MENUS = [
-            { id: "ver",   icon: "📋", titulo: "Ver procedimientos",  desc: "Consultá los procedimientos operativos vigentes"     },
-            { id: "subir", icon: "📤", titulo: "Subir procedimiento", desc: "Publicá un nuevo procedimiento para el personal"     },
+            { id: "ver",   icon: "📋", titulo: "Ver procedimientos",  desc: "Consultá los procedimientos operativos vigentes" },
+            { id: "subir", icon: "📤", titulo: "Subir procedimiento", desc: "Publicá un nuevo procedimiento para el personal" },
         ];
         return (
             <div className="sh-root">
                 {renderHeader()}
-                {volverBtn(() => setSeccion(null))}
-                <div className="sh-grid">
-                    {PROC_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">📌 Muro de Procedimientos</div>
+                    <div className="sh-grid">
+                        {PROC_MENUS.map(m => (
+                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon">{m.icon}</span>
+                                <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
     }
 
-    // Capacitación → submenú cursos disponibles / subir
+    // Capacitación → submenú repositorio / subir
     if (seccion === "capacitacion") {
-        if (subSeccion === "ver")   return <><AppHeader onLogout={handleLogout} /><VerCapacitacionesScreen  onBack={() => setSubSeccion(null)} /></>;
-        if (subSeccion === "subir") return <><AppHeader onLogout={handleLogout} /><SubirCapacitacionScreen  onBack={() => setSubSeccion(null)} /></>;
+        if (subSeccion === "ver")   return <div className="sh-root">{renderHeader()}<div className="vh-subpanel"><button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button><div className="vh-subpanel-title">📚 Repositorio de Capacitaciones</div></div><VerCapacitacionesScreen  onBack={() => setSubSeccion(null)} /></div>;
+        if (subSeccion === "subir") return <div className="sh-root">{renderHeader()}<div className="vh-subpanel"><button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button><div className="vh-subpanel-title">📤 Subir Capacitación</div></div><SubirCapacitacionScreen  onBack={() => setSubSeccion(null)} /></div>;
         const CAP_MENUS = [
-            { id: "ver",   icon: "📋", titulo: "Cursos disponibles",  desc: "Consultá los cursos y materiales de formación"      },
-            { id: "subir", icon: "📤", titulo: "Subir capacitación",  desc: "Publicá un nuevo curso o material de entrenamiento" },
+            { id: "ver",   icon: "📚", titulo: "Ingresar al repositorio", desc: "Consultá los cursos y materiales de formación"      },
+            { id: "subir", icon: "📤", titulo: "Subir capacitación",      desc: "Publicá un nuevo curso o material de entrenamiento" },
         ];
         return (
             <div className="sh-root">
                 {renderHeader()}
-                {volverBtn(() => setSeccion(null))}
-                <div className="sh-grid">
-                    {CAP_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">🎓 Capacitación y Entrenamiento</div>
+                    <div className="sh-grid">
+                        {CAP_MENUS.map(m => (
+                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon">{m.icon}</span>
+                                <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -293,43 +401,25 @@ export default function AdminContratoHome({ onExit }) {
         );
     }
 
-    if (seccion === "gestion_clientes") {
-        return (
-            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
-                {renderHeader()}
-                <GestionClientesScreen onBack={() => setSeccion(null)} />
-            </div>
-        );
-    }
 
-    if (seccion === "asig_personal") {
-        return (
-            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
-                {renderHeader()}
-                <GestionPersonalScreen onBack={() => setSeccion(null)} />
-            </div>
-        );
-    }
 
     // Supervisión → AdminScreen completo
     if (seccion === "supervision") {
         return (
-            <div className="sh-supervision-wrapper">
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
-                {volverBtn(() => { setSeccion(null); setSubSeccion(null); })}
-                <div className="sh-section-title-bar">
-                    🔍 Supervisión — Plan, cumplimiento y carga
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">🔍 Supervisión — Plan, cumplimiento y carga</div>
                 </div>
-                <div className="sh-admin-content">
-                    <AdminScreen embedded onExit={() => setSeccion(null)} />
-                </div>
+                <AdminScreen onExit={() => setSeccion(null)} />
             </div>
         );
     }
 
     if (seccion === "informes") {
         return (
-            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+            <div className="vh-root">
                 {renderHeader()}
                 <VerInformesScreen onBack={() => setSeccion(null)} />
             </div>
@@ -343,36 +433,10 @@ export default function AdminContratoHome({ onExit }) {
                 <GestionDatosAdminScreen onBack={() => setSubSeccion(null)} canCreate={true} />
             </div>
         );
-        if (subSeccion === "usuarios") return (
-            <div className="sh-supervision-wrapper">
-                {renderHeader()}
-                {volverBtn(() => setSubSeccion(null))}
-                <div className="sh-section-title-bar">👤 Usuarios del sistema</div>
-                <div className="sh-admin-content">
-                    <UsersScreen />
-                </div>
-            </div>
-        );
-        const GESTION_MENUS = [
-            { id: "datos_operativos", icon: "🗄️", titulo: "Datos operativos", desc: "Legajos, clientes, objetivos, vehículos y más" },
-            { id: "usuarios",         icon: "👤", titulo: "Usuarios del sistema", desc: "Alta, baja y gestión de accesos al sistema" },
-        ];
         return (
-            <div className="sh-root">
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
-                {volverBtn(() => { setSeccion(null); setSubSeccion(null); })}
-                <div className="sh-grid">
-                    {GESTION_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info">
-                                <strong>{m.titulo}</strong>
-                                <small>{m.desc}</small>
-                            </div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
-                </div>
+                <GestionDatosAdminScreen onBack={() => { setSeccion(null); setSubSeccion(null); }} canCreate={true} />
             </div>
         );
     }
@@ -404,46 +468,44 @@ export default function AdminContratoHome({ onExit }) {
             return (
                 <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                     {renderHeader()}
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
+                    </div>
                     <PlanCapacitacionScreen onBack={() => setSubSeccion(null)} />
                 </div>
             );
         }
         if (subSeccion === "bs_as") {
             return (
-                <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                <div className="vh-root">
                     {renderHeader()}
-                    {volverBtn(() => setSubSeccion(null))}
-                    <div className="sh-proximamente">
-                        <div className="sh-proximamente-icon">🚧</div>
-                        <div className="sh-proximamente-titulo">Plan Bs As — Próximamente</div>
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">🏙️ Plan Buenos Aires</div>
+                        <div className="vh-coming-soon">Próximamente</div>
                     </div>
                 </div>
             );
         }
-        // Menú de zonas
         const ZONAS = [
-            { id: "santa_cruz", icon: "🏔️", titulo: "Plan Santa Cruz",   desc: "Plan anual de capacitación zona Patagonia", color: "blue" },
-            { id: "bs_as",      icon: "🏙️", titulo: "Plan Buenos Aires", desc: "Plan anual de capacitación zona Buenos Aires", color: "green" },
+            { id: "santa_cruz", icon: "🏔️", titulo: "Plan Santa Cruz",   desc: "Plan anual de capacitación zona Patagonia",    color: "blue"  },
+            { id: "bs_as",      icon: "🏙️", titulo: "Plan Buenos Aires", desc: "Plan anual de capacitación zona Buenos Aires",  color: "green" },
         ];
         return (
-            <div className="sh-supervision-wrapper">
+            <div className="vh-root">
                 {renderHeader()}
-                {volverBtn(() => { setSeccion(null); setSubSeccion(null); })}
-                <div className="sh-grid">
-                    {ZONAS.map(z => (
-                        <button
-                            key={z.id}
-                            className={`sh-modulo sh-modulo--${z.color}`}
-                            onClick={() => setSubSeccion(z.id)}
-                        >
-                            <span className="sh-modulo-icon">{z.icon}</span>
-                            <div className="sh-modulo-info">
-                                <strong>{z.titulo}</strong>
-                                <small>{z.desc}</small>
-                            </div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => { setSeccion(null); setSubSeccion(null); }}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">🎓 Plan de Capacitación</div>
+                    <div className="sh-grid">
+                        {ZONAS.map(z => (
+                            <button key={z.id} className={`sh-modulo sh-modulo--${z.color}`} onClick={() => setSubSeccion(z.id)}>
+                                <span className="sh-modulo-icon">{z.icon}</span>
+                                <div className="sh-modulo-info"><strong>{z.titulo}</strong><small>{z.desc}</small></div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -462,7 +524,7 @@ export default function AdminContratoHome({ onExit }) {
             { id: "analisis_pas",    icon: "📊", titulo: "Análisis de horas PAS",      desc: "Análisis de cobertura y horas por puesto del período", color: "blue" },
             { id: "importacion",     icon: "📥", titulo: "Importación de horarios",    desc: "Importación de horarios desde archivo externo",         color: "gold" },
         ];
-        const CON_PERIODO = ["programacion", "real", "vista", "diagramas14", "control_cliente", "facturacion", "analisis_pas"];
+        const CON_PERIODO = ["programacion", "real", "vista", "diagramas14", "control_cliente", "facturacion", "analisis_pas", "importacion"];
 
         // Items con selector de período
         if (subSeccion && CON_PERIODO.includes(subSeccion)) {
@@ -473,12 +535,11 @@ export default function AdminContratoHome({ onExit }) {
                 return (
                     <div className="sh-supervision-wrapper">
                         {renderHeader()}
-                        {volverBtn(() => setSubSeccion(null))}
-                        <PeriodoCard
-                            icono={item.icon}
-                            titulo={item.titulo}
-                            onVer={(a, m) => setPeriodoSel({ año: a, mes: m })}
-                        />
+                        <div className="vh-subpanel">
+                            <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
+                            <div className="vh-subpanel-title">{item.icon} {item.titulo}</div>
+                            <PeriodoCard icono={item.icon} titulo={item.titulo} onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                        </div>
                     </div>
                 );
             }
@@ -486,97 +547,59 @@ export default function AdminContratoHome({ onExit }) {
             // Paso 2: contenido con período seleccionado
             const { año, mes } = periodoSel;
             const volverPeriodo = () => setPeriodoSel(null);
+            const subpanelVolver = (
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={volverPeriodo}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">{item.icon} {item.titulo}</div>
+                </div>
+            );
 
-            if (subSeccion === "programacion") {
-                return (
-                    <div className="sh-supervision-wrapper sh-fullscreen">
-                        {renderHeader()}
-                        <div style={{ padding: "1rem 1.5rem 0" }}>
-                            <button className="sh-back-btn" onClick={volverPeriodo}>← Volver</button>
-                        </div>
-                        <ProgramacionTodos año={año} mes={mes} modo="programado" />
-                    </div>
-                );
-            }
-            if (subSeccion === "real") {
-                return (
-                    <div className="sh-supervision-wrapper sh-fullscreen">
-                        {renderHeader()}
-                        <div style={{ padding: "1rem 1.5rem 0" }}>
-                            <button className="sh-back-btn" onClick={volverPeriodo}>← Volver</button>
-                        </div>
-                        <ProgramacionTodos año={año} mes={mes} modo="real" />
-                    </div>
-                );
-            }
-            if (subSeccion === "vista") {
-                return (
-                    <div className="sh-supervision-wrapper sh-fullscreen">
-                        {renderHeader()}
-                        <div style={{ padding: "1rem 1.5rem 0" }}>
-                            <button className="sh-back-btn" onClick={volverPeriodo}>← Volver</button>
-                        </div>
-                        <VistaTurnos año={año} mes={mes} />
-                    </div>
-                );
-            }
-            if (subSeccion === "diagramas14") {
-                return (
-                    <div className="sh-supervision-wrapper sh-fullscreen">
-                        {renderHeader()}
-                        <div style={{ padding: "1rem 1.5rem 0" }}>
-                            <button className="sh-back-btn" onClick={volverPeriodo}>← Volver</button>
-                        </div>
-                        <Diagramas14x14Screen onBack={volverPeriodo} />
-                    </div>
-                );
-            }
-            if (subSeccion === "control_cliente") {
-                return (
-                    <div className="sh-supervision-wrapper sh-fullscreen">
-                        {renderHeader()}
-                        <div style={{ padding: "1rem 1.5rem 0" }}>
-                            <button className="sh-back-btn" onClick={volverPeriodo}>← Volver</button>
-                        </div>
-                        <ControlClienteScreen año={año} mes={mes} />
-                    </div>
-                );
-            }
-            if (subSeccion === "facturacion") {
-                return (
-                    <div className="sh-supervision-wrapper">
-                        {renderHeader()}
-                        {volverBtn(volverPeriodo)}
-                        <div className="sh-admin-content">
-                            <FacturacionScreen año={año} mes={mes} onBack={volverPeriodo} />
-                        </div>
-                    </div>
-                );
-            }
-            if (subSeccion === "analisis_pas") {
-                return (
-                    <div className="sh-supervision-wrapper">
-                        {renderHeader()}
-                        {volverBtn(volverPeriodo)}
-                        <div className="sh-admin-content">
-                            <AnalisisHorasPASScreen año={año} mes={mes} />
-                        </div>
-                    </div>
-                );
-            }
-        }
-
-        // Importación — provisional, próximamente
-        if (subSeccion === "importacion") {
-            return (
+            if (subSeccion === "programacion") return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    {renderHeader()}{subpanelVolver}
+                    <ProgramacionTodos año={año} mes={mes} modo="programado" />
+                </div>
+            );
+            if (subSeccion === "real") return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    {renderHeader()}{subpanelVolver}
+                    <ProgramacionTodos año={año} mes={mes} modo="real" />
+                </div>
+            );
+            if (subSeccion === "vista") return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    {renderHeader()}{subpanelVolver}
+                    <VistaTurnos año={año} mes={mes} zonaFija={userZona} />
+                </div>
+            );
+            if (subSeccion === "diagramas14") return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    {renderHeader()}{subpanelVolver}
+                    <Diagramas14x14Screen onBack={volverPeriodo} />
+                </div>
+            );
+            if (subSeccion === "control_cliente") return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    {renderHeader()}{subpanelVolver}
+                    <ControlClienteScreen año={año} mes={mes} />
+                </div>
+            );
+            if (subSeccion === "facturacion") return (
                 <div className="sh-supervision-wrapper">
-                    {renderHeader()}
-                    {volverBtn(() => setSubSeccion(null))}
-                    <div className="sh-proximamente">
-                        <div className="sh-proximamente-icon">📥</div>
-                        <div className="sh-proximamente-titulo">Importación de horarios — Próximamente</div>
-                        <button className="sh-back-btn sh-back-btn--mt" onClick={() => setSubSeccion(null)}>← Volver</button>
-                    </div>
+                    {renderHeader()}{subpanelVolver}
+                    <FacturacionScreen año={año} mes={mes} onBack={volverPeriodo} />
+                </div>
+            );
+            if (subSeccion === "analisis_pas") return (
+                <div className="sh-supervision-wrapper">
+                    {renderHeader()}{subpanelVolver}
+                    <AnalisisHorasPASScreen año={año} mes={mes} />
+                </div>
+            );
+            if (subSeccion === "importacion") return (
+                <div className="sh-supervision-wrapper">
+                    {renderHeader()}{subpanelVolver}
+                    <ImportarRealesPanel año={año} mes={mes} />
                 </div>
             );
         }
@@ -584,9 +607,16 @@ export default function AdminContratoHome({ onExit }) {
         // Consolidado sin PeriodoCard (gestiona su propio período)
         if (subSeccion === "consolidado") {
             return (
-                <div className="sh-supervision-wrapper sh-fullscreen">
+                <div className={`sh-supervision-wrapper${consolidadoFull ? " sh-supervision-wrapper--full" : ""}`}>
                     {renderHeader()}
-                    <ConsolidadoScreen onBack={() => setSubSeccion(null)} />
+                    <div style={{ padding: "12px 16px" }}>
+                        <button className="vh-back" onClick={() => { setSubSeccion(null); setConsolidadoFull(false); }}>← Volver al panel</button>
+                    </div>
+                    <ConsolidadoScreen
+                        onBack={() => { setSubSeccion(null); setConsolidadoFull(false); }}
+                        onEnterGrilla={() => setConsolidadoFull(true)}
+                        onExitGrilla={() => setConsolidadoFull(false)}
+                    />
                 </div>
             );
         }
@@ -595,32 +625,29 @@ export default function AdminContratoHome({ onExit }) {
         return (
             <div className="sh-supervision-wrapper">
                 {renderHeader()}
-                {volverBtn(() => setSeccion(null))}
-                <div className="sh-grid">
-                    {TURNOS_MENUS.map(z => (
-                        <button
-                            key={z.id}
-                            className={`sh-modulo sh-modulo--${z.color}`}
-                            onClick={() => { setPeriodoSel(null); setSubSeccion(z.id); }}
-                        >
-                            <span className="sh-modulo-icon">{z.icon}</span>
-                            <div className="sh-modulo-info">
-                                <strong>{z.titulo}</strong>
-                                <small>{z.desc}</small>
-                            </div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => { setSeccion(null); setSubSeccion(null); setPeriodoSel(null); }}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">📅 Gestión de Horas</div>
+                    <div className="sh-grid">
+                        {TURNOS_MENUS.map(z => (
+                            <button key={z.id} className={`sh-modulo sh-modulo--${z.color}`} onClick={() => { setPeriodoSel(null); setSubSeccion(z.id); }}>
+                                <span className="sh-modulo-icon">{z.icon}</span>
+                                <div className="sh-modulo-info"><strong>{z.titulo}</strong><small>{z.desc}</small></div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
     }
 
-    if (seccion === "gestion_usuarios") {
+
+    if (seccion === "gestion_premios") {
         return (
-            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+            <div className="vh-root">
                 {renderHeader()}
-                <GestionUsuariosScreen onBack={() => setSeccion(null)} />
+                <GestionPremiosScreen onBack={() => setSeccion(null)} />
             </div>
         );
     }
@@ -629,12 +656,12 @@ export default function AdminContratoHome({ onExit }) {
     if (seccion) {
         const mod = MODULOS.find(m => m.id === seccion);
         return (
-            <div className="sh-root">
+            <div className="vh-root">
                 {renderHeader()}
-                {volverBtn(() => setSeccion(null))}
-                <div className="sh-subpanel">
-                    <div className="sh-subpanel-title">{mod.icon} {mod.titulo}</div>
-                    <div className="sh-coming-soon">Próximamente</div>
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">{mod?.icon} {mod?.titulo}</div>
+                    <div className="vh-coming-soon">Próximamente</div>
                 </div>
             </div>
         );
@@ -644,7 +671,7 @@ export default function AdminContratoHome({ onExit }) {
     return (
         <div className="sh-root">
             {renderHeader()}
-            <div className="sh-role-badge">🏢 Gerencia de Operaciones</div>
+            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} legajos={legajos} />
             <div className="sh-grid">
                 {MODULOS.map(m => {
                     const habilitado = tieneAcceso(empresaModulos, user, m.id);

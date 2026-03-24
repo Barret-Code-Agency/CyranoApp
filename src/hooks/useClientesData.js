@@ -5,18 +5,18 @@ import { useState, useEffect } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 
-export function useClientesData(empresa) {
+export function useClientesData(empresaId) {
     const [clientes,  setClientes]  = useState([]);
     const [objetivos, setObjetivos] = useState([]);
     const [cargando,  setCargando]  = useState(true);
 
     const cargar = async () => {
-        if (!empresa) { setCargando(false); return; }
+        if (!empresaId) { setCargando(false); return; }
         setCargando(true);
         try {
             const [csSnap, osSnap] = await Promise.all([
-                getDocs(query(collection(db, "clientes"),  where("empresa", "==", empresa))),
-                getDocs(query(collection(db, "objetivos"), where("empresa", "==", empresa))),
+                getDocs(query(collection(db, "clientes"),  where("empresaId", "==", empresaId))),
+                getDocs(query(collection(db, "objetivos"), where("empresaId", "==", empresaId))),
             ]);
             setClientes (csSnap.docs.map(d => ({ id: d.id, ...d.data() })));
             setObjetivos(osSnap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -27,7 +27,7 @@ export function useClientesData(empresa) {
         }
     };
 
-    useEffect(() => { cargar(); }, [empresa]);
+    useEffect(() => { cargar(); }, [empresaId]);
 
     return { clientes, objetivos, cargando, recargar: cargar };
 }

@@ -12,8 +12,8 @@ function norm(s) {
 }
 
 // Asigna grupoTurno14 en masa a los legajos que coincidan por nombre
-export async function seedAsignarGrupos(empresa) {
-    const snap = await getDocs(query(collection(db, "legajos"), where("empresa", "==", empresa)));
+export async function seedAsignarGrupos(empresaId) {
+    const snap = await getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId)));
     const legajos = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
 
     let ok = 0, noEncontrado = [];
@@ -31,14 +31,14 @@ export async function seedAsignarGrupos(empresa) {
     return { ok, noEncontrado };
 }
 
-export async function seedDiagramas14x14(empresa) {
+export async function seedDiagramas14x14(empresaId) {
     for (const grupo of GRUPOS_14x14) {
-        const docId = `PAS_${grupo.id}`;
+        const docId = `${empresaId}_${grupo.id}`;
         await setDoc(doc(db, "diagramas14x14", docId), {
-            empresa,
+            empresaId,
             grupo:   grupo.grupo,
             nombre:  grupo.nombre,
-            francos: [...new Set(grupo.francos)].sort(), // dedup + orden
+            francos: [...new Set(grupo.francos)].sort(),
         });
         console.log(`✓ Grupo ${grupo.grupo} guardado (${grupo.francos.length} francos)`);
     }

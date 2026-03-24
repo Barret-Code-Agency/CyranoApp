@@ -1,7 +1,8 @@
 // src/screens/superadmin/PanelMantenimiento.jsx
 import { useState } from "react";
-import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, writeBatch } from "firebase/firestore";
 import { db } from "../../firebase";
+import { correrMigracion } from "../../utils/migracionEmpresaId";
 
 // ── Colecciones a limpiar ─────────────────────────────────────────────────
 const COLECCIONES = [
@@ -197,14 +198,261 @@ function CardLimpiador({ col }) {
     );
 }
 
+// ── Migración forzada: pone empresaId a TODOS los docs sin él ──────────────
+const COLECCIONES_MIGRAR = [
+    "legajos","clientes","objetivos","vehiculos","supervisores","conductores",
+    "encargados","admins","informes","comunicaciones","procedimientos",
+    "capacitaciones","rondas","plantillasRonda","programacionServicios",
+    "diagramas14x14","ingresosTurno","planCapacitacion",
+];
+
+function PanelMigracionForzada() {
+    const [log,     setLog]     = useState([]);
+    const [running, setRunning] = useState(false);
+    const [done,    setDone]    = useState(false);
+
+    const addLog = (msg) => setLog(prev => [...prev, msg]);
+
+    const correr = async () => {
+        if (!window.confirm(
+            "¿Migración forzada?\n\n" +
+            "Asignará empresaId al PRIMER empresa activa a TODOS los documentos " +
+            "sin empresaId en 18 colecciones.\n" +
+            "Usá esto solo cuando hay UNA sola empresa en el sistema."
+        )) return;
+
+        setRunning(true); setLog([]); setDone(false);
+        try {
+            const empresasSnap = await getDocs(collection(db, "empresas"));
+            const empresa = empresasSnap.docs.find(d => d.data().activo !== false) || empresasSnap.docs[0];
+            if (!empresa) { addLog("❌ No hay empresas."); return; }
+            const empresaId = empresa.id;
+            addLog(`Empresa: ${empresaId} (${empresa.data().nombre || ""})`);
+
+            let totalActualizados = 0;
+            for (const colNombre of COLECCIONES_MIGRAR) {
+                const snap = await getDocs(collection(db, colNombre));
+                const sinId = snap.docs.filter(d => !d.data().empresaId);
+                if (sinId.length === 0) { addLog(`${colNombre}: ✅ ya migrada`); continue; }
+
+                let batch = writeBatch(db);
+                let en = 0;
+                for (const d of sinId) {
+                    batch.update(doc(db, colNombre, d.id), { empresaId });
+                    en++; totalActualizados++;
+                    if (en === 499) { await batch.commit(); batch = writeBatch(db); en = 0; }
+                }
+                if (en > 0) await batch.commit();
+                addLog(`${colNombre}: ${sinId.length} docs actualizados`);
+            }
+            addLog(`─────────────────────────────────`);
+            addLog(`✅ Total: ${totalActualizados} documentos con empresaId: "${empresaId}"`);
+            setDone(true);
+        } catch (e) {
+            addLog("❌ Error: " + e.message);
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    return (
+        <div className="sa-mant-card" style={{ marginBottom: "1.5rem", border: "2px solid #dc2626" }}>
+            <div style={{ padding: "1rem 1.25rem" }}>
+                <div className="sa-mant-card-title">⚡ Migración forzada: asignar empresaId a todo</div>
+                <div className="sa-mant-card-desc" style={{ marginBottom: "1rem" }}>
+                    Asigna <code>empresaId</code> a <strong>todos</strong> los documentos que no lo tienen, sin importar el campo <code>empresa</code>.
+                    Usar solo cuando hay <strong>una sola empresa</strong> en el sistema.
+                </div>
+                <button
+                    className={done ? "sa-ur-btn-cancel" : "sa-ur-btn-save"}
+                    style={{ background: done ? undefined : "#dc2626", marginBottom: log.length ? "1rem" : 0 }}
+                    onClick={correr}
+                    disabled={running}
+                >
+                    {running ? "Migrando…" : done ? "✅ Completado" : "⚡ Forzar migración"}
+                </button>
+                {log.length > 0 && (
+                    <div className="sa-mant-log">
+                        {log.map((l, i) => (
+                            <div key={i} className="sa-mant-log-line">
+                                <span className="sa-mant-log-ts">{new Date().toLocaleTimeString()}</span>{l}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ── Panel de migración empresaId ───────────────────────────────────────────
+function PanelMigracion() {
+    const [log,      setLog]      = useState([]);
+    const [running,  setRunning]  = useState(false);
+    const [done,     setDone]     = useState(false);
+
+    const addLog = (msg) => setLog(prev => [...prev, msg]);
+
+    const correr = async () => {
+        if (!window.confirm(
+            "¿Confirmar migración?\n\n" +
+            "Se agregará el campo empresaId a todos los documentos que no lo tengan.\n" +
+            "La operación es segura e idempotente (puede correrse más de una vez)."
+        )) return;
+
+        setRunning(true); setLog([]); setDone(false);
+        addLog("Iniciando migración de empresaId…");
+        try {
+            const resultados = await correrMigracion(addLog);
+            const totalMigrados = resultados.reduce((s, r) => s + (r.migrados ?? 0), 0);
+            const totalSinMapeo = resultados.reduce((s, r) => s + (r.sinMapeo ?? 0), 0);
+            addLog("─────────────────────────────────");
+            addLog(`Migración completa: ${totalMigrados} documentos actualizados, ${totalSinMapeo} sin mapeo.`);
+            setDone(true);
+        } catch (e) {
+            addLog("Error crítico: " + e.message);
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    return (
+        <div className="sa-mant-card" style={{ marginBottom: "2rem", border: "2px solid var(--color-warning, #f59e0b)" }}>
+            <div style={{ padding: "1rem 1.25rem" }}>
+                <div className="sa-mant-card-title">🔧 Migración: agregar empresaId a colecciones</div>
+                <div className="sa-mant-card-desc" style={{ marginBottom: "1rem" }}>
+                    Agrega el campo <code>empresaId</code> a todos los documentos que usan el campo legacy <code>empresa</code>.
+                    Necesario antes de activar las Firestore Security Rules. Idempotente — puede correrse múltiples veces.
+                </div>
+
+                <button
+                    className={done ? "sa-ur-btn-cancel" : "sa-ur-btn-save"}
+                    onClick={correr}
+                    disabled={running}
+                    style={{ marginBottom: log.length ? "1rem" : 0 }}
+                >
+                    {running ? "Migrando…" : done ? "✅ Migración completada — correr de nuevo" : "🚀 Correr migración"}
+                </button>
+
+                {log.length > 0 && (
+                    <div className="sa-mant-log">
+                        {log.map((l, i) => (
+                            <div key={i} className="sa-mant-log-line">
+                                <span className="sa-mant-log-ts">{new Date().toLocaleTimeString()}</span>{l}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ── Panel de migración de usuarios ─────────────────────────────────────────
+function PanelMigracionUsuarios() {
+    const [log,     setLog]     = useState([]);
+    const [running, setRunning] = useState(false);
+    const [done,    setDone]    = useState(false);
+
+    const addLog = (msg) => setLog(prev => [...prev, msg]);
+
+    const correr = async () => {
+        if (!window.confirm(
+            "¿Migrar usuarios?\n\n" +
+            "Se asignará empresaId a todos los usuarios que no lo tengan.\n" +
+            "Requiere que haya una sola empresa activa en el sistema."
+        )) return;
+
+        setRunning(true); setLog([]); setDone(false);
+        try {
+            // 1. Obtener empresas disponibles
+            const empresasSnap = await getDocs(collection(db, "empresas"));
+            const empresas = empresasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            addLog(`Empresas en sistema: ${empresas.map(e => e.id).join(", ")}`);
+
+            if (empresas.length === 0) {
+                addLog("❌ No hay empresas en Firestore. Creá una empresa primero.");
+                return;
+            }
+            if (empresas.length > 1) {
+                addLog("⚠️ Hay más de una empresa. Esta migración asigna la primera activa.");
+            }
+            const empresa = empresas.find(e => e.activo !== false) || empresas[0];
+            addLog(`Empresa destino: ${empresa.id} (${empresa.nombre || "sin nombre"})`);
+
+            // 2. Obtener usuarios sin empresaId
+            const usuariosSnap = await getDocs(collection(db, "usuarios"));
+            const sinEmpresa = usuariosSnap.docs.filter(d => !d.data().empresaId);
+            addLog(`Usuarios sin empresaId: ${sinEmpresa.length}`);
+
+            if (sinEmpresa.length === 0) {
+                addLog("✅ Todos los usuarios ya tienen empresaId.");
+                setDone(true);
+                return;
+            }
+
+            // 3. Actualizar en batches de 499
+            let batch = writeBatch(db);
+            let count = 0;
+            for (const d of sinEmpresa) {
+                batch.update(doc(db, "usuarios", d.id), { empresaId: empresa.id });
+                count++;
+                if (count % 499 === 0) { await batch.commit(); batch = writeBatch(db); }
+            }
+            if (count % 499 !== 0) await batch.commit();
+
+            addLog(`✅ ${count} usuarios actualizados con empresaId: "${empresa.id}".`);
+            setDone(true);
+        } catch (e) {
+            addLog("❌ Error: " + e.message);
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    return (
+        <div className="sa-mant-card" style={{ marginBottom: "1.5rem", border: "2px solid var(--color-primary, #6366f1)" }}>
+            <div style={{ padding: "1rem 1.25rem" }}>
+                <div className="sa-mant-card-title">👤 Migración: asignar empresaId a usuarios</div>
+                <div className="sa-mant-card-desc" style={{ marginBottom: "1rem" }}>
+                    Asigna <code>empresaId</code> a todos los usuarios que no lo tienen (creados antes de la migración multi-empresa).
+                    Necesario para que los usuarios existentes puedan ver los datos de su empresa.
+                </div>
+                <button
+                    className={done ? "sa-ur-btn-cancel" : "sa-ur-btn-save"}
+                    onClick={correr}
+                    disabled={running}
+                    style={{ marginBottom: log.length ? "1rem" : 0 }}
+                >
+                    {running ? "Migrando…" : done ? "✅ Completado — correr de nuevo" : "🚀 Migrar usuarios"}
+                </button>
+                {log.length > 0 && (
+                    <div className="sa-mant-log">
+                        {log.map((l, i) => (
+                            <div key={i} className="sa-mant-log-line">
+                                <span className="sa-mant-log-ts">{new Date().toLocaleTimeString()}</span>{l}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // ── Componente principal ───────────────────────────────────────────────────
 export default function PanelMantenimiento() {
     return (
         <div className="sa-mant">
             <div className="sa-usuarios-header">
                 <div className="sa-section-title">🛠️ Mantenimiento de base de datos</div>
-                <span className="sa-usuarios-count">Limpieza de duplicados por colección</span>
+                <span className="sa-usuarios-count">Migración y limpieza de duplicados</span>
             </div>
+
+            <PanelMigracionForzada />
+            <PanelMigracion />
+            <PanelMigracionUsuarios />
+
             <div className="sa-mant-instruccion">
                 Expandí cada colección, hacé clic en <strong>Analizar</strong> para detectar duplicados
                 y luego en <strong>Eliminar sobrantes</strong> para limpiarla. Se conserva siempre un registro por entrada.

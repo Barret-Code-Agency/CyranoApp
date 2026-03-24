@@ -5,6 +5,7 @@ import { db } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
 import { seedDiagramas14x14, seedAsignarGrupos } from "../../utils/seedFirestoreDiagramas";
 import { PERSONAS_POR_GRUPO } from "../../data/seedDiagramas14x14";
+import { MESES_CORTO as MESES_ES } from "../../utils/periodoUtils";
 import "./Diagramas14x14Screen.css";
 
 function normNombre(s) {
@@ -13,8 +14,7 @@ function normNombre(s) {
         .replace(/\s+/g, " ").trim();
 }
 
-const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-const DIAS_ES  = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];
+const DIAS_ES  = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];  // 2 letras — específico de este componente
 
 function fmtDate(iso) {
     const [y, m, d] = iso.split("-");
@@ -25,7 +25,7 @@ function getMesKey(iso) { return iso.slice(0, 7); } // "2026-03"
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Diagramas14x14Screen({ onBack }) {
-    const { empresaNombre } = useAppData();
+    const { empresaNombre, empresaId } = useAppData();
 
     const [grupos,    setGrupos]    = useState([]);   // [{id, grupo, nombre, francos:[]}]
     const [legajos,   setLegajos]   = useState([]);   // todos los legajos de la empresa
@@ -42,13 +42,13 @@ export default function Diagramas14x14Screen({ onBack }) {
 
     // ── Carga ────────────────────────────────────────────────────────────────
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         (async () => {
             setCargando(true);
             try {
                 const [gSnap, lSnap] = await Promise.all([
-                    getDocs(collection(db, "diagramas14x14")),
-                    getDocs(query(collection(db, "legajos"), where("empresa", "==", empresaNombre))),
+                    getDocs(query(collection(db, "diagramas14x14"), where("empresaId", "==", empresaId))),
+                    getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId))),
                 ]);
                 setGrupos(gSnap.docs.map(d => ({ docId: d.id, ...d.data() })));
                 setLegajos(lSnap.docs.map(d => ({ docId: d.id, ...d.data() })));
@@ -56,13 +56,13 @@ export default function Diagramas14x14Screen({ onBack }) {
                 setCargando(false);
             }
         })();
-    }, [empresaNombre]);
+    }, [empresaId]);
 
     // ── Seed inicial ─────────────────────────────────────────────────────────
     const handleSeed = async () => {
         if (!window.confirm("¿Cargar los diagramas 14x14 en Firestore? Solo hacer una vez.")) return;
         setSeeding(true);
-        await seedDiagramas14x14(empresaNombre);
+        await seedDiagramas14x14(empresaId);
         // recargar
         const snap = await getDocs(collection(db, "diagramas14x14"));
         setGrupos(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
@@ -74,9 +74,9 @@ export default function Diagramas14x14Screen({ onBack }) {
         if (!window.confirm("¿Asignar grupos 3 y 4 a los legajos según el diagrama oficial? Esto sobreescribe el campo grupoTurno14.")) return;
         setImporting(true);
         setImportRes(null);
-        const res = await seedAsignarGrupos(empresaNombre);
+        const res = await seedAsignarGrupos(empresaId);
         // recargar legajos
-        const snap = await getDocs(query(collection(db, "legajos"), where("empresa", "==", empresaNombre)));
+        const snap = await getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId)));
         setLegajos(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
         setImportRes(res);
         setImporting(false);
@@ -162,8 +162,6 @@ export default function Diagramas14x14Screen({ onBack }) {
         <div className="d14-root">
             {/* Header */}
             <header className="d14-header">
-                <button className="d14-back" onClick={onBack}>← Volver</button>
-                <div className="d14-header-title">Diagramas 14 × 14</div>
                 {grupos.length === 0 && (
                     <button className="d14-btn-seed" onClick={handleSeed} disabled={seeding}>
                         {seeding ? "Cargando..." : "⬆ Cargar datos iniciales"}
@@ -217,7 +215,7 @@ export default function Diagramas14x14Screen({ onBack }) {
                         })}
                         <div className="d14-resumen-fila d14-resumen-total">
                             <span>Total</span>
-                            <strong>{legajos.filter(l => l.grupoTurno14 === "3" || l.grupoTurno14 === "4").length}</strong>
+                            <strong>{legajos.filter(l => l.grupoTurno14 === "A" || l.grupoTurno14 === "B").length}</strong>
                         </div>
                     </div>
 

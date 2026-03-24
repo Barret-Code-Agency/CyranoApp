@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 
-export function usePersonalData(empresa) {
+export function usePersonalData(empresaId) {
     const [supervisores, setSupervisores] = useState([]);
     const [conductores,  setConductores]  = useState([]);
     const [encargados,   setEncargados]   = useState([]);
@@ -13,14 +13,14 @@ export function usePersonalData(empresa) {
     const [cargando,     setCargando]     = useState(true);
 
     const cargar = async () => {
-        if (!empresa) { setCargando(false); return; }
+        if (!empresaId) { setCargando(false); return; }
         setCargando(true);
         try {
             const [sSnap, vSnap, eSnap, aSnap] = await Promise.all([
-                getDocs(query(collection(db, "supervisores"), where("empresa", "==", empresa))),
-                getDocs(query(collection(db, "conductores"),  where("empresa", "==", empresa))),
-                getDocs(query(collection(db, "encargados"),   where("empresa", "==", empresa))),
-                getDocs(query(collection(db, "admins"),       where("empresa", "==", empresa))),
+                getDocs(query(collection(db, "supervisores"), where("empresaId", "==", empresaId))),
+                getDocs(query(collection(db, "conductores"),  where("empresaId", "==", empresaId))),
+                getDocs(query(collection(db, "encargados"),   where("empresaId", "==", empresaId))),
+                getDocs(query(collection(db, "admins"),       where("empresaId", "==", empresaId))),
             ]);
             setSupervisores(sSnap.docs.map(d => ({ id: d.id, ...d.data() })));
             setConductores (vSnap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -33,7 +33,7 @@ export function usePersonalData(empresa) {
         }
     };
 
-    useEffect(() => { cargar(); }, [empresa]);
+    useEffect(() => { cargar(); }, [empresaId]);
 
     return { supervisores, conductores, encargados, admins, cargando, recargar: cargar };
 }

@@ -8,7 +8,7 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    padding: 0 35px;
+    padding: 0 clamp(12px, 4vw, 35px);
 }
 
 .ps-vt-header {
@@ -977,29 +977,37 @@ thead th {
     position: fixed;
     z-index: 1000;
     background: #fff;
-    border-radius: 10px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
     border: 1px solid var(--color-border);
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 4px;
-    padding: 8px;
-    min-width: 200px;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    padding: 6px;
+    min-width: 0;
+    max-width: 320px;
 }
 
 .ps-popup-opt {
     border: none;
-    border-radius: 6px;
-    padding: 5px 4px;
-    font-size: 11px;
+    border-radius: 5px;
+    padding: 3px 2px;
+    font-size: 10px;
     font-weight: 700;
     cursor: pointer;
     text-align: center;
     transition: filter 0.1s;
+    white-space: nowrap;
 }
 
 .ps-popup-opt:hover {
     filter: brightness(0.88);
+}
+
+.ps-popup-opt--activo {
+    outline: 2px solid #002d72;
+    outline-offset: -2px;
+    font-weight: 700;
 }
 
 .ps-popup-opt--vacio {
@@ -1056,6 +1064,36 @@ thead th {
     background: #d1fae5;
     color: #065f46;
 }
+
+/* ── Entrada manual en popup ─────────────────────── */
+.ps-popup-manual {
+    display: flex;
+    gap: 4px;
+    padding: 5px 4px 3px;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 3px;
+    grid-column: 1 / -1;
+}
+.ps-popup-manual-input {
+    flex: 1;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 0.75rem;
+    outline: none;
+    min-width: 0;
+}
+.ps-popup-manual-input:focus { border-color: #002d72; }
+.ps-popup-manual-btn {
+    background: #002d72;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.ps-popup-manual-btn:disabled { background: #94a3b8; cursor: default; }
 
 /* ── Modal agregar personal ───────────────────────── */
 .ps-overlay {

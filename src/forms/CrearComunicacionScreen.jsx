@@ -1,7 +1,7 @@
 // src/forms/CrearComunicacionScreen.jsx
 // Formulario para publicar una comunicación o novedad en el muro.
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAuth }    from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -15,11 +15,20 @@ const TIPOS = [
 
 export default function CrearComunicacionScreen({ onBack }) {
     const { user }                       = useAuth();
-    const { empresaNombre, empresaLogos } = useAppData();
+    const { empresaNombre, empresaLogos, empresaId, userZona } = useAppData();
 
     const now     = new Date();
     const fechaStr = now.toLocaleDateString("es-AR");
     const horaStr  = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+
+    const numeroCom = useMemo(() => {
+        const d    = new Date();
+        const yyyy = d.getFullYear();
+        const mm   = String(d.getMonth() + 1).padStart(2, "0");
+        const dd   = String(d.getDate()).padStart(2, "0");
+        const rand = String(Math.floor(Math.random() * 9000) + 1000);
+        return `COM-${yyyy}${mm}${dd}-${rand}`;
+    }, []);
 
     const [form, setForm] = useState({
         tipo:   "comunicacion",
@@ -40,7 +49,10 @@ export default function CrearComunicacionScreen({ onBack }) {
         setError(null);
         try {
             const docRef = await addDoc(collection(db, "comunicaciones"), {
+                numero:      numeroCom,
+                empresaId:   empresaId      || "",
                 empresa:     empresaNombre  || "",
+                zona:        userZona       || null,
                 tipo:        form.tipo,
                 titulo:      form.titulo.trim(),
                 cuerpo:      form.cuerpo.trim(),
@@ -66,6 +78,7 @@ export default function CrearComunicacionScreen({ onBack }) {
                 <div className="cc-success">
                     <div className="cc-success-icon">✅</div>
                     <h2 className="cc-success-title">Comunicación publicada</h2>
+                    <div className="cc-success-codigo">{numeroCom}</div>
                     <p className="cc-success-sub">
                         Ya es visible para todos los usuarios de la empresa.
                     </p>
@@ -77,10 +90,30 @@ export default function CrearComunicacionScreen({ onBack }) {
 
     return (
         <div className="cc-root">
-            <header className="cc-header">
-                <button className="cc-back" onClick={onBack}>← Volver</button>
-                <span className="cc-header-title">📢 Nueva Comunicación</span>
-            </header>
+            <div className="cc-subpanel-top">
+                <button className="cc-back" onClick={onBack}>← Volver al panel</button>
+                <div className="cc-titulo">📢 Nueva Comunicación</div>
+            </div>
+
+            {/* ── Tarjeta de trazabilidad ── */}
+            <div className="cc-id-card">
+                <div className="cc-id-row">
+                    <span className="cc-id-label">Número</span>
+                    <span className="cc-id-val cc-id-val--num">{numeroCom}</span>
+                </div>
+                <div className="cc-id-row">
+                    <span className="cc-id-label">Fecha</span>
+                    <span className="cc-id-val">{fechaStr}</span>
+                </div>
+                <div className="cc-id-row">
+                    <span className="cc-id-label">Publicado por</span>
+                    <span className="cc-id-val">{user?.name || "—"}</span>
+                </div>
+                <div className="cc-id-row">
+                    <span className="cc-id-label">Empresa</span>
+                    <span className="cc-id-val">{empresaNombre || "—"}</span>
+                </div>
+            </div>
 
             <div className="cc-body">
 

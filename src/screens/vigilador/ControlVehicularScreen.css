@@ -34,6 +34,13 @@
     opacity: 0.75;
     margin-top: 2px;
 }
+.cv-header-num {
+    font-size: 10px;
+    font-family: monospace;
+    opacity: 0.6;
+    margin-top: 3px;
+    letter-spacing: 0.5px;
+}
 
 .cv-progress-pill {
     margin-left: auto;

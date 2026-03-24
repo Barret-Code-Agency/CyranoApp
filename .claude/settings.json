@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(grep -r \"capacitaciones\\\\|rondas_ejecucion\" 'c:\\\\Dev\\\\Programacion proyectos\\\\AppSup\\\\src' --include=*.jsx --include=*.js)",
+      "Bash(git -C 'c:/Dev/Programacion proyectos/AppSup' show HEAD~1:src/screens/AdminScreen.jsx)"
+    ]
+  }
+}

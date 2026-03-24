@@ -1,13 +1,12 @@
 // src/utils/periodoUtils.js
-// Utilidades compartidas de período: helpers de fechas y constantes de turno.
-// Copiados de ProgramacionServiciosScreen.jsx como fuente canónica.
+// Utilidades compartidas de período: helpers de fechas, constantes y funciones de turno.
+// FUENTE CANÓNICA — importar desde aquí, nunca re-definir en los pantallas.
 
 // ── Localización ─────────────────────────────────────────────────────────────
-// NOTA: DIAS_ES y MESES_ES son las abreviaciones cortas (3 caracteres).
-// Las versiones "LARGO" permanecen en cada archivo que las necesite.
-export const DIAS_ES  = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
-export const MESES_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-                         "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+export const DIAS_ES    = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+export const MESES_ES   = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
+                           "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+export const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 // ── Período de liquidación ────────────────────────────────────────────────────
 // Retorna un array de Date desde el 24 del mes anterior hasta el 23 del mes indicado.
@@ -33,15 +32,32 @@ export function fmtKey(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
+// ── Códigos de ausentismo / no-laboral ───────────────────────────────────────
+// Vac: vacaciones  |  Enf: enfermedad  |  Art: accidente  |  Asa/Aca/Sus/Lic: licencias
+export const AUS_CODES = ["Vac","Enf","Art","Asa","Aca","Sus","Lic"];
+
+// Días no-laborales (franco, compuesto, feriado, licencia) — no generan horas
+const NO_LABORAL_CODES = ["Fco","Com","FER","Lic"];
+
+// Devuelve true si el valor representa un turno horario facturable
+export function esLaboral(val) {
+    return Boolean(val) && !NO_LABORAL_CODES.includes(val);
+}
+
+// ── Índice de días para lookup de horas contractuales ─────────────────────────
+// Orden: Dom=0, Lun=1, …, Sáb=6  (igual que Date.getDay())
+export const HORAS_KEYS = [
+    "horasDomingo","horasLunes","horasMartes","horasMiercoles",
+    "horasJueves","horasViernes","horasSabado",
+];
+
 // ── Horas de un turno ─────────────────────────────────────────────────────────
 // Interpreta un string de turno "HH:MM – HH:MM" y devuelve las horas trabajadas.
-// Fuente canónica: ProgramacionServiciosScreen.jsx
-// NOTA: Esta es la versión "base". FacturacionScreen, ConsolidadoScreen y
-// ControlClienteScreen tienen variantes con lógica de filtrado diferente y
-// NO fueron unificadas. Ver AUDITORIA.md para detalle.
+// Maneja typeof number, todos los códigos de ausentismo/no-laboral → 0.
 export function horasDeValor(val) {
+    if (typeof val === "number") return val;
     if (!val) return 0;
-    // Separa por cualquier variante de guion (-, –, —) con espacios opcionales
+    if (NO_LABORAL_CODES.includes(val) || AUS_CODES.includes(val)) return 0;
     const partes = val.split(/\s*[-\u2013\u2014]\s*/);
     if (partes.length !== 2) return 0;
     const [h1, m1] = partes[0].split(":").map(Number);
@@ -50,6 +66,31 @@ export function horasDeValor(val) {
     const ini = h1 * 60 + (m1 || 0);
     const fin = h2 * 60 + (m2 || 0);
     return (fin > ini ? fin - ini : fin + 1440 - ini) / 60;
+}
+
+// ── Redondeo a 1 decimal ──────────────────────────────────────────────────────
+export function r1(n) { return Math.round(n * 10) / 10; }
+
+// ── Normalizador de turno manual ──────────────────────────────────────────────
+// Convierte "6-14", "06/14", "6 a 14", "6:00-14" → "06:00 – 14:00"
+export function normalizarTurno(str) {
+    if (typeof str !== "string") return str;
+    const s = str.trim();
+    if (!s) return s;
+    const ya = s.match(/^(\d{1,2}):(\d{2})\s*[-\u2013\u2014]\s*(\d{1,2}):(\d{2})$/);
+    if (ya) return `${String(ya[1]).padStart(2,"0")}:${ya[2]} \u2013 ${String(ya[3]).padStart(2,"0")}:${ya[4]}`;
+    // "16:00 a 20:00" — con minutos y separador "a"
+    const conA = s.match(/^(\d{1,2}):(\d{2})\s+a\s+(\d{1,2}):(\d{2})$/i);
+    if (conA) return `${String(conA[1]).padStart(2,"0")}:${conA[2]} \u2013 ${String(conA[3]).padStart(2,"0")}:${conA[4]}`;
+    const sin = s.match(/^(\d{1,2})\s*[-\u2013\u2014\/a]\s*(\d{1,2})$/i);
+    if (sin) return `${String(sin[1]).padStart(2,"0")}:00 \u2013 ${String(sin[2]).padStart(2,"0")}:00`;
+    const mix = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(?:[-\u2013\u2014\/]|a)\s*(\d{1,2})(?::(\d{2}))?$/i);
+    if (mix) {
+        const h1 = String(mix[1]).padStart(2,"0"); const m1 = String(mix[2] || "00").padStart(2,"0");
+        const h2 = String(mix[3]).padStart(2,"0"); const m2 = String(mix[4] || "00").padStart(2,"0");
+        return `${h1}:${m1} \u2013 ${h2}:${m2}`;
+    }
+    return s;
 }
 
 // ── Opciones de turno ─────────────────────────────────────────────────────────
@@ -68,6 +109,7 @@ export const OPCIONES = [
     { val: "07:00 – 19:00", label: "07-19",  cls: "dia" },
     { val: "08:00 – 20:00", label: "08-20",  cls: "dia" },
     { val: "09:00 – 17:00", label: "09-17",  cls: "dia" },
+    { val: "09:00 – 18:00", label: "09-18",  cls: "dia" },
     { val: "10:00 – 18:00", label: "10-18",  cls: "dia" },
     { val: "05:00 – 13:00", label: "05-13",  cls: "dia" },
     { val: "05:00 – 13:30", label: "05-13½", cls: "dia" },

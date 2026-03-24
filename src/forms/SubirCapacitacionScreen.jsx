@@ -85,7 +85,7 @@ export default function SubirCapacitacionScreen({ onBack }) {
                     <p className="cc-success-sub">
                         Ya está disponible para todos los usuarios de la empresa.
                     </p>
-                    <button className="cc-btn cc-btn--ghost" onClick={onBack}>← Volver</button>
+                    <button className="cc-btn cc-btn--ghost" onClick={onBack}>← Volver al panel</button>
                 </div>
             </div>
         );
@@ -93,10 +93,6 @@ export default function SubirCapacitacionScreen({ onBack }) {
 
     return (
         <div className="cc-root">
-            <header className="cc-header">
-                <button className="cc-back" onClick={onBack}>← Volver</button>
-                <span className="cc-header-title">🎓 Subir Capacitación</span>
-            </header>
 
             <div className="cc-body">
 

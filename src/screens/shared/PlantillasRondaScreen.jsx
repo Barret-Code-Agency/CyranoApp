@@ -480,7 +480,7 @@ export default function PlantillasRondaScreen({ onBack }) {
         return (
             <div className="pr-root">
                 <div className="pr-header">
-                    <button className="pr-header-back" onClick={() => setEditando(null)}>← Volver</button>
+                    <button className="pr-header-back" onClick={() => setEditando(null)}>← Volver al listado</button>
                     <div className="pr-header-title">
                         {editando === "nueva" ? "Nueva plantilla de ronda" : "Editar plantilla"}
                     </div>
@@ -570,9 +570,11 @@ export default function PlantillasRondaScreen({ onBack }) {
     return (
         <div className="pr-root">
             <div className="pr-header">
-                <button className="pr-header-back" onClick={onBack}>← Volver</button>
-                <div className="pr-header-title">🗺️ Plantillas de Ronda</div>
-                <button className="pr-header-action" onClick={nuevaPlantilla}>+ Nueva</button>
+                <button className="pr-header-back" onClick={onBack}>← Volver al panel</button>
+                <div className="pr-header-row">
+                    <div className="pr-header-title">🗺️ Plantillas de Ronda</div>
+                    <button className="pr-header-action" onClick={nuevaPlantilla}>+ Nueva</button>
+                </div>
             </div>
 
             {loading ? (

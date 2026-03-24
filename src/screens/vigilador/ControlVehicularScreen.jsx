@@ -1,5 +1,5 @@
 // src/screens/ControlVehicularScreen.jsx
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { todayDate, nowTime } from "../../utils/helpers";
 import "./ControlVehicularScreen.css";
 import { generarPDFControlVehicular } from "../../utils/generarPDF_ControlVehicular";
@@ -79,6 +79,13 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
     const [seccionAbierta, setSeccion] = useState("exterior");
     const [pdfLoading,   setPdfLoading] = useState(false);
 
+    const numeroCv = useMemo(() => {
+        const hoy = new Date();
+        const fecha = `${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,"0")}${String(hoy.getDate()).padStart(2,"0")}`;
+        const rand = String(Math.floor(Math.random() * 9000) + 1000);
+        return `CV-${fecha}-${rand}`;
+    }, []);
+
     const setCheck = (key, val) => setChecks(p => ({ ...p, [key]: val }));
 
     const respondidos = Object.values(checks).filter(v => v !== null).length;
@@ -106,6 +113,7 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
             fotos:       fotos.map(f => f.url),
             respondidos,
             conNovedad,
+            jornadaID:   numeroCv,
         };
         // Auto-descarga PDF
         setPdfLoading(true);
@@ -130,6 +138,7 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
                 <div>
                     <div className="cv-header-title">Control Vehicular</div>
                     <div className="cv-header-sub">{vehiculo || "Sin vehículo asignado"}</div>
+                    <div className="cv-header-num">{numeroCv}</div>
                 </div>
                 <div className="cv-progress-pill">
                     <span className="cv-progress-num">{pct}%</span>

@@ -6,50 +6,37 @@
     flex: 1;
     background: var(--color-bg);
     font-family: var(--font-main);
-    padding-bottom: 5rem;
 }
 
-/* ── Header ── */
-.mtv-header {
+/* ── Subpanel top ── */
+.mtv-subpanel-top {
+    padding: var(--space-6) var(--space-4);
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-3) var(--space-4);
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    flex-direction: column;
+    gap: var(--space-5);
 }
 
-.mtv-header-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-}
-
-/* ── Botón flotante de volver ── */
-.mtv-float-back {
-    position: fixed;
-    bottom: 1.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--color-primary);
-    color: #fff;
-    border: none;
-    border-radius: 2rem;
-    padding: 0.65rem 1.75rem;
-    font-size: 0.9rem;
-    font-weight: 700;
+.mtv-back {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-primary);
+    font-size: var(--text-sm);
+    font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 45, 114, 0.35);
-    z-index: 50;
-    white-space: nowrap;
-    transition: background var(--transition-base), transform 0.1s;
+    padding: var(--space-2) var(--space-4);
+    margin-bottom: 20px;
+    font-family: var(--font-body);
+    align-self: flex-start;
+    transition: all var(--transition-base);
 }
-.mtv-float-back:hover {
-    background: var(--color-primary-dark, #003080);
-    transform: translateX(-50%) translateY(-1px);
+.mtv-back:hover { background: var(--color-primary-ghost); }
+
+.mtv-titulo {
+    font-size: var(--text-2xl);
+    font-weight: 800;
+    color: var(--color-primary);
+    letter-spacing: 0.5px;
 }
 
 /* ── Navegación de mes ── */
@@ -93,7 +80,7 @@
     flex-direction: column;
     gap: var(--space-4);
     padding: var(--space-4);
-    max-width: 680px;
+    max-width: 50%;
     margin: 0 auto;
     width: 100%;
 }

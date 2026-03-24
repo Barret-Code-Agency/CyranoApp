@@ -9,7 +9,7 @@ import { db } from "../../firebase";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import "./FacturacionScreen.css";
-import { getDias, fmtKey, MESES_ES } from "../../utils/periodoUtils";
+import { getDias, fmtKey, MESES_ES, HORAS_KEYS, horasDeValor, r1 } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 
 // ── Configuración de distribución ────────────────────────────────────────────
@@ -50,25 +50,7 @@ const DIST_CONFIG = {
 // ── Colecciones Firestore ─────────────────────────────────────────────────────
 const COL_PROG = "programacionServicios";
 
-// MESES_ES, getDias, fmtKey, FERIADOS_ARG importados desde utils
-
-const HORAS_KEYS = ["horasDomingo","horasLunes","horasMartes","horasMiercoles",
-                    "horasJueves","horasViernes","horasSabado"];
-
-// horasDeValor local: difiere de periodoUtils (no usa esLaboral)
-function horasDeValor(val) {
-    if (!val) return 0;
-    const partes = val.split(/\s*[-\u2013\u2014]\s*/);
-    if (partes.length !== 2) return 0;
-    const [h1, m1] = partes[0].split(":").map(Number);
-    const [h2, m2] = partes[1].split(":").map(Number);
-    if (isNaN(h1) || isNaN(h2)) return 0;
-    const ini = h1 * 60 + (m1 || 0);
-    const fin = h2 * 60 + (m2 || 0);
-    return (fin > ini ? fin - ini : fin + 1440 - ini) / 60;
-}
-
-function r1(n) { return Math.round(n * 10) / 10; }
+// MESES_ES, HORAS_KEYS, horasDeValor, r1, getDias, fmtKey, FERIADOS_ARG importados desde utils
 
 function horasDiaObj(dia, obj, diasEsp) {
     if (!obj) return null;
@@ -98,9 +80,9 @@ function parseCodigo(codigo) {
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function FacturacionScreen({ año, mes, onBack }) {
-    const { empresaNombre } = useAppData();
-    const { objetivos }     = useClientesData(empresaNombre);
+export default function FacturacionScreen({ año, mes, onBack, zonaFija = null }) {
+    const { empresaId } = useAppData();
+    const { objetivos } = useClientesData(empresaId);
     const [docs,      setDocs]      = useState([]);
     const [cargando,  setCargando]  = useState(false);
     const [exportando,setExportando]= useState(false);
@@ -111,16 +93,17 @@ export default function FacturacionScreen({ año, mes, onBack }) {
     const añoAnterior = mes === 1 ? año - 1 : año;
 
     useEffect(() => {
-        if (!empresaNombre) return;
+        if (!empresaId) return;
         setCargando(true);
         getDocs(query(
             collection(db, COL_PROG),
-            where("empresa", "==", empresaNombre),
-            where("año",     "==", año),
-            where("mes",     "==", mes)
+            where("empresaId", "==", empresaId)
         ))
             .then(snap => {
-                const data = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                let data = snap.docs
+                    .map(d => ({ docId: d.id, ...d.data() }))
+                    .filter(d => d.año === año && d.mes === mes);
+                if (zonaFija) data = data.filter(d => d.zona === zonaFija);
                 data.sort((a, b) =>
                     (a.clienteNombre || "").localeCompare(b.clienteNombre || "") ||
                     (a.proyectoNombre || "").localeCompare(b.proyectoNombre || "") ||
@@ -130,7 +113,7 @@ export default function FacturacionScreen({ año, mes, onBack }) {
             })
             .catch(console.error)
             .finally(() => setCargando(false));
-    }, [empresaNombre, año, mes]);
+    }, [empresaId, año, mes]);
 
     // ── Calcular totales por doc ───────────────────────────────────────────────
     const filas = useMemo(() => {

@@ -1,5 +1,10 @@
 // src/screens/AdministrativoHome.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "../../firebase";
+import { MESES_CORTO as MESES_ES, MESES_ES as MESES_ES_LARGO } from "../../utils/periodoUtils";
+import { useWhatsApp } from "../../hooks/useWhatsApp";
+import { buildResumenDiario } from "../../utils/whatsapp";
 import { useAuth }                from "../../context/AuthContext";
 import { useAppData }             from "../../context/AppDataContext";
 import { tieneAcceso }            from "../../config/roles";
@@ -9,10 +14,12 @@ import ControlClienteScreen       from "../shared/ControlClienteScreen";
 import { VistaTurnos }            from "../shared/ProgramacionServiciosScreen";
 import InformeSencilloScreen      from "../../forms/InformeSencilloScreen";
 import InformeNovedadScreen       from "../../forms/InformeNovedadScreen";
+import ReporteCondicionInseguraScreen from "../../forms/ReporteCondicionInseguraScreen";
 import VerInformesScreen          from "../../forms/VerInformesScreen";
 import VerComunicacionesScreen    from "../../forms/VerComunicacionesScreen";
 import FacturacionScreen          from "../gerencia/FacturacionScreen";
 import CrearComunicacionScreen    from "../../forms/CrearComunicacionScreen";
+import PedidoInsumosScreen from "../shared/PedidoInsumosScreen";
 import AppHeader from "../../components/AppHeader";
 import "../../styles/VigHome.css";
 import "../../styles/SupervisorHome.css";
@@ -21,15 +28,15 @@ import "./GestionDatosAdminScreen.css";
 
 // ── Calendario semanal (idéntico al de VigHome) ────────────────────────────
 const DIAS_ES  = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MESES_ES_LARGO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-                        "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-const MESES_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 function fmtKey(d) { return d.toISOString().slice(0, 10); }
 
-function CalendarioSemanal({ actividades = {} }) {
+function CalendarioSemanal({ actividades = {}, legajos = [] }) {
     const hoy    = new Date();
     const hoyKey = fmtKey(hoy);
     const [selKey, setSelKey] = useState(hoyKey);
+    const [sending, setSending] = useState(false);
+    const [waSent,  setWaSent]  = useState(false);
+    const { configurado, enviar } = useWhatsApp();
 
     const dias = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(hoy);
@@ -37,8 +44,23 @@ function CalendarioSemanal({ actividades = {} }) {
         return d;
     });
 
-    const selDate = new Date(selKey + "T12:00:00");
-    const selActs = actividades[selKey] ?? [];
+    // Cumpleaños de la semana
+    const cumplesPorKey = {};
+    legajos.forEach(p => {
+        if (!p.nacimiento) return;
+        const [dd, mm] = p.nacimiento.split("/").map(Number);
+        dias.forEach(d => {
+            if (d.getDate() === dd && d.getMonth() + 1 === mm) {
+                const key = fmtKey(d);
+                const ap = (p.nombre || "").trim().split(" ")[0];
+                cumplesPorKey[key] = [...(cumplesPorKey[key] || []), ap];
+            }
+        });
+    });
+
+    const selDate  = new Date(selKey + "T12:00:00");
+    const selActs  = actividades[selKey] ?? [];
+    const selCumps = cumplesPorKey[selKey] ?? [];
 
     return (
         <div className="vh-calendario">
@@ -56,14 +78,19 @@ function CalendarioSemanal({ actividades = {} }) {
                             <span className="vh-cal-dayname">{DIAS_ES[d.getDay()]}</span>
                             <span className="vh-cal-daynum">{d.getDate()}</span>
                             <div className="vh-cal-dia-acts">
-                                {acts.length === 0
-                                    ? <span className="vh-cal-dia-empty">—</span>
-                                    : acts.map((a, i) => (
-                                        <span key={i} className={`vh-cal-dia-chip vh-cal-dia-chip--${a.tipo ?? "default"}`}>
-                                            {a.label}
-                                        </span>
-                                    ))
-                                }
+                                {acts.map((a, i) => (
+                                    <span key={i} className={`vh-cal-dia-chip vh-cal-dia-chip--${a.tipo ?? "default"}`}>
+                                        {a.label}
+                                    </span>
+                                ))}
+                                {(cumplesPorKey[key] || []).map((ap, i) => (
+                                    <span key={`c${i}`} className="vh-cal-dia-chip vh-cal-dia-chip--cumple">
+                                        🎂 {ap}
+                                    </span>
+                                ))}
+                                {acts.length === 0 && !cumplesPorKey[key] && (
+                                    <span className="vh-cal-dia-empty">—</span>
+                                )}
                             </div>
                         </button>
                     );
@@ -74,7 +101,7 @@ function CalendarioSemanal({ actividades = {} }) {
                     {DIAS_ES[selDate.getDay()]} {selDate.getDate()} de {MESES_ES[selDate.getMonth()]}
                     {selKey === hoyKey && <span className="vh-cal-hoy-badge">Hoy</span>}
                 </div>
-                {selActs.length === 0 ? (
+                {selActs.length === 0 && selCumps.length === 0 ? (
                     <div className="vh-cal-empty">Sin actividades programadas</div>
                 ) : (
                     <div className="vh-cal-acts">
@@ -84,7 +111,28 @@ function CalendarioSemanal({ actividades = {} }) {
                                 <span className="vh-cal-act-label">{a.label}</span>
                             </div>
                         ))}
+                        {selCumps.map((ap, i) => (
+                            <div key={`c${i}`} className="vh-cal-act vh-cal-act--cumple">
+                                <span className="vh-cal-act-hora">🎂</span>
+                                <span className="vh-cal-act-label">Cumpleaños de {ap}</span>
+                            </div>
+                        ))}
                     </div>
+                )}
+                {configurado && (
+                    <button
+                        className="vh-cal-wa-btn"
+                        disabled={sending || waSent}
+                        onClick={async () => {
+                            setSending(true);
+                            const selDate = new Date(selKey + "T12:00:00");
+                            await enviar(buildResumenDiario(selDate, selActs, selCumps));
+                            setSending(false); setWaSent(true);
+                            setTimeout(() => setWaSent(false), 4000);
+                        }}
+                    >
+                        {waSent ? "✅ Enviado" : sending ? "Enviando…" : "📱 Enviar por WhatsApp"}
+                    </button>
                 )}
             </div>
         </div>
@@ -133,11 +181,12 @@ const MODULOS = [
     { id: "facturacion",         icon: "💰", titulo: "Facturación",                       desc: "Gestión de facturación"                              },
     { id: "control_horas",       icon: "⏱️", titulo: "Control de horas",                  desc: "Control de horas y facturación al cliente"           },
     { id: "ausentismo",          icon: "📉", titulo: "Ausentismo",                        desc: "Registro y seguimiento de ausentismo"                },
+    { id: "pedido_insumos",      icon: "📦", titulo: "Pedido de Insumos",                 desc: "Solicitá materiales o insumos para el puesto"         },
 ];
 
 export default function AdministrativoHome({ user: propUser, onLogout }) {
     const { user: authUser, logout } = useAuth();
-    const { data, empresaModulos } = useAppData();
+    const { data, empresaModulos, empresaNombre, empresaId, userZona } = useAppData();
     const [seccion,    setSeccion]    = useState(null);
     const [subSeccion, setSubSeccion] = useState(null);
     const [periodoSel, setPeriodoSel] = useState(null);
@@ -145,7 +194,20 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
     const user = authUser || propUser;
     const handleLogout = async () => { await logout(); onLogout?.(); };
 
-    const header = <AppHeader onLogout={handleLogout} />;
+    // Carga legajos para cumpleaños en el calendario
+    const [legajos, setLegajos] = useState([]);
+    useEffect(() => {
+        if (!empresaId) return;
+        getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId)))
+            .then(snap => setLegajos(snap.docs.map(d => d.data())))
+            .catch(err => console.error("Error cargando legajos:", err));
+    }, [empresaId]);
+
+    const modActivo = MODULOS.find(m => m.id === seccion);
+    const subline   = seccion
+        ? `${modActivo?.icon ?? ""} ${modActivo?.titulo ?? seccion}`.trim()
+        : "🗂️ Administrativo";
+    const header = <AppHeader onLogout={handleLogout} subline={subline} />;
 
     const volverBtn = (onClick) => (
         <div style={{ padding: "1rem 1.5rem 0" }}>
@@ -155,8 +217,8 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
 
     // ── Muro de comunicación ───────────────────────────────────────────────
     if (seccion === "muro_comunicacion") {
-        if (subSeccion === "ver")   return <><AppHeader onLogout={handleLogout} /><VerComunicacionesScreen  onBack={() => setSubSeccion(null)} /></>;
-        if (subSeccion === "crear") return <><AppHeader onLogout={handleLogout} /><CrearComunicacionScreen  onBack={() => setSubSeccion(null)} /></>;
+        if (subSeccion === "ver")   return <div className="vh-root">{header}<VerComunicacionesScreen  onBack={() => setSubSeccion(null)} /></div>;
+        if (subSeccion === "crear") return <div className="vh-root">{header}<CrearComunicacionScreen  onBack={() => setSubSeccion(null)} /></div>;
         const MURO_MENUS = [
             { id: "ver",   icon: "📋", titulo: "Ver novedades y comunicaciones", desc: "Consultá las comunicaciones publicadas para el personal" },
             { id: "crear", icon: "✏️", titulo: "Crear comunicación",             desc: "Publicá una comunicación o novedad para todo el personal" },
@@ -164,18 +226,21 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
         return (
             <div className="vh-root">
                 {header}
-                {volverBtn(() => setSeccion(null))}
-                <div className="sh-grid">
-                    {MURO_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info">
-                                <strong>{m.titulo}</strong>
-                                <small>{m.desc}</small>
-                            </div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">📢 Muro de Comunicación y Novedades</div>
+                    <div className="sh-grid">
+                        {MURO_MENUS.map(m => (
+                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon">{m.icon}</span>
+                                <div className="sh-modulo-info">
+                                    <strong>{m.titulo}</strong>
+                                    <small>{m.desc}</small>
+                                </div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -184,7 +249,7 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
     // ── Actualización de datos ─────────────────────────────────────────────
     if (seccion === "actualizacion_datos") {
         return (
-            <div className="gd-page">
+            <div className="vh-root vh-root--full">
                 {header}
                 <GestionDatosAdminScreen onBack={() => setSeccion(null)} noDelete={true} />
             </div>
@@ -194,11 +259,10 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
     // ── Dashboard de personal (filtrado por zona del usuario) ──────────────
     if (seccion === "dashboard_personal") {
         return (
-            <div className="vh-root">
+            <div className="vh-root vh-root--full">
                 {header}
                 <DashboardPersonalScreen
                     onBack={() => setSeccion(null)}
-                    zonaFija={user?.zona || null}
                 />
             </div>
         );
@@ -216,16 +280,22 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
                 return (
                     <div className="vh-root">
                         {header}
-                        {volverBtn(() => setSubSeccion(null))}
-                        <PeriodoCard icono="🤝" titulo="Control cliente" onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                        <div className="vh-subpanel">
+                            <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
+                            <div className="vh-subpanel-title">🤝 Control Cliente</div>
+                            <PeriodoCard icono="🤝" titulo="Control cliente" onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                        </div>
                     </div>
                 );
             }
             return (
-                <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-                    <AppHeader onLogout={handleLogout} />
-                    {volverBtn(() => setPeriodoSel(null))}
-                    <ControlClienteScreen año={periodoSel.año} mes={periodoSel.mes} />
+                <div className="vh-root">
+                    {header}
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setPeriodoSel(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">🤝 Control Cliente</div>
+                    </div>
+                    <ControlClienteScreen año={periodoSel.año} mes={periodoSel.mes} zonaFija={userZona} />
                 </div>
             );
         }
@@ -234,9 +304,9 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
             return (
                 <div className="vh-root">
                     {header}
-                    {volverBtn(() => setSubSeccion(null))}
                     <div className="vh-subpanel">
-                        <div className="vh-subpanel-title">⏱️ Carga de horas</div>
+                        <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">⏱️ Carga de Horas</div>
                         <div className="vh-coming-soon">Próximamente</div>
                     </div>
                 </div>
@@ -246,7 +316,10 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
         return (
             <div className="vh-root">
                 {header}
-                {volverBtn(() => { setSeccion(null); setSubSeccion(null); setPeriodoSel(null); })}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => { setSeccion(null); setSubSeccion(null); setPeriodoSel(null); }}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">⏱️ Control de Horas</div>
+                </div>
                 <div className="sh-grid">
                     {CONTROL_HORAS_MENUS.map(m => (
                         <button key={m.id} className="sh-modulo" onClick={() => { setPeriodoSel(null); setSubSeccion(m.id); }}>
@@ -269,16 +342,22 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
             return (
                 <div className="vh-root">
                     {header}
-                    {volverBtn(() => setSeccion(null))}
-                    <PeriodoCard icono="🕐" titulo="Vista de horarios" onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">🕐 Turnos de Trabajo</div>
+                        <PeriodoCard icono="🕐" titulo="Vista de horarios" onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                    </div>
                 </div>
             );
         }
         return (
-            <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-                <AppHeader onLogout={handleLogout} />
-                {volverBtn(() => setPeriodoSel(null))}
-                <VistaTurnos año={periodoSel.año} mes={periodoSel.mes} />
+            <div className="vh-root">
+                {header}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setPeriodoSel(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">🕐 Turnos de Trabajo</div>
+                </div>
+                <VistaTurnos año={periodoSel.año} mes={periodoSel.mes} zonaFija={userZona} />
             </div>
         );
     }
@@ -289,36 +368,43 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
             return (
                 <div className="vh-root">
                     {header}
-                    <VerInformesScreen onBack={() => setSubSeccion(null)} />
+                    <VerInformesScreen onBack={() => setSubSeccion(null)} zonaFija={userZona} />
                 </div>
             );
         }
         if (subSeccion === "informe_sencillo") {
-            return <><AppHeader onLogout={handleLogout} /><InformeSencilloScreen onBack={() => setSubSeccion(null)} /></>;
+            return <div className="vh-root">{header}<InformeSencilloScreen onBack={() => setSubSeccion(null)} /></div>;
         }
         if (subSeccion === "informe_gravedad") {
-            return <><AppHeader onLogout={handleLogout} /><InformeNovedadScreen onBack={() => setSubSeccion(null)} /></>;
+            return <div className="vh-root">{header}<InformeNovedadScreen onBack={() => setSubSeccion(null)} /></div>;
+        }
+        if (subSeccion === "condicion_insegura") {
+            return <div className="vh-root">{header}<ReporteCondicionInseguraScreen onBack={() => setSubSeccion(null)} /></div>;
         }
         if (subSeccion === "crear_informes") {
             const CREAR_MENUS = [
-                { id: "informe_sencillo",  icon: "📝", titulo: "Informe sencillo",   desc: "Redactá un informe no urgente" },
-                { id: "informe_gravedad",  icon: "🚨", titulo: "Informe de gravedad", desc: "Registrá un incidente con daños a personas o bienes" },
+                { id: "informe_sencillo",  icon: "📝", titulo: "Informe sencillo",    desc: "Redactá un informe no urgente" },
+                { id: "informe_gravedad",  icon: "🚨", titulo: "Informe de gravedad",  desc: "Registrá un incidente con daños a personas o bienes" },
+                { id: "condicion_insegura",icon: "⚠️", titulo: "Condición Insegura",  desc: "Reportá una condición insegura detectada en el puesto" },
             ];
             return (
                 <div className="vh-root">
                     {header}
-                    {volverBtn(() => setSubSeccion(null))}
-                    <div className="sh-grid">
-                        {CREAR_MENUS.map(m => (
-                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                                <span className="sh-modulo-icon">{m.icon}</span>
-                                <div className="sh-modulo-info">
-                                    <strong>{m.titulo}</strong>
-                                    <small>{m.desc}</small>
-                                </div>
-                                <span className="sh-modulo-arrow">›</span>
-                            </button>
-                        ))}
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">✏️ Crear Informe</div>
+                        <div className="sh-grid">
+                            {CREAR_MENUS.map(m => (
+                                <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                                    <span className="sh-modulo-icon">{m.icon}</span>
+                                    <div className="sh-modulo-info">
+                                        <strong>{m.titulo}</strong>
+                                        <small>{m.desc}</small>
+                                    </div>
+                                    <span className="sh-modulo-arrow">›</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             );
@@ -332,18 +418,21 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
         return (
             <div className="vh-root">
                 {header}
-                {volverBtn(() => { setSeccion(null); setSubSeccion(null); })}
-                <div className="sh-grid">
-                    {INFORMES_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info">
-                                <strong>{m.titulo}</strong>
-                                <small>{m.desc}</small>
-                            </div>
-                            <span className="sh-modulo-arrow">›</span>
-                        </button>
-                    ))}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => { setSeccion(null); setSubSeccion(null); }}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">📄 Informes</div>
+                    <div className="sh-grid">
+                        {INFORMES_MENUS.map(m => (
+                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon">{m.icon}</span>
+                                <div className="sh-modulo-info">
+                                    <strong>{m.titulo}</strong>
+                                    <small>{m.desc}</small>
+                                </div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -355,16 +444,31 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
             return (
                 <div className="vh-root">
                     {header}
-                    {volverBtn(() => setPeriodoSel(null))}
-                    <FacturacionScreen año={periodoSel.año} mes={periodoSel.mes} onBack={() => setPeriodoSel(null)} />
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setPeriodoSel(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">Horas Brinks Seguridad Corporativa</div>
+                    </div>
+                    <FacturacionScreen año={periodoSel.año} mes={periodoSel.mes} onBack={() => setPeriodoSel(null)} zonaFija={userZona} titulo="Horas Brinks Seguridad Corporativa" />
                 </div>
             );
         }
         return (
             <div className="vh-root">
                 {header}
-                {volverBtn(() => setSeccion(null))}
-                <PeriodoCard icono="💰" titulo="Facturación" onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">Horas Brinks Seguridad Corporativa</div>
+                    <PeriodoCard icono="" titulo="Horas Brinks Seguridad Corporativa" onVer={(a, m) => setPeriodoSel({ año: a, mes: m })} />
+                </div>
+            </div>
+        );
+    }
+
+    if (seccion === "pedido_insumos") {
+        return (
+            <div className="vh-root">
+                {header}
+                <PedidoInsumosScreen onBack={() => setSeccion(null)} />
             </div>
         );
     }
@@ -389,9 +493,7 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
         <div className="vh-root">
             {header}
 
-            <div className="vh-role-badge"><span>🗂️</span> Administrativo</div>
-
-            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} />
+            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} legajos={legajos} />
 
             <div className="sh-grid">
                 {MODULOS.map(m => {
