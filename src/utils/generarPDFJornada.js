@@ -1,348 +1,536 @@
 // src/utils/generarPDFJornada.js
+// Hoja de Supervisión Diaria — Formulario BSCGOP-FOR-002 v2.0
+// Tabla cronológica unificada con todos los tipos de actividad
+
 import { jsPDF } from "jspdf";
 
-const AZUL  = [0, 45, 114];
-const ROJO  = [226, 1, 19];
-const GRIS  = [240, 242, 248];
-const TEXTO = [13, 27, 62];
-const MUTED = [136, 148, 172];
-const W     = 210;
-const PAD   = 14;
+// ── Paleta ─────────────────────────────────────────────────────────────────────
+const AZUL    = [0,   45,  114];
+const ROJO    = [226, 1,   19 ];
+const GRIS_BG = [245, 247, 252];
+const GRIS_BD = [210, 214, 225];
+const TEXTO   = [13,  27,  62 ];
+const MUTED   = [120, 132, 158];
+const BLANCO  = [255, 255, 255];
+const W       = 210;
+const PAD     = 10;
+const CW      = W - PAD * 2;     // 190mm ancho de contenido
 
-function diffMinutes(ini, fin) {
+// ── Colores por tipo de actividad ──────────────────────────────────────────────
+const TIPO_CONFIG = {
+    inicio:    { label: "Inicio",     bg: [16,  185, 129], fg: BLANCO },
+    fin:       { label: "Fin",        bg: [100, 116, 139], fg: BLANCO },
+    ctrl:      { label: "Supervision",bg: [28,  100, 242], fg: BLANCO },
+    cap:       { label: "Capacit.",   bg: [139, 92,  246], fg: BLANCO },
+    traslado:  { label: "Traslado",   bg: [14,  165, 233], fg: BLANCO },
+    admin:     { label: "Admin.",     bg: [80,  90,  105], fg: BLANCO },
+    vulnerab:  { label: "Vulnerab.",  bg: [234, 88,  12 ], fg: BLANCO },
+    reclamos:  { label: "Reclamo",    bg: [220, 38,  38 ], fg: BLANCO },
+    almuerzo:  { label: "Almuerzo",   bg: [34,  197, 94 ], fg: BLANCO },
+    taller:    { label: "Taller",     bg: [100, 116, 139], fg: BLANCO },
+    gremial:   { label: "Gremial",    bg: [168, 85,  247], fg: BLANCO },
+    otras:     { label: "Otras",      bg: [156, 163, 175], fg: BLANCO },
+};
+
+// ── Columnas de la tabla unificada ─────────────────────────────────────────────
+// Suma total = 1.0 → CW mm
+const COLS = [
+    { key: "objetivo",      header: "OBJETIVO / PUESTO",     w: 0.22 },
+    { key: "entrada",       header: "H. ENTRADA",             w: 0.08 },
+    { key: "salida",        header: "H. SALIDA",              w: 0.08 },
+    { key: "vigilador",     header: "VIGILADOR",              w: 0.15 },
+    { key: "actividad",     header: "ACTIVIDAD",              w: 0.09 },
+    { key: "pag",           header: "PAG.",                   w: 0.05 },
+    { key: "anomalia",      header: "ANOMALIA",               w: 0.06 },
+    { key: "calificacion",  header: "CALIFICACION",           w: 0.09 },
+    { key: "obs",           header: "OBSERVACIONES / NOTAS",  w: 0.18 },
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+const c = s => String(s || "")
+    .replace(/[àáâã]/g,"a").replace(/[èéêë]/g,"e")
+    .replace(/[ìíîï]/g,"i").replace(/[òóôõ]/g,"o")
+    .replace(/[ùúûü]/g,"u").replace(/ñ/g,"n")
+    .replace(/[ÀÁÂÃ]/g,"A").replace(/[ÈÉÊË]/g,"E")
+    .replace(/[ÌÍÎÏ]/g,"I").replace(/[ÒÓÔÕ]/g,"O")
+    .replace(/[ÙÚÛÜ]/g,"U").replace(/Ñ/g,"N")
+    .replace(/[^\x00-\x7F]/g,"");
+
+function parseTimeMin(s) {
+    if (!s) return -1;
+    const lower = String(s).toLowerCase().replace(/\s/g,"");
+    const isPM  = lower.includes("p.m.") || lower.includes("pm");
+    const isAM  = lower.includes("a.m.") || lower.includes("am");
+    const parts = lower.replace(/[ap]\.?m\.?/g,"").split(":");
+    let h = parseInt(parts[0]) || 0;
+    const m = parseInt(parts[1]) || 0;
+    if (isPM && h !== 12) h += 12;
+    if (isAM && h === 12) h = 0;
+    return h * 60 + m;
+}
+
+function diffMin(ini, fin) {
     if (!ini || !fin) return 0;
-    try {
-        const clean = s => s.replace(/[ap]\. ?m\./i, "").trim();
-        const [h1, m1] = clean(ini).split(":").map(Number);
-        const [h2, m2] = clean(fin).split(":").map(Number);
-        if (isNaN(h1) || isNaN(h2)) return 0;
-        const t1 = h1 * 60 + (m1 || 0), t2 = h2 * 60 + (m2 || 0);
-        return t2 >= t1 ? t2 - t1 : 0;
-    } catch { return 0; }
+    const t1 = parseTimeMin(ini), t2 = parseTimeMin(fin);
+    return (t1 >= 0 && t2 > t1) ? t2 - t1 : 0;
 }
 
-function fmtMin(m) {
-    if (!m || m <= 0) return "--";
-    const h = Math.floor(m / 60), min = m % 60;
-    return h > 0 ? `${h}h ${min > 0 ? min + "m" : ""}`.trim() : `${min}m`;
+function fmtHHMM(mins) {
+    if (!mins || mins <= 0) return "00:00";
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
 }
 
-// ── Header de página ──────────────────────────────────────────────────────────
-function drawHeader(doc, empresaNombre, logoBase64) {
+const CRITERIOS_ABBR = {
+    "Presencia":                        "Pre",
+    "Cumplimiento de horarios":         "Cum",
+    "Completado de libro y registros":  "Com",
+    "Estado del equipamiento":          "Est",
+    "Orden y aseo del puesto":          "Ord",
+    "Conocimiento de consignas":        "Con",
+};
+
+function califLabel(ratings) {
+    if (!ratings) return null;
+    const vals = Object.values(ratings).filter(v => v > 0);
+    if (!vals.length) return null;
+    const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+    if (avg >= 9)  return "Excelente";
+    if (avg >= 7)  return "Muy bien";
+    if (avg >= 5)  return "Aceptable";
+    if (avg >= 3)  return "Regular";
+    return "Insuficiente";
+}
+
+function califScores(ratings) {
+    if (!ratings) return "";
+    return Object.entries(ratings)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => `${CRITERIOS_ABBR[k] || k.substring(0,3)}:${v}`)
+        .join("  ");
+}
+
+// ── Header de página ───────────────────────────────────────────────────────────
+function drawPageHeader(doc, empresaNombre, logoBase64, fecha) {
+    // Banda azul
     doc.setFillColor(...AZUL);
-    doc.rect(0, 0, W, 28, "F");
+    doc.rect(0, 0, W, 26, "F");
+    // Banda roja
     doc.setFillColor(...ROJO);
-    doc.rect(0, 28, W, 2, "F");
+    doc.rect(0, 26, W, 2, "F");
 
-    // Logo empresa — respetando proporción, altura máx 20mm
+    // Logo
     let logoW = 0;
     if (logoBase64) {
         try {
-            const fmt  = logoBase64.startsWith("data:image/png") ? "PNG" : "JPEG";
+            const fmt   = logoBase64.startsWith("data:image/png") ? "PNG" : "JPEG";
             const props = doc.getImageProperties(logoBase64);
-            const maxH  = 20, maxW = 32;
+            const maxH  = 18, maxW = 30;
             const ratio = props.width / props.height;
             let iw = maxH * ratio, ih = maxH;
             if (iw > maxW) { iw = maxW; ih = iw / ratio; }
-            const iy = 4 + (maxH - ih) / 2;   // centrar verticalmente
-            doc.addImage(logoBase64, fmt, PAD, iy, iw, ih);
+            doc.addImage(logoBase64, fmt, PAD, 4 + (maxH - ih) / 2, iw, ih);
             logoW = iw + 4;
         } catch { /* sin logo */ }
     }
 
-    const textX = PAD + logoW;
+    // Nombre empresa (arriba izquierda)
+    const tx = PAD + logoW;
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.text("HOJA DE SUPERVISION", textX, 12);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text(empresaNombre || "CyranoApp", textX, 19);
-    doc.setFontSize(7.5);
-    doc.text("CyranoApp - Sistema de Gestion de Seguridad", W - PAD, 12, { align: "right" });
-    doc.setTextColor(...TEXTO);
-}
-
-// ── Celda de info ─────────────────────────────────────────────────────────────
-function infoCell(doc, x, y, w, label, value) {
-    doc.setFillColor(...GRIS);
-    doc.rect(x, y, w, 14, "F");
-    doc.setDrawColor(210, 213, 222);
-    doc.rect(x, y, w, 14, "S");
     doc.setFontSize(7);
-    doc.setTextColor(...MUTED);
+    doc.text(c(empresaNombre || "CyranoApp"), tx, 8);
+
+    // Título centrado
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text(label.toUpperCase(), x + 3, y + 5);
-    doc.setFontSize(9);
+    doc.text("HOJA DE SUPERVISION DIARIA", W / 2, 15, { align: "center" });
+
+    // Formulario (arriba derecha)
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "normal");
+    doc.text("Formulario BSCGOP-FOR-002 - Version 2.0", W - PAD, 8, { align: "right" });
+    doc.text(`Modificada: ${fecha || new Date().toLocaleDateString("es-AR")}`, W - PAD, 13, { align: "right" });
+
     doc.setTextColor(...TEXTO);
+}
+
+// ── Celda de info ──────────────────────────────────────────────────────────────
+function infoCell(doc, x, y, w, h, label, value, bold = false) {
+    doc.setFillColor(...GRIS_BG);
+    doc.rect(x, y, w, h, "F");
+    doc.setDrawColor(...GRIS_BD);
+    doc.rect(x, y, w, h, "S");
+    // Label
     doc.setFont("helvetica", "bold");
-    const val = String(value || "--").substring(0, 28);
-    doc.text(val, x + 3, y + 11);
+    doc.setFontSize(6);
+    doc.setTextColor(...MUTED);
+    doc.text(c(label).toUpperCase(), x + 2, y + 4.5);
+    // Value
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...TEXTO);
+    const val = c(String(value || "--")).substring(0, 30);
+    doc.text(val, x + 2, y + 10);
 }
 
-// ── Resumen en celdas (reemplaza la línea de texto con chars especiales) ───────
-function resumenCells(doc, y, items) {
-    const totalW = W - PAD * 2;
-    const cw = totalW / items.length;
-    items.forEach((item, i) => {
-        const x = PAD + i * cw;
-        doc.setFillColor(235, 240, 255);
-        doc.rect(x, y, cw, 10, "F");
-        doc.setDrawColor(210, 218, 235);
-        doc.rect(x, y, cw, 10, "S");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(...AZUL);
-        doc.text(String(item.val), x + cw / 2, y + 5.5, { align: "center" });
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.5);
-        doc.setTextColor(...MUTED);
-        doc.text(item.label, x + cw / 2, y + 9, { align: "center" });
+// ── Encabezado de tabla ────────────────────────────────────────────────────────
+function drawTableHeader(doc, y) {
+    const rowH = 7;
+    doc.setFillColor(20, 50, 110);
+    doc.rect(PAD, y, CW, rowH, "F");
+    doc.setTextColor(...BLANCO);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6);
+    let x = PAD;
+    COLS.forEach(col => {
+        const cw = col.w * CW;
+        doc.text(c(col.header), x + 2, y + 4.5, { maxWidth: cw - 3 });
+        x += cw;
     });
-    return y + 10;
+    doc.setTextColor(...TEXTO);
+    return y + rowH;
 }
 
-// ── Título de sección ─────────────────────────────────────────────────────────
+// ── Fila de actividad ─────────────────────────────────────────────────────────
+function drawActivityRow(doc, y, row, alt) {
+    const rowH = row.rowH || 7;
+
+    // Fondo alternado
+    if (alt) {
+        doc.setFillColor(248, 249, 253);
+        doc.rect(PAD, y, CW, rowH, "F");
+    }
+    // Línea inferior
+    doc.setDrawColor(...GRIS_BD);
+    doc.line(PAD, y + rowH, PAD + CW, y + rowH);
+
+    let x = PAD;
+    COLS.forEach(col => {
+        const cw = col.w * CW;
+
+        if (col.key === "actividad" && row.tipo) {
+            // Badge de color para el tipo
+            const cfg = TIPO_CONFIG[row.tipo] || TIPO_CONFIG.otras;
+            const bx = x + 1, by = y + 1.5, bw = cw - 2, bh = rowH - 3;
+            doc.setFillColor(...cfg.bg);
+            doc.roundedRect(bx, by, bw, bh, 1, 1, "F");
+            doc.setTextColor(...cfg.fg);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(5.5);
+            doc.text(c(cfg.label), bx + bw / 2, by + bh / 2 + 1.5, { align: "center", maxWidth: bw - 2 });
+            doc.setTextColor(...TEXTO);
+        } else {
+            const val = c(row[col.key] || "");
+            const bold = col.key === "anomalia" && val === "SI";
+            doc.setFont("helvetica", bold ? "bold" : "normal");
+            doc.setFontSize(6.5);
+            if (bold) doc.setTextColor(200, 30, 30);
+            else doc.setTextColor(...TEXTO);
+            doc.text(val, x + 2, y + rowH / 2 + 1.5, { maxWidth: cw - 3 });
+        }
+
+        x += cw;
+    });
+
+    doc.setTextColor(...TEXTO);
+    return y + rowH;
+}
+
+// ── Sección título ──────────────────────────────────────────────────────────────
 function sectionTitle(doc, y, label, color = AZUL) {
     doc.setFillColor(...color);
-    doc.rect(PAD, y, W - PAD * 2, 7, "F");
-    doc.setTextColor(255, 255, 255);
+    doc.rect(PAD, y, CW, 6.5, "F");
+    doc.setTextColor(...BLANCO);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.text(label.toUpperCase(), PAD + 3, y + 5);
+    doc.setFontSize(7);
+    doc.text(c(label).toUpperCase(), PAD + 3, y + 4.5);
     doc.setTextColor(...TEXTO);
-    return y + 7;
+    return y + 6.5;
 }
 
-// ── Fila de tabla ─────────────────────────────────────────────────────────────
-function tableRow(doc, y, cols, isHeader = false, alt = false) {
-    const totalW = W - PAD * 2;
-    let x = PAD;
-    if (isHeader) {
-        doc.setFillColor(30, 60, 130);
-        doc.rect(PAD, y, totalW, 6, "F");
-        doc.setTextColor(255, 255, 255);
+// ── Resumen de jornada ─────────────────────────────────────────────────────────
+function drawResumen(doc, y, items) {
+    y = sectionTitle(doc, y, "Resumen de Jornada", AZUL);
+    const cols  = Math.min(items.length, 9);
+    const cellW = CW / cols;
+    items.forEach((item, i) => {
+        const x = PAD + i * cellW;
+        doc.setFillColor(235, 241, 255);
+        doc.rect(x, y, cellW, 13, "F");
+        doc.setDrawColor(190, 205, 235);
+        doc.rect(x, y, cellW, 13, "S");
+
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(7);
-    } else {
-        if (alt) { doc.setFillColor(248, 249, 252); doc.rect(PAD, y, totalW, 7, "F"); }
-        doc.setDrawColor(225, 228, 235);
-        doc.line(PAD, y + 7, PAD + totalW, y + 7);
-        doc.setTextColor(...TEXTO);
+        doc.setFontSize(11);
+        doc.setTextColor(...AZUL);
+        doc.text(String(item.val || "0"), x + cellW / 2, y + 7, { align: "center" });
+
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(7.5);
-    }
-    cols.forEach(({ text, w }) => {
-        const tw = w * totalW;
-        const safe = String(text || "--").replace(/[^\x00-\x7F]/g, "");
-        doc.text(safe, x + 2, y + (isHeader ? 4.5 : 5), { maxWidth: tw - 4 });
-        x += tw;
+        doc.setFontSize(5.5);
+        doc.setTextColor(...MUTED);
+        doc.text(c(item.label), x + cellW / 2, y + 11.5, { align: "center" });
     });
-    return y + (isHeader ? 6 : 7);
+    return y + 13;
 }
 
-// ── Definición de categorías (igual que el modal) ─────────────────────────────
-const CATS_PDF = [
-    { tipo:"ctrl",     label:"Controles",       color: AZUL,            hdr:[30,60,130]  },
-    { tipo:"cap",      label:"Capacitaciones",   color:[100,40,200],     hdr:[80,30,170]  },
-    { tipo:"traslado", label:"Traslados",         color:[3,105,161],      hdr:[3,85,130]   },
-    { tipo:"admin",    label:"Administrativo",    color:[55,65,81],       hdr:[50,60,75]   },
-    { tipo:"vulnerab", label:"Vuln./Riesgos",     color:[180,83,9],       hdr:[160,70,5]   },
-    { tipo:"reclamos", label:"Reclamos",           color:[220,38,38],      hdr:[190,20,20]  },
-    { tipo:"almuerzo", label:"Almuerzo/Cena",     color:[21,128,61],      hdr:[15,100,45]  },
-    { tipo:"taller",   label:"Taller/Rep.",       color:[107,114,128],    hdr:[80,88,100]  },
-    { tipo:"gremial",  label:"Gremial",           color:[109,40,217],     hdr:[90,30,190]  },
-    { tipo:"otras",    label:"Otras actividades", color:[107,114,128],    hdr:[80,88,100]  },
-];
-
-function calcMin(a) {
-    if (a.tipo === "cap") return Number(a.duracion) || 0;
-    return diffMinutes(a.inicio||a.horaInicio, a.fin||a.horaFin) + Number(a.duracionMin || 0);
+// ── Footer de página ───────────────────────────────────────────────────────────
+function drawFooters(doc, jornadaID, fecha) {
+    const total = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= total; p++) {
+        doc.setPage(p);
+        doc.setFillColor(...AZUL);
+        doc.rect(0, 290, W, 7, "F");
+        doc.setTextColor(...BLANCO);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        const ts = new Date().toLocaleString("es-AR");
+        doc.text(
+            `CyranoApp - Generado: ${ts} - Jornada ${jornadaID || ""}  |  Pag. ${p}/${total}`,
+            W / 2, 294.5, { align: "center" }
+        );
+    }
 }
 
-// ── GENERADOR PRINCIPAL ───────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// GENERADOR PRINCIPAL
+// ══════════════════════════════════════════════════════════════════════════════
 export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null) {
-    const doc       = new jsPDF({ unit: "mm", format: "a4" });
-    const km        = Math.max(0, Number(j.kmFinal || 0) - Number(j.kmInicial || 0));
-    const acts      = j.actividades || [];
-    const ctrls     = acts.filter(a => a.tipo === "ctrl");
-    const anomalias = ctrls.filter(c => c.anomalia === "Si" || c.anomalia === true || c.anomalia === "Sí");
+    const doc  = new jsPDF({ unit: "mm", format: "a4" });
+    const acts = j.actividades || [];
+    const km   = Math.max(0, Number(j.kmFinal || 0) - Number(j.kmInicial || 0));
 
-    // Datos por categoría (solo las que tienen ítems)
-    const catData = CATS_PDF.map(cat => ({
-        ...cat,
-        items:    acts.filter(a => a.tipo === cat.tipo),
-        totalMin: acts.filter(a => a.tipo === cat.tipo).reduce((s, a) => s + calcMin(a), 0),
-    })).filter(c => c.items.length > 0);
+    // ── Calcular tiempos por categoría ────────────────────────────────────────
+    const minCtrl     = acts.filter(a => a.tipo === "ctrl")     .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin), 0);
+    const minTraslado = acts.filter(a => a.tipo === "traslado") .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin) + Number(a.duracionMin || 0), 0);
+    const minAdmin    = acts.filter(a => a.tipo === "admin")    .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin) + Number(a.duracionMin || 0), 0);
+    const minCap      = acts.filter(a => a.tipo === "cap")      .reduce((s, a) => s + Number(a.duracion || 0) + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin), 0);
+    const minTotal    = diffMin(j.horaInicio, j.horaFin);
 
-    drawHeader(doc, empresaNombre, logoBase64);
-    let y = 36;
+    // ── Contadores ────────────────────────────────────────────────────────────
+    const noCtrls    = acts.filter(a => a.tipo === "ctrl").length;
+    const noCaps     = acts.filter(a => a.tipo === "cap").length;
+    const noOtras    = acts.filter(a => a.tipo !== "ctrl" && a.tipo !== "cap").length;
+    const noNocturno = acts.filter(a => a.tipo === "ctrl" && (a.turno === "nocturno" || a.esNocturno)).length;
+    const noFdS      = acts.filter(a => a.tipo === "ctrl" && (a.esFinDeSemana || a.esFds)).length;
+    const noAnom     = acts.filter(a => a.tipo === "ctrl" && (a.anomalia === "Si" || a.anomalia === "Sí" || a.anomalia === true)).length;
 
-    // ── Fila 1: Supervisor / Fecha / ID ─────────────────────────────────────
-    const cw  = (W - PAD * 2) / 4;
-    const cw2 = (W - PAD * 2) / 2;
-    infoCell(doc, PAD,            y, cw2, "Supervisor",  j.nombre    || "--");
-    infoCell(doc, PAD + cw2,      y, cw,  "Fecha",       j.fecha     || "--");
-    infoCell(doc, PAD + cw2 + cw, y, cw,  "Jornada ID",  j.jornadaID || "--");
-    y += 14;
-
-    // ── Fila 2: Vehículo / Km / Hora ini / Hora fin ──────────────────────────
-    infoCell(doc, PAD,           y, cw, "Vehiculo",      j.vehiculo    || "--");
-    infoCell(doc, PAD + cw,      y, cw, "Km recorridos", km > 0 ? km + " km" : "--");
-    infoCell(doc, PAD + cw * 2,  y, cw, "Hora inicio",   j.horaInicio  || "--");
-    infoCell(doc, PAD + cw * 3,  y, cw, "Hora fin",      j.horaFin     || "--");
-    y += 14;
-
-    // ── Fila 3: Km ini / Km fin / Km netos / Anomalías ──────────────────────
-    infoCell(doc, PAD,           y, cw, "Km inicial",  j.kmInicial || "--");
-    infoCell(doc, PAD + cw,      y, cw, "Km final",    j.kmFinal   || "--");
-    infoCell(doc, PAD + cw * 2,  y, cw, "Km netos",    km > 0 ? km + " km" : "--");
-    infoCell(doc, PAD + cw * 3,  y, cw, "Anomalias",   anomalias.length > 0 ? anomalias.length + " DETECTADAS" : "Sin anomalias");
-    y += 16;
-
-    // ── Resumen visual por categoría (solo las presentes) ────────────────────
-    if (catData.length > 0) {
-        const items = catData.map(c => ({
-            label: c.label,
-            val:   `${c.items.length} (${fmtMin(c.totalMin)})`,
-        }));
-        // Mostrar en filas de 4 si hay más de 4 categorías
-        const cols = Math.min(items.length, 4);
-        const rows = [];
-        for (let i = 0; i < items.length; i += cols) rows.push(items.slice(i, i + cols));
-        rows.forEach(row => {
-            // Pad to cols
-            while (row.length < cols) row.push({ label: "", val: "" });
-            y = resumenCells(doc, y, row);
+    // ── Construir filas de la tabla ───────────────────────────────────────────
+    // Fila sintética de inicio
+    const rows = [];
+    if (j.horaInicio) {
+        rows.push({
+            tipo:         "inicio",
+            objetivo:     "—",
+            entrada:      j.horaInicio,
+            salida:       "",
+            vigilador:    "—",
+            pag:          "",
+            anomalia:     "",
+            calificacion: "",
+            obs:          "Inicio del servicio del dia de la fecha",
+            rowH:         7,
         });
     }
-    y += 5;
 
-    // ── Secciones por categoría ───────────────────────────────────────────────
-    catData.forEach(cat => {
-        if (y > 252) { doc.addPage(); drawHeader(doc, empresaNombre, logoBase64); y = 36; }
-        const titleStr = `${cat.label} (${cat.items.length})  -  Tiempo total: ${fmtMin(cat.totalMin)}`;
-        y = sectionTitle(doc, y, titleStr, cat.hdr);
-
-        if (cat.tipo === "ctrl") {
-            // ── Controles: Objetivo / Hora ini / Hora fin / Duración / Anomalía / Obs ──
-            y = tableRow(doc, y, [
-                { text: "Objetivo / Puesto",  w: 0.38 },
-                { text: "Hora ini",           w: 0.13 },
-                { text: "Hora fin",           w: 0.13 },
-                { text: "Duracion",           w: 0.12 },
-                { text: "Anomalia",           w: 0.11 },
-                { text: "Observacion",        w: 0.13 },
-            ], true);
-            cat.items.forEach((c, i) => {
-                if (y > 272) { doc.addPage(); drawHeader(doc, empresaNombre, logoBase64); y = 36; }
-                const dur  = diffMinutes(c.inicio || c.horaInicio, c.fin || c.horaFin);
-                const anom = (c.anomalia === "Si" || c.anomalia === true || c.anomalia === "Si") ? "SI" : "No";
-                y = tableRow(doc, y, [
-                    { text: c.objetivo || c.puesto || "--",     w: 0.38 },
-                    { text: c.inicio || c.horaInicio || "--",   w: 0.13 },
-                    { text: c.fin    || c.horaFin    || "--",   w: 0.13 },
-                    { text: fmtMin(dur),                         w: 0.12 },
-                    { text: anom,                                 w: 0.11 },
-                    { text: c.observacion || c.novedad || "--", w: 0.13 },
-                ], false, i % 2 === 1);
-            });
-
-        } else if (cat.tipo === "cap") {
-            // ── Capacitaciones: Tema / Duración / Participantes / Descripción ────────
-            y = tableRow(doc, y, [
-                { text: "Tema",           w: 0.40 },
-                { text: "Duracion",       w: 0.15 },
-                { text: "Participantes",  w: 0.15 },
-                { text: "Descripcion",    w: 0.30 },
-            ], true);
-            cat.items.forEach((c, i) => {
-                if (y > 272) { doc.addPage(); drawHeader(doc, empresaNombre, logoBase64); y = 36; }
-                y = tableRow(doc, y, [
-                    { text: c.tema || c.descripcion || "--",           w: 0.40 },
-                    { text: c.duracion ? c.duracion + " min" : "--",   w: 0.15 },
-                    { text: c.cantPersonas || "--",                     w: 0.15 },
-                    { text: c.detalle || c.descripcion || "--",         w: 0.30 },
-                ], false, i % 2 === 1);
-            });
-
-        } else {
-            // ── Actividades genéricas: Actividad / Descripción / Hora ini / Hora fin / Duración
-            y = tableRow(doc, y, [
-                { text: "Actividad",    w: 0.28 },
-                { text: "Descripcion",  w: 0.34 },
-                { text: "Hora ini",     w: 0.13 },
-                { text: "Hora fin",     w: 0.13 },
-                { text: "Duracion",     w: 0.12 },
-            ], true);
-            cat.items.forEach((a, i) => {
-                if (y > 272) { doc.addPage(); drawHeader(doc, empresaNombre, logoBase64); y = 36; }
-                const dur = calcMin(a);
-                y = tableRow(doc, y, [
-                    { text: a.actividad || a.tipo || "--",         w: 0.28 },
-                    { text: a.descripcion || a.detalle || "--",    w: 0.34 },
-                    { text: a.inicio || a.horaInicio || "--",      w: 0.13 },
-                    { text: a.fin    || a.horaFin    || "--",      w: 0.13 },
-                    { text: fmtMin(dur),                            w: 0.12 },
-                ], false, i % 2 === 1);
-            });
-        }
-        y += 4;
+    // Actividades ordenadas cronológicamente
+    const actsOrdenadas = [...acts].sort((a, b) => {
+        const ta = parseTimeMin(a.horaInicio || a.inicio || "");
+        const tb = parseTimeMin(b.horaInicio || b.inicio || "");
+        return (ta === -1 ? 9999 : ta) - (tb === -1 ? 9999 : tb);
     });
 
-    // ── Novedades ────────────────────────────────────────────────────────────
+    actsOrdenadas.forEach(a => {
+        if (a.tipo === "ctrl") {
+            const label = califLabel(a.ratings);
+            const scores = califScores(a.ratings);
+            const infoAnomalia = a.informeAnomalia || a.novedad || "";
+            const obsText = [scores, infoAnomalia].filter(Boolean).join("  |  ");
+            rows.push({
+                tipo:         "ctrl",
+                objetivo:     c(a.objetivo || a.puesto || ""),
+                entrada:      c(a.horaInicio || a.inicio || ""),
+                salida:       c(a.horaFin   || a.fin    || ""),
+                vigilador:    c(a.vigilador  || ""),
+                pag:          c(a.paginaLibro || ""),
+                anomalia:     (a.anomalia === "Si" || a.anomalia === "Sí" || a.anomalia === true) ? "SI" : "",
+                calificacion: label ? c(label) : "",
+                obs:          c(obsText || a.observacion || ""),
+                rowH:         (scores || label) ? 9 : 7,
+            });
+        } else if (a.tipo === "cap") {
+            const obs = [
+                a.tema || a.descripcion || "",
+                a.cantPersonas ? `${a.cantPersonas} pers.` : "",
+                a.detalle || "",
+            ].filter(Boolean).join("  |  ");
+            rows.push({
+                tipo:         "cap",
+                objetivo:     "—",
+                entrada:      c(a.horaInicio || a.inicio || ""),
+                salida:       c(a.horaFin   || a.fin    || (a.duracion ? `(${a.duracion}min)` : "")),
+                vigilador:    "—",
+                pag:          "",
+                anomalia:     "",
+                calificacion: "",
+                obs:          c(obs || a.tema || ""),
+                rowH:         7,
+            });
+        } else if (a.tipo === "traslado") {
+            rows.push({
+                tipo:         "traslado",
+                objetivo:     "—",
+                entrada:      c(a.horaInicio || a.inicio || ""),
+                salida:       c(a.horaFin   || a.fin    || ""),
+                vigilador:    "—",
+                pag:          "",
+                anomalia:     "",
+                calificacion: "",
+                obs:          c(a.descripcion || a.detalle || a.actividad || ""),
+                rowH:         7,
+            });
+        } else {
+            const obs = [a.actividad || "", a.descripcion || a.detalle || ""].filter(Boolean).join(" — ");
+            rows.push({
+                tipo:         a.tipo || "otras",
+                objetivo:     "—",
+                entrada:      c(a.horaInicio || a.inicio || ""),
+                salida:       c(a.horaFin   || a.fin    || ""),
+                vigilador:    "—",
+                pag:          "",
+                anomalia:     "",
+                calificacion: "",
+                obs:          c(obs),
+                rowH:         7,
+            });
+        }
+    });
+
+    // Fila sintética de fin
+    if (j.horaFin) {
+        rows.push({
+            tipo:         "fin",
+            objetivo:     "—",
+            entrada:      j.horaFin,
+            salida:       "",
+            vigilador:    "—",
+            pag:          "",
+            anomalia:     "",
+            calificacion: "",
+            obs:          "Cierre de jornada",
+            rowH:         7,
+        });
+    }
+
+    // ── RENDER ─────────────────────────────────────────────────────────────────
+    drawPageHeader(doc, empresaNombre, logoBase64, j.fecha);
+    let y = 32;
+
+    // ── Fila 1: Supervisor | Fecha | Vehículo | Km Inicio | Km Final | Total Km ──
+    const cw6 = CW / 6;
+    infoCell(doc, PAD,             y, cw6 * 2, 13, "Supervisor",  j.nombre    || j.email || "--", true);
+    infoCell(doc, PAD + cw6 * 2,   y, cw6,     13, "Fecha",       j.fecha     || "--");
+    infoCell(doc, PAD + cw6 * 3,   y, cw6,     13, "Vehiculo",    j.vehiculo  || "--");
+    infoCell(doc, PAD + cw6 * 4,   y, cw6 / 2, 13, "Km Inicio",  j.kmInicial || "--");
+    infoCell(doc, PAD + cw6 * 4 + cw6/2, y, cw6 / 2, 13, "Km Final", j.kmFinal || "--");
+    y += 13;
+
+    // ── Fila 2: Hora ini | Hora fin | Total Hs | Hs Trasl. | Hs Sup. | Hs Cap. | Hs Admin. | Total Km ──
+    const cw7 = CW / 8;
+    infoCell(doc, PAD,             y, cw7,    13, "Hora inicio",  j.horaInicio || "--");
+    infoCell(doc, PAD + cw7,       y, cw7,    13, "Hora fin",     j.horaFin    || "--");
+    infoCell(doc, PAD + cw7 * 2,   y, cw7,    13, "Total Horas",  fmtHHMM(minTotal) + " Hs");
+    infoCell(doc, PAD + cw7 * 3,   y, cw7,    13, "Hs Traslados", fmtHHMM(minTraslado) + " Hs");
+    infoCell(doc, PAD + cw7 * 4,   y, cw7,    13, "Hs Supervision", fmtHHMM(minCtrl) + " Hs");
+    infoCell(doc, PAD + cw7 * 5,   y, cw7,    13, "Hs Apoyo/Cap.", fmtHHMM(minCap) + " Hs");
+    infoCell(doc, PAD + cw7 * 6,   y, cw7,    13, "Hs Admin.",    fmtHHMM(minAdmin) + " Hs");
+    infoCell(doc, PAD + cw7 * 7,   y, cw7,    13, "Total Km",     km > 0 ? km + " km" : "--");
+    y += 15;
+
+    // ── Tabla de actividades ──────────────────────────────────────────────────
+    y = sectionTitle(doc, y, `Detalle de actividades (${rows.filter(r => r.tipo !== "inicio" && r.tipo !== "fin").length} registros)`, [20, 50, 110]);
+    y = drawTableHeader(doc, y);
+
+    rows.forEach((row, i) => {
+        const neededH = row.rowH || 7;
+        // Espacio para la fila + al menos el resumen (40mm) en la misma página
+        if (y + neededH + 40 > 285) {
+            doc.addPage();
+            drawPageHeader(doc, empresaNombre, logoBase64, j.fecha);
+            y = 32;
+            y = drawTableHeader(doc, y);
+        }
+        y = drawActivityRow(doc, y, row, i % 2 === 1);
+    });
+
+    y += 4;
+
+    // ── Anomalías destacadas ──────────────────────────────────────────────────
+    const anomalias = acts.filter(a => a.tipo === "ctrl" && (a.anomalia === "Si" || a.anomalia === "Sí" || a.anomalia === true));
+    if (anomalias.length > 0) {
+        if (y + 30 > 260) { doc.addPage(); drawPageHeader(doc, empresaNombre, logoBase64, j.fecha); y = 32; }
+        y = sectionTitle(doc, y, `Anomalias detectadas (${anomalias.length})`, [190, 25, 25]);
+        anomalias.forEach((a, i) => {
+            if (y + 14 > 270) { doc.addPage(); drawPageHeader(doc, empresaNombre, logoBase64, j.fecha); y = 32; }
+            doc.setFillColor(255, 242, 242);
+            doc.rect(PAD, y, CW, 13, "F");
+            doc.setDrawColor(220, 150, 150);
+            doc.rect(PAD, y, CW, 13, "S");
+            // Borde izquierdo rojo
+            doc.setFillColor(220, 38, 38);
+            doc.rect(PAD, y, 3, 13, "F");
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.5);
+            doc.setTextColor(180, 0, 0);
+            doc.text(c(a.objetivo || a.puesto || "--"), PAD + 6, y + 5);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7);
+            doc.setTextColor(...TEXTO);
+            const desc = c(a.informeAnomalia || a.novedad || a.observacion || "Sin descripcion");
+            doc.text(desc, PAD + 6, y + 10, { maxWidth: CW - 10 });
+            y += 15;
+        });
+        y += 2;
+    }
+
+    // ── Novedades generales ───────────────────────────────────────────────────
     const novedades = j.novedades || j.observaciones || j.novedad;
     if (novedades) {
-        if (y > 252) { doc.addPage(); drawHeader(doc, empresaNombre, logoBase64); y = 36; }
-        y = sectionTitle(doc, y, "Novedades / Observaciones", [160, 100, 0]);
+        if (y + 28 > 260) { doc.addPage(); drawPageHeader(doc, empresaNombre, logoBase64, j.fecha); y = 32; }
+        y = sectionTitle(doc, y, "Novedades / Observaciones generales", [140, 100, 0]);
         doc.setFillColor(255, 251, 230);
-        doc.rect(PAD, y, W - PAD * 2, 18, "F");
+        doc.rect(PAD, y, CW, 18, "F");
+        doc.setDrawColor(220, 180, 80);
+        doc.rect(PAD, y, CW, 18, "S");
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.setTextColor(...TEXTO);
-        const safe = novedades.replace(/[^\x00-\x7F]/g, "");
-        doc.text(safe, PAD + 3, y + 6, { maxWidth: W - PAD * 2 - 6 });
+        doc.text(c(novedades), PAD + 3, y + 7, { maxWidth: CW - 6 });
         y += 22;
     }
 
-    // ── Anomalías ─────────────────────────────────────────────────────────────
-    if (anomalias.length > 0) {
-        if (y > 252) { doc.addPage(); drawHeader(doc, empresaNombre, logoBase64); y = 36; }
-        y = sectionTitle(doc, y, `Anomalias detectadas (${anomalias.length})`, [200, 30, 30]);
-        anomalias.forEach((c, i) => {
-            if (y > 272) { doc.addPage(); drawHeader(doc, empresaNombre, logoBase64); y = 36; }
-            doc.setFillColor(255, 240, 240);
-            doc.rect(PAD, y, W - PAD * 2, 12, "F");
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(8);
-            doc.setTextColor(180, 0, 0);
-            const obj = (c.objetivo || c.puesto || "--").replace(/[^\x00-\x7F]/g, "");
-            doc.text(obj, PAD + 3, y + 5);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(...TEXTO);
-            doc.setFontSize(7.5);
-            const obs = (c.observacion || c.novedad || "Sin descripcion").replace(/[^\x00-\x7F]/g, "");
-            doc.text(obs, PAD + 3, y + 10, { maxWidth: W - PAD * 2 - 6 });
-            y += 15;
-        });
-    }
+    // ── Resumen de jornada ────────────────────────────────────────────────────
+    if (y + 25 > 272) { doc.addPage(); drawPageHeader(doc, empresaNombre, logoBase64, j.fecha); y = 32; }
+    y += 4;
+    drawResumen(doc, y, [
+        { val: noCtrls,              label: "Controles"       },
+        { val: noCaps,               label: "Capacitaciones"  },
+        { val: noOtras,              label: "Otras act."      },
+        { val: fmtHHMM(minCtrl),    label: "Hs Supervision"  },
+        { val: fmtHHMM(minTraslado),label: "Hs Traslados"    },
+        { val: fmtHHMM(minAdmin),   label: "Hs Admin."       },
+        { val: km > 0 ? km + " km" : "—", label: "Km recorridos" },
+        { val: noNocturno,           label: "Nocturnos"       },
+        { val: noFdS,                label: "Fin de semana"   },
+    ]);
 
-    // ── Footer ────────────────────────────────────────────────────────────────
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let p = 1; p <= totalPages; p++) {
-        doc.setPage(p);
-        doc.setFillColor(...AZUL);
-        doc.rect(0, 291, W, 6, "F");
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(6.5);
-        doc.setFont("helvetica", "normal");
-        const fecha = new Date().toLocaleDateString("es-AR");
-        doc.text(`CyranoApp  -  Generado el ${fecha}  -  Pag. ${p}/${totalPages}`, W / 2, 295, { align: "center" });
-    }
+    // ── Footers ───────────────────────────────────────────────────────────────
+    drawFooters(doc, j.jornadaID, j.fecha);
 
-    const nombre = (j.nombre || "supervisor").split(" ").slice(0, 2).join("_").replace(/[^\x00-\x7F]/g, "");
-    const fecha  = (j.fecha || "").replace(/\//g, "-");
-    doc.save(`Jornada_${j.jornadaID || "J"}_${nombre}_${fecha}.pdf`);
+    // ── Guardar ───────────────────────────────────────────────────────────────
+    const nombre = c(j.nombre || "supervisor").split(" ").slice(0, 2).join("_");
+    const fecha  = String(j.fecha || "").replace(/\//g, "_");
+    doc.save(`HojaSupervision_${nombre}_${fecha}_${j.jornadaID || "J"}.pdf`);
 }
 
 // ── Descarga múltiple ─────────────────────────────────────────────────────────

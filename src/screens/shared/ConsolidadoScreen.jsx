@@ -1,16 +1,17 @@
 // src/screens/ConsolidadoScreen.jsx
 // Consolidado de horas del período — vista general de toda la planilla
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAppData } from "../../context/AppDataContext";
 import { useAuth }     from "../../context/AuthContext";
 import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
     ResponsiveContainer, BarChart, Bar,
-    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
+    XAxis, YAxis, CartesianGrid, Tooltip,
     PieChart, Pie, Cell,
 } from "recharts";
+import * as XLSX from "xlsx";
 import "../../styles/ConsolidadoScreen.css";
 import { getDias, fmtKey, DIAS_ES, MESES_ES, AUS_CODES, horasDeValor, normalizarTurno } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
@@ -106,7 +107,7 @@ function SelectorPeriodo({ onSelect }) {
                     </select>
                     <select className="con-select con-select--año" value={año}
                         onChange={e => setAño(Number(e.target.value))}>
-                        {[2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={y}>{y}</option>)}
+                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <button className="con-btn-abrir" onClick={() => onSelect({ año, mes })}>
                         Ver →
@@ -127,6 +128,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
     const [docIdMap,     setDocIdMap]     = useState({});
     const [tareaMap,     setTareaMap]     = useState({}); // legajo → tarea
     const [cargoMap,     setCargoMap]     = useState({}); // legajo → cargo
+    const [rolMap,       setRolMap]       = useState({}); // legajo → rol
     const [grupoMap,     setGrupoMap]     = useState({}); // legajo → grupoTurno14
     const [francosMap,   setFrancosMap]   = useState({}); // grupo → Set<"YYYY-MM-DD">
     const [excluidos,    setExcluidos]    = useState(new Set());
@@ -170,6 +172,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                 const gm  = {};
                 const tm  = {};
                 const cm  = {};
+                const rlm = {}; // rol map
                 const exc = new Set();
                 const pers = [];
                 legSnap.docs.forEach(d => {
@@ -180,9 +183,13 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                     rm[leg] = data.regimen      || "";
                     dm[leg] = d.id;
                     gm[leg] = data.grupoTurno14 || "";
-                    tm[leg] = data.tarea        || "";
-                    cm[leg] = data.cargo        || "";
-                    if (TAREAS_EXCLUIR.has(data.tarea)) {
+                    tm[leg]  = data.tarea        || "";
+                    cm[leg]  = data.cargo        || "";
+                    rlm[leg] = data.rol          || "";
+                    // Excluir por tarea, por estado inactivo o por cargo "fuera de convenio"
+                    const inactivo       = data.estado && data.estado !== "Activo";
+                    const fueraConvenio  = (data.cargo || "").includes("(FC)");
+                    if (TAREAS_EXCLUIR.has(data.tarea) || inactivo || fueraConvenio) {
                         exc.add(leg);
                     } else {
                         pers.push({ ...data });
@@ -227,6 +234,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                 setDocIdMap(dm);
                 setTareaMap(tm);
                 setCargoMap(cm);
+                setRolMap(rlm);
                 setGrupoMap(gm);
                 setFrancosMap(fm);
                 setExcluidos(exc);
@@ -273,6 +281,8 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                         regimen: regimenMap[leg] || "",
                         rawDias: {},
                         nocDias: {},
+                        capDias: {},
+                        pasPuesto1Dias: 0,
                         horasPorDows: [],
                     };
                 }
@@ -285,7 +295,22 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                         byLeg[leg].nocDias[key] = (byLeg[leg].nocDias[key] || 0) + hn;
                     }
                 });
+                // Acumular capacitación
+                Object.entries(p.capacitacion || {}).forEach(([key, val]) => {
+                    const hc = Number(val) || 0;
+                    if (hc > 0) byLeg[leg].capDias[key] = (byLeg[leg].capDias[key] || 0) + hc;
+                });
                 byLeg[leg].horasPorDows.push(hpd);
+                // Contar días trabajados en "PAS Puesto 1" (para 000138 Adicional Alcolemia)
+                const _docNombreCompleto = [doc.clienteNombre, doc.proyectoNombre, doc.objetivoNombre]
+                    .filter(Boolean).join(" ").toLowerCase();
+                if (_docNombreCompleto.includes("puesto 1")) {
+                    const personDataPAS = p[vista] || {};
+                    Object.values(personDataPAS).forEach(val => {
+                        if (horasDeValor(normalizarTurno(val)) > 0)
+                            byLeg[leg].pasPuesto1Dias++;
+                    });
+                }
             });
         });
 
@@ -302,6 +327,17 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                     data[key] = vals.find(v => v && v !== "") || "";
                 }
             });
+            // Fusionar horas de capacitación en el total diario
+            Object.entries(r.capDias).forEach(([key, capHs]) => {
+                const hc = Number(capHs) || 0;
+                if (hc <= 0) return;
+                if (typeof data[key] === "number") {
+                    data[key] = data[key] + hc;   // sumar al turno del día
+                } else if (!data[key]) {
+                    data[key] = hc;               // solo CAP ese día
+                }
+                // si hay código (Fco, Enf…) se ignora la CAP
+            });
             // Sumar horas contratadas por DOW de todos los objetivos
             const horasPorDow = [0,1,2,3,4,5,6].map(dow => {
                 const t = r.horasPorDows.reduce((s, hpd) =>
@@ -313,7 +349,8 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                 legajo: r.legajo, nombre: r.nombre,
                 cc: r.cc, proyecto: r.proyecto,
                 zona: r.zona, regimen: r.regimen,
-                horasPorDow, data, nocData,
+                horasPorDow, data, nocData, capData: {},
+                pasPuesto1Dias: r.pasPuesto1Dias || 0,
             };
         });
 
@@ -357,14 +394,21 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
         );
     }, [todasFilas, filtroBusq, filtroZona, zonaFija]);
 
-    const calcExtras = (data, regimen, grupoTurno14) => {
+    // Verdadero si el legajo tiene rol o tarea = "Encargado"
+    const esEncargado = (leg) =>
+        String(tareaMap[leg] || "").toUpperCase().includes("ENCARGADO") ||
+        String(rolMap[leg]   || "").toUpperCase().includes("ENCARGADO");
+
+    const calcExtras = (data, regimen, grupoTurno14, capData = {}) => {
         let ext50 = 0, ext100 = 0;
         if (regimen === "14 x 14 x 8" || regimen === "14 x 14 x 12") {
             const umbral  = regimen === "14 x 14 x 8" ? 8 : 12;
             const francos = francosMap[grupoTurno14] || new Set();
             dias.forEach(d => {
-                const key = fmtKey(d);
-                const hs  = horasDeValor(data[key] || "");
+                const key   = fmtKey(d);
+                const hsTur = horasDeValor(normalizarTurno(data[key] || ""));
+                const hsCap = Number(capData[key]) || 0;
+                const hs    = hsTur + hsCap;
                 if (hs <= 0) return;
                 if (francos.has(key)) {
                     ext100 += hs;          // trabajó en franco → todo al 100%
@@ -373,8 +417,9 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                 }
             });
         } else if (regimen === "200") {
-            const hsTotal = dias.reduce((s, d) => s + horasDeValor(data[fmtKey(d)] || ""), 0);
-            ext50 = Math.max(0, hsTotal - 200);
+            const hsTur = dias.reduce((s, d) => s + horasDeValor(normalizarTurno(data[fmtKey(d)] || "")), 0);
+            const hsCap = Object.values(capData).reduce((s, v) => s + (Number(v) || 0), 0);
+            ext50 = Math.max(0, hsTur + hsCap - 200);
         } else {
             const umbral = regimen === "4 x 2 x 12" ? 10
                          : regimen === "5 x 2 x 12" ? 9.5
@@ -384,7 +429,9 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
             if (umbral !== null) {
                 dias.forEach(d => {
                     const key   = fmtKey(d);
-                    const hs    = horasDeValor(data[key] || "");
+                    const hsTur = horasDeValor(normalizarTurno(data[key] || ""));
+                    const hsCap = Number(capData[key]) || 0;
+                    const hs    = hsTur + hsCap;
                     const dow   = d.getDay();
                     const esFer = !!FERIADOS_ARG[key];
                     if (hs > umbral) {
@@ -406,10 +453,13 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
         }, 0);
     };
 
-    const calcResumen = (data) => {
+    const calcResumen = (data, capData = {}) => {
         let hsTotal = 0, diasTrab = 0, francos = 0, ausentes = 0, vac = 0;
         let lv = 0, sabado = 0, domingo = 0, ferDias = 0;
         let domingoHs = 0, ferHs = 0, sabadoHs = 0, lvHs = 0;
+
+        // Sumar horas de capacitación al total
+        Object.values(capData).forEach(hc => { hsTotal += Number(hc) || 0; });
 
         dias.forEach(d => {
             const key   = fmtKey(d);
@@ -441,8 +491,8 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
     // ── Datos para gráficos ───────────────────────────────────────────────────
     const grafPersonas = useMemo(() => {
         return todasFilas.map(f => {
-            const r = calcResumen(f.data);
-            const { ext50, ext100 } = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "");
+            const r = calcResumen(f.data, f.capData);
+            const { ext50, ext100 } = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData);
             const exc = f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0;
             return {
                 nombre: f.nombre.trim(),
@@ -457,14 +507,14 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
 
     const grafDesvios = useMemo(() => {
         const totAut = todasFilas.reduce((acc, f) => {
-            const r = calcResumen(f.data);
+            const r = calcResumen(f.data, f.capData);
             return {
-                lvHs:      acc.lvHs      + r.lvHs,
-                saDomFerHs:acc.saDomFerHs + (r.sabadoHs + r.domingoHs + r.ferHs),
+                lvHs:       acc.lvHs       + r.lvHs,
+                saDomFerHs: acc.saDomFerHs + (r.sabadoHs + r.domingoHs + r.ferHs),
             };
         }, { lvHs: 0, saDomFerHs: 0 });
         const totPag = todasFilas.reduce((acc, f) => {
-            const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "");
+            const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData);
             return { ext50: acc.ext50 + ext.ext50, ext100: acc.ext100 + ext.ext100 };
         }, { ext50: 0, ext100: 0 });
         const autExt50  = Math.round(totAut.lvHs       * 0.07 * 10) / 10;
@@ -472,16 +522,12 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
         const pagExt50  = Math.round(totPag.ext50  * 10) / 10;
         const pagExt100 = Math.round(totPag.ext100 * 10) / 10;
         return {
-            comparacion: [
-                { name: "Ext 50%",  Autorizado: autExt50,  Pagado: pagExt50  },
-                { name: "Ext 100%", Autorizado: autExt100, Pagado: pagExt100 },
-            ],
             kpis: [
                 {
                     label: "Ext 50%",
                     aut: autExt50, pag: pagExt50,
-                    desv: Math.round((pagExt50 - autExt50) * 10) / 10,
-                    pct:  autExt50 ? Math.round((pagExt50 / autExt50 - 1) * 1000) / 10 : null,
+                    desv: Math.round((pagExt50  - autExt50)  * 10) / 10,
+                    pct:  autExt50  ? Math.round((pagExt50  / autExt50  - 1) * 1000) / 10 : null,
                 },
                 {
                     label: "Ext 100%",
@@ -504,6 +550,153 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                 console.error("Error guardando régimen:", e);
             }
         }
+    };
+
+    // ── Exportar Excel ────────────────────────────────────────────────────────
+    const descargarExcel = () => {
+        const BON_HEADERS = [
+            "H00106 Premio Objetivo",
+            "OOA112 Premio Present. Lee",
+            "000219 Presentismo BA",
+            "000215 Viáticos CCT Vig",
+            "H00108 Adic Obj Lab Cuenca",
+            "000105 Adic por Función",
+            "000219 Presentismo SC",
+            "000138 Adic Alcolemia",
+            "OOA115 Adic Especial",
+            "OOA110 Premio Objetivo SC",
+        ];
+
+        // ── Fila de cabecera ─────────────────────────────────────────────────
+        const cabecera = [
+            "LEGAJO", "CC", "PROY.", "NOMBRE Y APELLIDO", "ZONA", "RÉGIMEN",
+            ...dias.map(d => {
+                const dow = DIAS_ES[d.getDay()];
+                const esFer = !!FERIADOS_ARG[fmtKey(d)];
+                return `${d.getDate()}/${d.getMonth()+1} ${esFer ? "FER" : dow.slice(0,2)}`;
+            }),
+            "Hs", "Días", "Base", "L-V", "Sáb", "Dom", "Fer", "Fco", "Aus", "Vac",
+            "Ext 50%", "Ext 100%", "Hs Exc.", "Hs Noc.",
+            ...BON_HEADERS,
+        ];
+
+        // ── Filas de datos ───────────────────────────────────────────────────
+        const filasDatos = filas.map(f => {
+            const r   = calcResumen(f.data, f.capData);
+            const reg = regimenMap[f.legajo] || "";
+            const { ext50, ext100 } = calcExtras(f.data, reg, grupoMap[f.legajo] || "", f.capData);
+            const noc = Object.values(f.nocData || {}).reduce((s,v) => s+v, 0);
+            const exc = f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0;
+            const esSC = String(f.zona || "").toUpperCase().includes("SANTA CRUZ");
+            const esBA = String(f.zona || "").toUpperCase().includes("BUENOS AIRES");
+
+            // 000138 Alcolemia
+            const alcolemia = !esSC ? "—"
+                : f.pasPuesto1Dias >= 14 ? "100%"
+                : f.pasPuesto1Dias >= 7  ? "50%"
+                : "—";
+
+            // Columnas de días
+            const celdasDias = dias.map(d => {
+                const val = f.data[fmtKey(d)] || "";
+                if (typeof val === "number") return val;
+                const hs = horasDeValor(normalizarTurno(val));
+                if (hs > 0) return hs;
+                return val || "";
+            });
+
+            // Bonus
+            const bonuses = [
+                f.proyecto === "113" ? (r.ausentes >= dias.length ? "0%" : "100%") : "—",
+                f.proyecto === "113" ? (r.ausentes >= dias.length ? "0%" : "100%") : "—",
+                esBA ? (r.ausentes > 4 ? "0%" : "100%") : "—",
+                esBA ? (r.ausentes > 4 ? "0%" : "100%") : "—",
+                f.legajo === "20038" ? "100%" : "—",
+                esSC && esEncargado(f.legajo) ? "100%" : "—",
+                esSC ? (r.ausentes > 4 ? "0%" : "100%") : "—",
+                alcolemia,
+                esSC ? (r.ausentes > 4 ? "0%" : "100%") : "—",
+                esSC ? (r.ausentes > 4 ? "0%" : "100%") : "—",
+            ];
+
+            return [
+                f.legajo, f.cc, f.proyecto, f.nombre, f.zona, reg,
+                ...celdasDias,
+                r.hsTotal  || 0,
+                r.diasTrab || 0,
+                "",                 // Base
+                r.lv      || 0,
+                r.sabado  || 0,
+                r.domingo || 0,
+                r.ferDias || 0,
+                r.francos || 0,
+                r.ausentes|| 0,
+                r.vac     || 0,
+                ext50  || 0,
+                ext100 || 0,
+                exc    || 0,
+                noc    || 0,
+                ...bonuses,
+            ];
+        });
+
+        // ── Fila de totales ──────────────────────────────────────────────────
+        const totHs    = filas.reduce((s,f) => s + calcResumen(f.data, f.capData).hsTotal,  0);
+        const totDias  = filas.reduce((s,f) => s + calcResumen(f.data, f.capData).diasTrab, 0);
+        const totDiasCols = dias.map(d => {
+            const key = fmtKey(d);
+            return filas.reduce((s,f) => s + horasDeValor(f.data[key] || ""), 0) || "";
+        });
+
+        const filaTotales = [
+            filas.length, "", "", "TOTALES", "", "",
+            ...totDiasCols,
+            totHs  || 0,
+            totDias|| 0,
+            "", "", "", "", "", "", "", "",
+            "", "", "", "",
+            "", "", "", "", "", "", "", "", "", "",
+        ];
+
+        // ── Armar hoja ───────────────────────────────────────────────────────
+        const aoa = [cabecera, ...filasDatos, filaTotales];
+        const ws  = XLSX.utils.aoa_to_sheet(aoa);
+
+        // Anchos de columna
+        ws["!cols"] = [
+            { wch: 8  }, // LEGAJO
+            { wch: 5  }, // CC
+            { wch: 5  }, // PROY
+            { wch: 30 }, // NOMBRE
+            { wch: 18 }, // ZONA
+            { wch: 15 }, // RÉGIMEN
+            ...dias.map(() => ({ wch: 6 })),
+            { wch: 7  }, // Hs
+            { wch: 5  }, // Días
+            { wch: 6  }, // Base
+            { wch: 4  }, // L-V
+            { wch: 4  }, // Sáb
+            { wch: 4  }, // Dom
+            { wch: 4  }, // Fer
+            { wch: 4  }, // Fco
+            { wch: 4  }, // Aus
+            { wch: 4  }, // Vac
+            { wch: 7  }, // Ext 50%
+            { wch: 7  }, // Ext 100%
+            { wch: 7  }, // Hs Exc.
+            { wch: 7  }, // Hs Noc.
+            ...BON_HEADERS.map(() => ({ wch: 22 })),
+        ];
+
+        // Paneles fijos: 1 fila de encabezado + 6 columnas fijas
+        ws["!views"] = [{ state: "frozen", xSplit: 6, ySplit: 1, topLeftCell: "G2" }];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws,
+            `${MESES_ES[config.mes-1]} ${config.año}`);
+
+        XLSX.writeFile(wb,
+            `Consolidado_${MESES_ES[config.mes-1]}_${config.año}.xlsx`);
     };
 
     if (cargando) return <div className="con-loading">Cargando consolidado...</div>;
@@ -545,182 +738,148 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                             onClick={() => setShowGraf(v => !v)}
                             title="Ver gráficos"
                         >📊</button>
+                        <button
+                            className="con-btn-dl"
+                            onClick={descargarExcel}
+                            title="Descargar Excel"
+                        >⬇ Descargar</button>
                     </div>
                 </div>
             </div>
 
             {/* ── Panel de gráficos ── */}
             {showGraf && todasFilas.length > 0 && (() => {
-            const GrafTick = ({ x, y, payload }) => {
-                const txt = String(payload?.value || "");
-                const MAX = 26;
-                const label = txt.length > MAX ? txt.slice(0, MAX) + "…" : txt;
+                const GrafTick = ({ x, y, payload }) => {
+                    const txt   = String(payload?.value || "");
+                    const label = txt.length > 26 ? txt.slice(0, 26) + "…" : txt;
+                    return (
+                        <text x={x} y={y} dy={4} textAnchor="end" fill="#cbd5e1" fontSize={10}>
+                            {label}
+                        </text>
+                    );
+                };
+                const totExt50  = grafDesvios.kpis[0];
+                const totExt100 = grafDesvios.kpis[1];
+                const totalAut  = Math.round((totExt50.aut  + totExt100.aut)  * 10) / 10;
+                const totalPag  = Math.round((totExt50.pag  + totExt100.pag)  * 10) / 10;
+                const totalDesv = Math.round((totExt50.desv + totExt100.desv) * 10) / 10;
+                const totalPct  = totalAut ? Math.round((totalPag / totalAut - 1) * 1000) / 10 : null;
+                const kpisGraf  = [...grafDesvios.kpis, { label: "Total Extras", aut: totalAut, pag: totalPag, desv: totalDesv, pct: totalPct }];
                 return (
-                    <text x={x} y={y} dy={4} textAnchor="end" fill="#cbd5e1" fontSize={10}>
-                        {label}
-                    </text>
-                );
-            };
-            return (
-                <div className="con-graf-panel">
-                    {/* KPIs de desvíos */}
-                    <div className="con-graf-kpis">
-                        {[...grafDesvios.kpis, {
-                            label: "Total Extras",
-                            aut:  Math.round((grafDesvios.kpis[0].aut  + grafDesvios.kpis[1].aut)  * 10) / 10,
-                            pag:  Math.round((grafDesvios.kpis[0].pag  + grafDesvios.kpis[1].pag)  * 10) / 10,
-                            desv: Math.round((grafDesvios.kpis[0].desv + grafDesvios.kpis[1].desv) * 10) / 10,
-                            pct:  (() => {
-                                const aut = grafDesvios.kpis[0].aut + grafDesvios.kpis[1].aut;
-                                const pag = grafDesvios.kpis[0].pag + grafDesvios.kpis[1].pag;
-                                return aut ? Math.round((pag / aut - 1) * 1000) / 10 : null;
-                            })(),
-                        }].map(k => (
-                            <div key={k.label} className="con-graf-kpi">
-                                <div className="con-graf-kpi-label">{k.label}</div>
-                                <div className="con-graf-kpi-row">
-                                    <span className="con-graf-kpi-item">
-                                        <span className="con-graf-kpi-sub">Autorizado</span>
-                                        <span className="con-graf-kpi-val">{k.aut || "—"}</span>
-                                    </span>
-                                    <span className="con-graf-kpi-item">
-                                        <span className="con-graf-kpi-sub">Pagado</span>
-                                        <span className="con-graf-kpi-val">{k.pag || "—"}</span>
-                                    </span>
-                                    <span className="con-graf-kpi-item">
-                                        <span className="con-graf-kpi-sub">Desvío</span>
-                                        <span className={`con-graf-kpi-val ${k.desv > 0 ? "con-graf-kpi--pos" : k.desv < 0 ? "con-graf-kpi--neg" : ""}`}>
-                                            {k.desv > 0 ? "+" : ""}{k.desv || "—"}
-                                        </span>
-                                    </span>
-                                    <span className="con-graf-kpi-item">
-                                        <span className="con-graf-kpi-sub">% Desvío</span>
-                                        <span className={`con-graf-kpi-val ${k.pct > 0 ? "con-graf-kpi--pos" : k.pct < 0 ? "con-graf-kpi--neg" : ""}`}>
-                                            {k.pct != null ? `${k.pct > 0 ? "+" : ""}${k.pct}%` : "—"}
-                                        </span>
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Gráficos */}
-                    <div className="con-graf-charts">
-                        {/* Top 20 Ext 50% */}
-                        {(() => {
-                            const data = grafPersonas.slice().sort((a,b) => b.ext50 - a.ext50).slice(0,20);
-                            return (
-                                <div className="con-graf-card">
-                                    <div className="con-graf-card-title">20 mayores — Ext 50%</div>
-                                    <div className="con-graf-scroll-inner">
-                                    <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
-                                        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" horizontal={false} />
-                                            <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 10 }} height={18} />
-                                            <YAxis type="category" dataKey="nombre" tick={<GrafTick />} width={160} />
-                                            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", fontSize: 12 }} />
-                                            <Bar dataKey="ext50" name="Ext 50%" fill="#f59e0b" radius={[0,3,3,0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                    <div className="con-graf-panel">
+                        {/* KPIs */}
+                        <div className="con-graf-kpis">
+                            {kpisGraf.map(k => (
+                                <div key={k.label} className="con-graf-kpi">
+                                    <div className="con-graf-kpi-label">{k.label}</div>
+                                    <div className="con-graf-kpi-row">
+                                        {[
+                                            { sub: "Autorizado", val: k.aut },
+                                            { sub: "Pagado",     val: k.pag },
+                                            { sub: "Desvío",     val: (k.desv > 0 ? "+" : "") + (k.desv || "—"), cls: k.desv > 0 ? "con-graf-kpi--pos" : k.desv < 0 ? "con-graf-kpi--neg" : "" },
+                                            { sub: "% Desvío",   val: k.pct != null ? `${k.pct > 0 ? "+" : ""}${k.pct}%` : "—", cls: k.pct > 0 ? "con-graf-kpi--pos" : k.pct < 0 ? "con-graf-kpi--neg" : "" },
+                                        ].map(item => (
+                                            <span key={item.sub} className="con-graf-kpi-item">
+                                                <span className="con-graf-kpi-sub">{item.sub}</span>
+                                                <span className={`con-graf-kpi-val ${item.cls || ""}`}>{item.val ?? "—"}</span>
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
-                            );
-                        })()}
-
-                        {/* Top 10 Ext 100% */}
-                        {(() => {
-                            const data = grafPersonas.slice().sort((a,b) => b.ext100 - a.ext100).slice(0,10);
-                            return (
-                                <div className="con-graf-card">
-                                    <div className="con-graf-card-title">10 mayores — Ext 100%</div>
-                                    <div className="con-graf-scroll-inner">
-                                    <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
-                                        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" horizontal={false} />
-                                            <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 10 }} height={18} />
-                                            <YAxis type="category" dataKey="nombre" tick={<GrafTick />} width={160} />
-                                            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", fontSize: 12 }} />
-                                            <Bar dataKey="ext100" name="Ext 100%" fill="#ef4444" radius={[0,3,3,0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                        {/* Desvíos — gauges semicírculo */}
-                        <div className="con-graf-card con-graf-card--full">
-                            <div className="con-graf-card-title">Desvíos — Autorizado vs Pagado</div>
-                            <div className="con-desv-panels">
-                                {[...grafDesvios.kpis, {
-                                    label: "Total Extras",
-                                    aut:  Math.round((grafDesvios.kpis[0].aut  + grafDesvios.kpis[1].aut)  * 10) / 10,
-                                    pag:  Math.round((grafDesvios.kpis[0].pag  + grafDesvios.kpis[1].pag)  * 10) / 10,
-                                    desv: Math.round((grafDesvios.kpis[0].desv + grafDesvios.kpis[1].desv) * 10) / 10,
-                                    pct:  (() => {
-                                        const aut = grafDesvios.kpis[0].aut + grafDesvios.kpis[1].aut;
-                                        const pag = grafDesvios.kpis[0].pag + grafDesvios.kpis[1].pag;
-                                        return aut ? Math.round((pag / aut - 1) * 1000) / 10 : null;
-                                    })(),
-                                }].map(k => {
-                                    const over  = k.pag > k.aut;
-                                    const ratio = k.aut > 0 ? Math.min(k.pag / k.aut, 1.3) : 0;
-                                    const color = over ? "#ef4444" : "#22c55e";
-                                    const gaugeData = [
-                                        { v: ratio,            fill: color    },
-                                        { v: Math.max(0, 1.3 - ratio), fill: "#1e3a5f" },
-                                    ];
-                                    return (
-                                        <div key={k.label} className="con-desv-panel">
-                                            <div className="con-desv-title">{k.label}</div>
-                                            <div className="con-desv-gauge-wrap">
-                                                <PieChart width={200} height={110} margin={{ top:0,right:0,bottom:0,left:0 }}>
-                                                    {/* Fondo del gauge */}
-                                                    <Pie data={[{v:1.3}]} dataKey="v" cx={100} cy={100}
-                                                        startAngle={210} endAngle={-30}
-                                                        innerRadius={58} outerRadius={80} strokeWidth={0}>
-                                                        <Cell fill="#0f172a" />
-                                                    </Pie>
-                                                    {/* Barra del gauge */}
-                                                    <Pie data={gaugeData} dataKey="v" cx={100} cy={100}
-                                                        startAngle={210} endAngle={-30}
-                                                        innerRadius={60} outerRadius={78} strokeWidth={0}>
-                                                        {gaugeData.map((e,i) => <Cell key={i} fill={e.fill} />)}
-                                                    </Pie>
-                                                </PieChart>
-                                                <div className="con-desv-gauge-center">
-                                                    <span className="con-desv-val" style={{color}}>{k.pag}</span>
-                                                    <span className="con-desv-aut">de {k.aut} aut.</span>
-                                                </div>
-                                            </div>
-                                            <div className="con-desv-stats">
-                                                <div className="con-desv-stat">
-                                                    <span className="con-desv-stat-dot" style={{background:"#22c55e"}} />
-                                                    <span className="con-desv-stat-label">Autorizado</span>
-                                                    <span className="con-desv-stat-val">{k.aut} hs</span>
-                                                </div>
-                                                <div className="con-desv-stat">
-                                                    <span className="con-desv-stat-dot" style={{background: color}} />
-                                                    <span className="con-desv-stat-label">Pagado</span>
-                                                    <span className="con-desv-stat-val" style={{color}}>{k.pag} hs</span>
-                                                </div>
-                                                <div className="con-desv-stat">
-                                                    <span className="con-desv-stat-dot" style={{background: color}} />
-                                                    <span className="con-desv-stat-label">Desvío</span>
-                                                    <span className="con-desv-stat-val" style={{color}}>
-                                                        {k.desv > 0 ? "+" : ""}{k.desv} hs
-                                                        {k.pct != null && <em> ({k.pct > 0 ? "+" : ""}{k.pct}%)</em>}
-                                                    </span>
-                                                </div>
-                                            </div>
+                            ))}
+                        </div>
+                        {/* Gráficos */}
+                        <div className="con-graf-charts">
+                            {/* Top 20 Ext 50% */}
+                            {(() => {
+                                const data = grafPersonas.slice().sort((a,b) => b.ext50 - a.ext50).slice(0,20);
+                                if (!data.some(d => d.ext50 > 0)) return null;
+                                return (
+                                    <div className="con-graf-card">
+                                        <div className="con-graf-card-title">20 mayores — Ext 50%</div>
+                                        <div className="con-graf-scroll-inner">
+                                            <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
+                                                <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" horizontal={false} />
+                                                    <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 10 }} height={18} />
+                                                    <YAxis type="category" dataKey="nombre" tick={<GrafTick />} width={160} />
+                                                    <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", fontSize: 12 }} />
+                                                    <Bar dataKey="ext50" name="Ext 50%" fill="#f59e0b" radius={[0,3,3,0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                );
+                            })()}
+                            {/* Top 10 Ext 100% */}
+                            {(() => {
+                                const data = grafPersonas.slice().sort((a,b) => b.ext100 - a.ext100).slice(0,10);
+                                if (!data.some(d => d.ext100 > 0)) return null;
+                                return (
+                                    <div className="con-graf-card">
+                                        <div className="con-graf-card-title">10 mayores — Ext 100%</div>
+                                        <div className="con-graf-scroll-inner">
+                                            <ResponsiveContainer width="100%" height={Math.max(180, data.length * 22)}>
+                                                <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 4, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" horizontal={false} />
+                                                    <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 10 }} height={18} />
+                                                    <YAxis type="category" dataKey="nombre" tick={<GrafTick />} width={160} />
+                                                    <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", fontSize: 12 }} />
+                                                    <Bar dataKey="ext100" name="Ext 100%" fill="#ef4444" radius={[0,3,3,0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                            {/* Gauges desvíos */}
+                            <div className="con-graf-card con-graf-card--full">
+                                <div className="con-graf-card-title">Desvíos — Autorizado vs Pagado</div>
+                                <div className="con-desv-panels">
+                                    {kpisGraf.map(k => {
+                                        const over  = k.pag > k.aut;
+                                        const ratio = k.aut > 0 ? Math.min(k.pag / k.aut, 1.3) : 0;
+                                        const color = over ? "#ef4444" : "#22c55e";
+                                        const gd    = [{ v: ratio }, { v: Math.max(0, 1.3 - ratio) }];
+                                        return (
+                                            <div key={k.label} className="con-desv-panel">
+                                                <div className="con-desv-title">{k.label}</div>
+                                                <div className="con-desv-gauge-wrap">
+                                                    <PieChart width={200} height={110} margin={{top:0,right:0,bottom:0,left:0}}>
+                                                        <Pie data={[{v:1.3}]} dataKey="v" cx={100} cy={100} startAngle={210} endAngle={-30} innerRadius={58} outerRadius={80} strokeWidth={0}>
+                                                            <Cell fill="#0f172a" />
+                                                        </Pie>
+                                                        <Pie data={gd} dataKey="v" cx={100} cy={100} startAngle={210} endAngle={-30} innerRadius={60} outerRadius={78} strokeWidth={0}>
+                                                            <Cell fill={color} />
+                                                            <Cell fill="#1e3a5f" />
+                                                        </Pie>
+                                                    </PieChart>
+                                                    <div className="con-desv-gauge-center">
+                                                        <span className="con-desv-val" style={{color}}>{k.pag}</span>
+                                                        <span className="con-desv-aut">de {k.aut} aut.</span>
+                                                    </div>
+                                                </div>
+                                                <div className="con-desv-stats">
+                                                    {[
+                                                        { dot: "#22c55e", lbl: "Autorizado", val: `${k.aut} hs` },
+                                                        { dot: color,     lbl: "Pagado",     val: `${k.pag} hs`, color },
+                                                        { dot: color,     lbl: "Desvío",     val: `${k.desv > 0 ? "+" : ""}${k.desv} hs${k.pct != null ? ` (${k.pct > 0 ? "+" : ""}${k.pct}%)` : ""}`, color },
+                                                    ].map(s => (
+                                                        <div key={s.lbl} className="con-desv-stat">
+                                                            <span className="con-desv-stat-dot" style={{background: s.dot}} />
+                                                            <span className="con-desv-stat-label">{s.lbl}</span>
+                                                            <span className="con-desv-stat-val" style={{color: s.color}}>{s.val}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            );
+                );
             })()}
 
             {errorCarga ? (
@@ -791,7 +950,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
 
                         <tbody>
                             {filas.map((f, i) => {
-                                const r = calcResumen(f.data);
+                                const r = calcResumen(f.data, f.capData);
                                 return (
                                     <tr key={`${f.legajo}-${i}`} className="con-row">
                                         <td className="con-td-fix con-td-leg">{f.legajo}</td>
@@ -809,7 +968,9 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                         {dias.map(d => {
                                             const key = fmtKey(d);
                                             const val = f.data[key] || "";
-                                            const hs  = horasDeValor(val);
+                                            const valN = normalizarTurno(val);
+                                            const hs  = horasDeValor(valN);
+                                            const rendered = valorCelda(val);
                                             const dow = d.getDay();
                                             const esFer = !!FERIADOS_ARG[key];
                                             const esFin = dow === 0 || dow === 6;
@@ -826,9 +987,9 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                                     val === "Aca"                  ? "con-celda--aca"  : "",
                                                     val === "Sus"                  ? "con-celda--sus"  : "",
                                                     hs > 0                         ? "con-celda--hs"    : "",
-                                                    !val                           ? "con-celda--empty" : "",
+                                                    !rendered                      ? "con-celda--empty" : "",
                                                 ].join(" ")}>
-                                                    {valorCelda(val)}
+                                                    {rendered}
                                                 </td>
                                             );
                                         })}
@@ -844,7 +1005,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                         <td className="con-td-sum con-td-sum--aus">{r.vac     || "—"}</td>
                                         {(() => {
                                             const reg = regimenMap[f.legajo] || "";
-                                            const { ext50, ext100 } = calcExtras(f.data, reg, grupoMap[f.legajo] || "");
+                                            const { ext50, ext100 } = calcExtras(f.data, reg, grupoMap[f.legajo] || "", f.capData);
                                             const noc = Object.values(f.nocData || {}).reduce((s,v)=>s+v,0);
                                             const exc = f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0;
                                             return <>
@@ -878,8 +1039,8 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                             {f.legajo === "20038" ? "100%" : "—"}
                                         </td>
                                         <td className="con-td-sum con-td-sum--bon2">
-                                            {String(f.zona || "").toUpperCase().includes("SANTA CRUZ") && String(tareaMap[f.legajo] || "").toUpperCase().includes("ENCARGADO")
-                                                ? r.ausentes > 14 ? "0%" : "100%"
+                                            {String(f.zona || "").toUpperCase().includes("SANTA CRUZ") && esEncargado(f.legajo)
+                                                ? "100%"
                                                 : "—"}
                                         </td>
                                         <td className="con-td-sum con-td-sum--bon2">
@@ -887,7 +1048,14 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                                 ? r.ausentes > 4 ? "0%" : "100%"
                                                 : "—"}
                                         </td>
-                                        <td className="con-td-sum con-td-sum--bon2">—</td>
+                                        <td className="con-td-sum con-td-sum--bon2">
+                                            {(() => {
+                                                if (!String(f.zona || "").toUpperCase().includes("SANTA CRUZ")) return "—";
+                                                if (f.pasPuesto1Dias >= 14) return "100%";
+                                                if (f.pasPuesto1Dias >= 7)  return "50%";
+                                                return "—";
+                                            })()}
+                                        </td>
                                         <td className="con-td-sum con-td-sum--bon2">
                                             {String(f.zona || "").toUpperCase().includes("SANTA CRUZ")
                                                 ? r.ausentes > 4 ? "0%" : "100%"
@@ -923,7 +1091,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                 })}
                                 {(() => {
                                     const tots = filas.reduce((acc, f) => {
-                                        const r    = calcResumen(f.data);
+                                        const r    = calcResumen(f.data, f.capData);
                                         const base = calcBase(f.horasPorDow) ?? 0;
                                         return {
                                             hs:    acc.hs    + r.hsTotal,
@@ -935,20 +1103,20 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                             sab:   acc.sab   + r.sabado,
                                             dom:   acc.dom   + r.domingo,
                                             fer:   acc.fer   + r.ferDias,
-                                            ext50: acc.ext50 + calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "").ext50,
-                                            ext100:acc.ext100+ calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "").ext100,
+                                            ext50: acc.ext50 + calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData).ext50,
+                                            ext100:acc.ext100+ calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData).ext100,
                                             exc:   acc.exc   + (f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0),
                                             noc:   acc.noc   + Object.values(f.nocData || {}).reduce((s,v)=>s+v,0),
                                             // bonus
-                                            b1:  acc.b1  + (f.proyecto === "113" && calcResumen(f.data).ausentes < dias.length ? 1 : 0),
-                                            b2:  acc.b2  + (f.proyecto === "113" && calcResumen(f.data).ausentes < dias.length ? 1 : 0),
-                                            b3:  acc.b3  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
-                                            b4:  acc.b4  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
+                                            b1:  acc.b1  + (f.proyecto === "113" && calcResumen(f.data, f.capData).ausentes < dias.length ? 1 : 0),
+                                            b2:  acc.b2  + (f.proyecto === "113" && calcResumen(f.data, f.capData).ausentes < dias.length ? 1 : 0),
+                                            b3:  acc.b3  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && calcResumen(f.data, f.capData).ausentes <= 4 ? 1 : 0),
+                                            b4:  acc.b4  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && calcResumen(f.data, f.capData).ausentes <= 4 ? 1 : 0),
                                             b5:  acc.b5  + (f.legajo === "20038" ? 1 : 0),
-                                            b21: acc.b21 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && String(tareaMap[f.legajo]||"").toUpperCase().includes("ENCARGADO") && calcResumen(f.data).ausentes <= 14 ? 1 : 0),
-                                            b22: acc.b22 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
-                                            b24: acc.b24 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
-                                            b25: acc.b25 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data).ausentes <= 4 ? 1 : 0),
+                                            b21: acc.b21 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && esEncargado(f.legajo) ? 1 : 0),
+                                            b22: acc.b22 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data, f.capData).ausentes <= 4 ? 1 : 0),
+                                            b24: acc.b24 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data, f.capData).ausentes <= 4 ? 1 : 0),
+                                            b25: acc.b25 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && calcResumen(f.data, f.capData).ausentes <= 4 ? 1 : 0),
                                         };
                                     }, { hs:0, dias:0, fco:0, vac:0, aus:0, lv:0, sab:0, dom:0, fer:0, ext50:0, ext100:0, exc:0, noc:0, b1:0,b2:0,b3:0,b4:0,b5:0,b21:0,b22:0,b24:0,b25:0 });
                                     return <>
@@ -983,7 +1151,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                             {/* Cantidad autorizada */}
                             {(() => {
                                 const aut = filas.reduce((acc, f) => {
-                                    const r = calcResumen(f.data);
+                                    const r = calcResumen(f.data, f.capData);
                                     return {
                                         lvHs:      acc.lvHs      + r.lvHs,
                                         saDomFerHs:acc.saDomFerHs + (r.sabadoHs + r.domingoHs + r.ferHs),
@@ -1019,8 +1187,8 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                             {/* Pagados */}
                             {(() => {
                                 const tots = filas.reduce((acc, f) => {
-                                    const r   = calcResumen(f.data);
-                                    const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "");
+                                    const r   = calcResumen(f.data, f.capData);
+                                    const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData);
                                     return {
                                         ext50: acc.ext50 + ext.ext50,
                                         ext100:acc.ext100+ ext.ext100,
@@ -1030,12 +1198,13 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                         b3:  acc.b3  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && r.ausentes <= 4 ? 1 : 0),
                                         b4:  acc.b4  + (String(f.zona||"").toUpperCase().includes("BUENOS AIRES") && r.ausentes <= 4 ? 1 : 0),
                                         b5:  acc.b5  + (f.legajo === "20038" ? 1 : 0),
-                                        b21: acc.b21 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && String(tareaMap[f.legajo]||"").toUpperCase().includes("ENCARGADO") && r.ausentes <= 14 ? 1 : 0),
+                                        b21: acc.b21 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && esEncargado(f.legajo) ? 1 : 0),
                                         b22: acc.b22 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && r.ausentes <= 4 ? 1 : 0),
+                                        b23: acc.b23 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && f.pasPuesto1Dias >= 7 ? 1 : 0),
                                         b24: acc.b24 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && r.ausentes <= 4 ? 1 : 0),
                                         b25: acc.b25 + (String(f.zona||"").toUpperCase().includes("SANTA CRUZ") && r.ausentes <= 4 ? 1 : 0),
                                     };
-                                }, { ext50:0, ext100:0, exc:0, b1:0,b2:0,b3:0,b4:0,b5:0,b21:0,b22:0,b24:0,b25:0 });
+                                }, { ext50:0, ext100:0, exc:0, b1:0,b2:0,b3:0,b4:0,b5:0,b21:0,b22:0,b23:0,b24:0,b25:0 });
                                 return (
                                     <tr className="con-tfoot con-tfoot--sub">
                                         <td className="con-td-fix" colSpan={6 + dias.length + 10} style={{textAlign:"right", fontSize:10, color:"#93c5fd", paddingRight:8}}>
@@ -1052,7 +1221,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                         <td className="con-tfoot-sum con-tfoot-sum--bon">{tots.b5  || "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b21 || "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b22 || "—"}</td>
-                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">—</td>
+                                        <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b23 || "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b24 || "—"}</td>
                                         <td className="con-tfoot-sum con-tfoot-sum--bon2">{tots.b25 || "—"}</td>
                                     </tr>
@@ -1094,7 +1263,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                             // Helper: calcula cards de donuts para un subset de filas
                             const buildCards = (rows) => {
                                 const totAut = rows.reduce((acc, f) => {
-                                    const r = calcResumen(f.data);
+                                    const r = calcResumen(f.data, f.capData);
                                     return {
                                         lvHs:      acc.lvHs       + r.lvHs,
                                         saDomFerHs:acc.saDomFerHs + (r.sabadoHs + r.domingoHs + r.ferHs),
@@ -1103,7 +1272,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                 const aut50  = Math.round(totAut.lvHs       * 0.07 * 10) / 10;
                                 const aut100 = Math.round(totAut.saDomFerHs * 0.07 * 10) / 10;
                                 const totPag = rows.reduce((acc, f) => {
-                                    const e = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "");
+                                    const e = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData);
                                     return { ext50: acc.ext50 + e.ext50, ext100: acc.ext100 + e.ext100 };
                                 }, { ext50: 0, ext100: 0 });
                                 const pag50  = Math.round(totPag.ext50  * 10) / 10;

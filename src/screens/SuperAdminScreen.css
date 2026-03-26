@@ -1090,6 +1090,30 @@
     font-size: var(--text-base);
 }
 
+/* Sección reinicialización empresa */
+.sa-emp-reinit-section {
+    margin-top: var(--space-5);
+    padding: var(--space-4);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    background: rgba(245, 158, 11, 0.04);
+}
+.sa-emp-reinit-title {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-warning, #f59e0b);
+    margin-bottom: var(--space-2);
+}
+.sa-emp-reinit-desc {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    margin-bottom: var(--space-3);
+    line-height: 1.5;
+}
+.sa-emp-reinit-btn {
+    font-size: var(--text-sm) !important;
+}
+
 /* Tags */
 .sa-empresa-tag {
     display: inline-flex;

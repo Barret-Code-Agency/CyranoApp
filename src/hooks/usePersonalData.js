@@ -1,31 +1,38 @@
 // src/hooks/usePersonalData.js
-// Carga supervisores, conductores y encargados de la empresa desde Firestore.
+// Carga personal de la empresa desde la colección "legajos".
+// Puede filtrar por cargo/rol si se necesita un subconjunto específico.
 
 import { useState, useEffect } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 
-export function usePersonalData(empresaId) {
-    const [supervisores, setSupervisores] = useState([]);
-    const [conductores,  setConductores]  = useState([]);
-    const [encargados,   setEncargados]   = useState([]);
-    const [admins,       setAdmins]       = useState([]);
-    const [cargando,     setCargando]     = useState(true);
+/**
+ * @param {string} empresaId
+ * @param {{ rol?: string, cargo?: string }} [filtros] - filtros opcionales
+ */
+export function usePersonalData(empresaId, filtros = {}) {
+    const [personal,  setPersonal]  = useState([]);
+    const [cargando,  setCargando]  = useState(true);
 
     const cargar = async () => {
         if (!empresaId) { setCargando(false); return; }
         setCargando(true);
         try {
-            const [sSnap, vSnap, eSnap, aSnap] = await Promise.all([
-                getDocs(query(collection(db, "supervisores"), where("empresaId", "==", empresaId))),
-                getDocs(query(collection(db, "conductores"),  where("empresaId", "==", empresaId))),
-                getDocs(query(collection(db, "encargados"),   where("empresaId", "==", empresaId))),
-                getDocs(query(collection(db, "admins"),       where("empresaId", "==", empresaId))),
-            ]);
-            setSupervisores(sSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setConductores (vSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setEncargados  (eSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setAdmins      (aSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            let q = query(collection(db, "legajos"), where("empresaId", "==", empresaId));
+            const snap = await getDocs(q);
+            let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            // Filtro local por rol o cargo si se especifica
+            if (filtros.rol) {
+                const rolLower = filtros.rol.toLowerCase();
+                docs = docs.filter(d => String(d.rol || "").toLowerCase().includes(rolLower));
+            }
+            if (filtros.cargo) {
+                const cargoLower = filtros.cargo.toLowerCase();
+                docs = docs.filter(d => String(d.cargo || "").toLowerCase().includes(cargoLower));
+            }
+
+            setPersonal(docs);
         } catch (e) {
             console.error("usePersonalData error:", e);
         } finally {
@@ -33,7 +40,23 @@ export function usePersonalData(empresaId) {
         }
     };
 
-    useEffect(() => { cargar(); }, [empresaId]);
+    useEffect(() => { cargar(); }, [empresaId, filtros.rol, filtros.cargo]);
 
-    return { supervisores, conductores, encargados, admins, cargando, recargar: cargar };
+    // Helpers por rol para compatibilidad con usos anteriores
+    const supervisores = personal.filter(p =>
+        String(p.rol || p.cargo || "").toUpperCase().includes("SUPERVISOR") ||
+        String(p.tarea || "").toUpperCase().includes("SUPERVISOR")
+    );
+    const conductores = personal.filter(p =>
+        String(p.rol || p.cargo || "").toUpperCase().includes("CONDUCTOR")
+    );
+    const encargados = personal.filter(p =>
+        String(p.rol || p.cargo || "").toUpperCase().includes("ENCARGADO") ||
+        String(p.tarea || "").toUpperCase().includes("ENCARGADO")
+    );
+    const vigiladores = personal.filter(p =>
+        String(p.rol || p.cargo || "").toUpperCase().includes("VIGILADOR")
+    );
+
+    return { personal, supervisores, conductores, encargados, vigiladores, cargando, recargar: cargar };
 }

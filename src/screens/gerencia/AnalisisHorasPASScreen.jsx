@@ -3,7 +3,9 @@ import { useEffect, useState, useMemo } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
-import { MESES_ES } from "../../utils/periodoUtils";
+import { useClientesData } from "../../hooks/useClientesData";
+import { getDias, fmtKey, MESES_ES, HORAS_KEYS, horasDeValor, r1 } from "../../utils/periodoUtils";
+import { FERIADOS_ARG } from "../../utils/feriados";
 import "./AnalisisHorasPASScreen.css";
 
 // ── Colecciones Firestore ─────────────────────────────────────────────────────
@@ -44,8 +46,18 @@ function BarraCobertura({ pct, meta = 100 }) {
     );
 }
 
+function horasDiaObj(dia, obj, diasEsp) {
+    if (!obj) return null;
+    const key = fmtKey(dia);
+    if (FERIADOS_ARG[key]) return obj.horasFeriados != null ? Number(obj.horasFeriados) : null;
+    if (diasEsp?.[key] === false) return 0;
+    const hs = obj[HORAS_KEYS[dia.getDay()]];
+    return hs != null ? Number(hs) : null;
+}
+
 export default function AnalisisHorasPASScreen({ año, mes }) {
     const { empresaNombre, empresaId } = useAppData();
+    const { objetivos } = useClientesData(empresaId);
     const [docs,     setDocs]     = useState([]);
     const [cargando, setCargando] = useState(true);
 
@@ -56,7 +68,11 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
             /santa\s*cruz/i.test(d.clienteNombre || "") ||
             /santa\s*cruz/i.test(d.proyectoNombre || "") ||
             /cerro\s*moro/i.test(d.clienteNombre  || "") ||
-            /cerro\s*moro/i.test(d.proyectoNombre || "");
+            /cerro\s*moro/i.test(d.proyectoNombre || "") ||
+            /panamerican/i.test(d.clienteNombre   || "") ||
+            /panamerican/i.test(d.proyectoNombre  || "") ||
+            /\bpas\b/i.test(d.clienteNombre       || "") ||
+            /\bpas\b/i.test(d.proyectoNombre      || "");
 
         getDocs(query(
             collection(db, COL_PROG),
@@ -73,22 +89,35 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
     const avance   = avanceMes(año, mes);
     const avancePct = (avance * 100).toFixed(1);
 
+    const dias = useMemo(() => getDias(año, mes), [año, mes]);
+
     // ── Calcular filas ────────────────────────────────────────────────────────
     const filas = useMemo(() => docs.map(doc => {
         const personal = doc.personal || [];
-        const hc       = doc.horasConfig || {};
-        const totalDias = DIAS_MES(año, mes);
+        const obj      = objetivos.find(o => o.id === doc.objetivoId) || null;
+        const diasEsp  = doc.diasEspeciales || {};
 
-        // Horas pedidas: horas diarias del objetivo × días del mes (placeholder — fórmulas a definir)
-        const horasPedidas    = null; // TODO: fórmula a definir
-        const horasTraslados  = null;
-        const horasCapac      = null;
-        const horasAdicionales= null;
-        const horasNoPrestadas= null;
-        const horasPrestadas  = null;
-        const totalHoras      = null;
-        const pctCobertura    = null;
-        const totalCubierto   = null;
+        // Horas pedidas: suma de horas contratadas por día según el objetivo
+        const horasPedidas = r1(dias.reduce((s, dia) => s + (horasDiaObj(dia, obj, diasEsp) ?? 0), 0));
+
+        // Horas prestadas: horas reales trabajadas (real → programado como fallback)
+        const horasPrestadas = r1(dias.reduce((s, dia) => {
+            const key = fmtKey(dia);
+            return s + personal.reduce((ps, p) => ps + horasDeValor((p.real || p.programado || {})[key] || ""), 0);
+        }, 0));
+
+        // Horas capacitación
+        const horasCapac = r1(dias.reduce((s, dia) => {
+            const key = fmtKey(dia);
+            return s + personal.reduce((ps, p) => ps + (Number(p.capacitacion?.[key]) || 0), 0);
+        }, 0));
+
+        const horasTraslados   = 0; // sin dato en el modelo actual
+        const horasNoPrestadas = r1(Math.max(0, horasPedidas - horasPrestadas));
+        const horasAdicionales = r1(Math.max(0, horasPrestadas - horasPedidas));
+        const totalHoras       = r1(horasPrestadas + horasCapac + horasAdicionales);
+        const pctCobertura     = horasPedidas > 0 ? r1((horasPrestadas / horasPedidas) * 100) : null;
+        const totalCubierto    = pctCobertura;
 
         return {
             nombre:          [doc.clienteNombre, doc.proyectoNombre, doc.objetivoNombre].filter(Boolean).join(" · "),
@@ -102,7 +131,7 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
             pctCobertura,
             totalCubierto,
         };
-    }), [docs, año, mes]);
+    }), [docs, objetivos, dias]);
 
     // Totales
     const sum = key => filas.reduce((s, f) => s + (f[key] ?? 0), 0);
@@ -133,52 +162,83 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
         <div className="ahp-root">
             {/* ── Header ── */}
             <div className="ahp-header">
-                <div className="ahp-header-left">
-                    <span className="ahp-title">📊 Análisis de horas PAS</span>
-                    <span className="ahp-periodo">{MESES_ES[mes - 1]} {año}</span>
-                </div>
+                <span className="ahp-periodo" style={{ width: "100%", textAlign: "center", fontSize: "15px", fontWeight: 700, color: "#1e3a5f" }}>
+                    {MESES_ES[mes - 1]} {año}
+                </span>
             </div>
 
             {cargando && <div className="ahp-loading">Cargando datos…</div>}
 
             {!cargando && (
-                <div className="ahp-card">
-                    {/* Título del reporte */}
-                    <div className="ahp-reporte-header">
-                        <div className="ahp-reporte-titulo">Análisis de cobertura de puestos — {MESES_ES[mes - 1]}</div>
+                <div className="ahp-card" style={{ margin: "0 16px 16px" }}>
+                    {/* Avance del mes */}
+                    <div className="ahp-avance-strip">
+                        <span className="ahp-avance-strip-label">Avance del mes</span>
+                        <div className="ahp-avance-barra-wrap" style={{ flex: 1 }}>
+                            <div className="ahp-avance-barra-fill" style={{ width: `${avancePct}%` }} />
+                        </div>
+                        <span className="ahp-avance-strip-pct">{avancePct}%</span>
+                    </div>
+
+                    {/* Lista de puestos con barra de cobertura */}
+                    <div className="ahp-puestos-lista">
+                        {filas.length === 0 && (
+                            <div className="ahp-empty">Sin planillas para este período</div>
+                        )}
+                        {filas.map((f, i) => {
+                            const pct      = f.pctCobertura ?? 0;
+                            const verde    = Math.min(pct, 100);
+                            const rojo     = Math.max(0, 100 - verde);
+                            const exceso   = Math.max(0, pct - 100);
+                            const colorBarra = pct >= 100 ? "#16a34a" : pct >= 95 ? "#ca8a04" : "#dc2626";
+                            return (
+                                <div key={i} className="ahp-puesto-row">
+                                    <div className="ahp-puesto-encabezado">
+                                        <span className="ahp-puesto-nombre">{f.nombre}</span>
+                                        <span className="ahp-puesto-hs">
+                                            {fmtNum(f.horasPrestadas)} / {fmtNum(f.horasPedidas)} hs
+                                        </span>
+                                        <span className="ahp-puesto-pct" style={{ color: colorBarra }}>
+                                            {fmtPct(pct)}
+                                        </span>
+                                    </div>
+                                    <div className="ahp-puesto-barra-wrap">
+                                        {/* Verde: cubierto */}
+                                        <div className="ahp-puesto-barra-verde" style={{ width: `${verde}%`, background: colorBarra }} />
+                                        {/* Rojo: no cubierto */}
+                                        {rojo > 0 && (
+                                            <div className="ahp-puesto-barra-rojo" style={{ width: `${rojo}%` }}>
+                                                <span className="ahp-puesto-barra-rojo-pct">{rojo.toFixed(1)}% no cubierto</span>
+                                            </div>
+                                        )}
+                                        {/* Verde extra si supera 100% */}
+                                        {exceso > 0 && (
+                                            <div className="ahp-puesto-barra-exceso" style={{ width: `${Math.min(exceso, 20)}%` }}>
+                                                <span className="ahp-puesto-barra-rojo-pct">+{exceso.toFixed(1)}% adicional</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
 
                     <div className="ahp-table-wrap">
                         <table className="ahp-table">
                             <thead>
                                 <tr className="ahp-thead-row">
-                                    <th className="ahp-th ahp-th-nombre"></th>
-                                    <th className="ahp-th ahp-th-num">Horas<br/>pedidas</th>
-                                    <th className="ahp-th ahp-th-num">Horas de<br/>traslados</th>
-                                    <th className="ahp-th ahp-th-num">Horas de<br/>capacitación</th>
-                                    <th className="ahp-th ahp-th-num">Horas<br/>adicionales</th>
-                                    <th className="ahp-th ahp-th-num ahp-th-neg">Horas No<br/>prestadas</th>
-                                    <th className="ahp-th ahp-th-num">Horas<br/>prestadas</th>
-                                    <th className="ahp-th ahp-th-num">Total de<br/>horas</th>
+                                    <th className="ahp-th ahp-th-nombre">Puesto</th>
+                                    <th className="ahp-th ahp-th-num">Hs<br/>pedidas</th>
+                                    <th className="ahp-th ahp-th-num">Hs<br/>traslados</th>
+                                    <th className="ahp-th ahp-th-num">Hs<br/>capacit.</th>
+                                    <th className="ahp-th ahp-th-num">Hs<br/>adicionales</th>
+                                    <th className="ahp-th ahp-th-num ahp-th-neg">Hs No<br/>prestadas</th>
+                                    <th className="ahp-th ahp-th-num">Hs<br/>prestadas</th>
+                                    <th className="ahp-th ahp-th-num">Total<br/>horas</th>
                                     <th className="ahp-th ahp-th-num ahp-th-pct">%<br/>Cobertura</th>
-                                    <th className="ahp-th ahp-th-num ahp-th-pct">Total<br/>cubierto</th>
-                                    <th className="ahp-th ahp-th-barra">Gráfico de cobertura en %</th>
-                                </tr>
-                                {/* Avance del mes */}
-                                <tr className="ahp-avance-row">
-                                    <td colSpan={8} className="ahp-avance-label">Avance del tiempo en el mes</td>
-                                    <td colSpan={2} className="ahp-avance-pct">{avancePct}%</td>
-                                    <td className="ahp-avance-barra-cel">
-                                        <div className="ahp-avance-barra-wrap">
-                                            <div className="ahp-avance-barra-fill" style={{ width: `${avancePct}%` }} />
-                                        </div>
-                                    </td>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filas.length === 0 && (
-                                    <tr><td colSpan={11} className="ahp-empty">Sin planillas para este período</td></tr>
-                                )}
                                 {filas.map((f, i) => (
                                     <tr key={i} className="ahp-row">
                                         <td className="ahp-td ahp-td-nombre">{f.nombre}</td>
@@ -190,10 +250,6 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
                                         <td className="ahp-td ahp-td-num">{fmtNum(f.horasPrestadas)}</td>
                                         <td className="ahp-td ahp-td-num">{fmtNum(f.totalHoras)}</td>
                                         <td className="ahp-td ahp-td-num ahp-td-pct">{fmtPct(f.pctCobertura)}</td>
-                                        <td className="ahp-td ahp-td-num ahp-td-pct-ok">{fmtPct(f.totalCubierto)}</td>
-                                        <td className="ahp-td ahp-td-barra">
-                                            <BarraCobertura pct={f.pctCobertura} />
-                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -208,8 +264,6 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
                                     <td className="ahp-td-total ahp-td-num">{fmtNum(totales.horasPrestadas)}</td>
                                     <td className="ahp-td-total ahp-td-num">{fmtNum(totales.totalHoras)}</td>
                                     <td className="ahp-td-total ahp-td-num ahp-td-pct">{fmtPct(totales.pctCobertura)}</td>
-                                    <td className="ahp-td-total ahp-td-num">{fmtNum(totales.totalCubierto)}</td>
-                                    <td className="ahp-td-total" />
                                 </tr>
                             </tfoot>
                         </table>

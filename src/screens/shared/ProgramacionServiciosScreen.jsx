@@ -121,7 +121,10 @@ function SelectorServicio({ onSelect }) {
         const cn  = clienteSel.nombre.toLowerCase().trim();
         const oid = String(o.clienteId ?? "").toLowerCase().trim();
         const onm = String(o.clienteNombre ?? o.nombreProyecto ?? "").toLowerCase().trim();
-        return oid === cn || onm === cn;
+        // coincidencia exacta o parcial (cubre casos con clienteId vacío)
+        if (oid === cn || onm === cn) return true;
+        if (onm && cn && (onm.includes(cn) || cn.includes(onm))) return true;
+        return false;
     });
     const objSel = objetivos.find(o => o.id === objetivoId);
     const valido = clienteId && objetivoId;
@@ -144,7 +147,7 @@ function SelectorServicio({ onSelect }) {
                             {MESES_ES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                         </select>
                         <select className="ps-select ps-select--año" value={año} onChange={e => setAño(Number(e.target.value))}>
-                            {[2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+                            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                     </div>
                     <div className="ps-periodo-hint">
@@ -1095,9 +1098,9 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
     const [patronModal,   setPatronModal] = useState(null);
     const diasEsp = docInicial.diasEspeciales || {};
 
-    // Cargar legajos cuando se abre el modal
+    // Cargar legajos al montar (para régimen) y también al abrir el modal de agregar
     useEffect(() => {
-        if (!modalAdd || todosLegajos.length > 0 || !empresaId) return;
+        if (todosLegajos.length > 0 || !empresaId) return;
         getDocs(query(collection(db, COL_LEGAJOS), where("empresaId", "==", empresaId)))
             .then(snap => {
                 const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1105,7 +1108,12 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
                 setTodosLegajos(data);
             })
             .catch(console.error);
-    }, [modalAdd, empresaId, todosLegajos.length]);
+    }, [empresaId, todosLegajos.length]);
+
+    // Mapa legajo → datos del legajo (para lookup de régimen)
+    const legMap = React.useMemo(() =>
+        Object.fromEntries(todosLegajos.map(l => [String(l.legajo), l]))
+    , [todosLegajos]);
 
     const agregarPersona = (v) => {
         if (personal.find(p => p.legajo === v.legajo)) return;
@@ -1210,6 +1218,7 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
                                 <tr>
                                     <th className="ps-th-sticky ps-th-legajo">Leg.</th>
                                     <th className="ps-th-sticky ps-th-nombre">Nombre y Apellido</th>
+                                    <th className="ps-th-sticky ps-th-regimen">Régimen</th>
                                     {dias.map(dia => {
                                         const key = fmtKey(dia);
                                         const fin = dia.getDay() === 0 || dia.getDay() === 6;
@@ -1248,6 +1257,9 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
                                                     {p.nombre}
                                                     <button className="ps-btn-patron-inline" title="Asignar patrón" onClick={() => setPatronModal({ rowIdx })}>🗓</button>
                                                 </td>
+                                                <td className="ps-td-sticky ps-td-regimen">
+                                                    {legMap[String(p.legajo)]?.regimen || p.regimen || "—"}
+                                                </td>
                                                 {dias.map(dia => {
                                                     const key = fmtKey(dia);
                                                     const val = data[key] || "";
@@ -1273,7 +1285,7 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
                                             </tr>
                                             {modo === "real" && (
                                                 <tr className="ps-row-cap">
-                                                    <td colSpan={2} className="ps-td-sticky ps-cap-label">Cap.</td>
+                                                    <td colSpan={3} className="ps-td-sticky ps-cap-label">Cap.</td>
                                                     {dias.map(d => {
                                                         const key = fmtKey(d);
                                                         const val = p.capacitacion?.[key] ?? "";
@@ -1298,7 +1310,7 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
                             </tbody>
                             <tfoot>
                                 <tr className="ps-tfoot">
-                                    <td colSpan={2} className="ps-tfoot-label">Hs. a cubrir</td>
+                                    <td colSpan={3} className="ps-tfoot-label">Hs. a cubrir</td>
                                     {dias.map(dia => {
                                         const hs = horasDiaDoc(dia);
                                         return (
@@ -1452,13 +1464,16 @@ export function ProgramacionTodos({ año, mes, modo = "programado" }) {
         finally { setCreando(false); }
     };
 
-    const tituloModo = modo === "programado" ? "Programación de Objetivos" : "Horarios Trabajados";
+    const tituloModo  = modo === "programado" ? "Programación de Objetivos" : "Horarios Trabajados";
+    const mesAnterior = mes === 1 ? 12 : mes - 1;
+    const añoAnterior = mes === 1 ? año - 1 : año;
+    const periodoHint = `24/${String(mesAnterior).padStart(2,"0")}/${añoAnterior} — 23/${String(mes).padStart(2,"0")}/${año}`;
 
     return (
         <div className="ps-vt-root">
             {/* ── Barra superior con botón nueva planilla ── */}
             <div className="ps-todos-bar">
-                <span className="ps-todos-titulo">{tituloModo}</span>
+                <span className="ps-todos-titulo">{periodoHint}</span>
                 <button className="ps-todos-btn-nueva" onClick={() => setModalNueva(true)}>
                     ➕ Nueva planilla
                 </button>

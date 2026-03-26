@@ -88,8 +88,7 @@ export default function FinJornadaScreen({ onClosed, onBack }) {
             </div>
 
             <div className="fin-warning">
-                ⚠️ Al cerrar se enviará el informe a <strong>{session.email}</strong> y a{" "}
-                <strong>{data.supervisorEmail}</strong>
+                ⚠️ Al cerrar se guardará el informe de jornada para <strong>{session.email}</strong>
             </div>
 
             <button className="btn btn-danger"

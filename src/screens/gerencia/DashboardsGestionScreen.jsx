@@ -10,6 +10,8 @@ import {
     PieChart, Pie, Cell, LineChart, Line, ComposedChart,
 } from "recharts";
 import "./DashboardsGestionScreen.css";
+import { getDias, fmtKey, horasDeValor, normalizarTurno } from "../../utils/periodoUtils";
+import { FERIADOS_ARG } from "../../utils/feriados";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -94,6 +96,7 @@ export default function DashboardsGestionScreen({ onBack }) {
     const [capacitaciones,setCapacitaciones]= useState([]);
     const [objetivos,     setObjetivos]     = useState([]);
     const [zonaActiva,    setZonaActiva]    = useState(null); // null = Total
+    const [diagramas,     setDiagramas]     = useState([]);
 
     const meses = useMemo(() => ultimos6Meses(), []);
 
@@ -136,6 +139,13 @@ export default function DashboardsGestionScreen({ onBack }) {
                     where("empresaId", "==", empresaId)
                 ));
                 setObjetivos(objSnap.docs.map(d => d.data()));
+
+                // Diagramas 14x14 (francos — opcionales)
+                const diagSnap = await getDocs(query(
+                    collection(db, "diagramas14x14"),
+                    where("empresaId", "==", empresaId)
+                )).catch(() => ({ docs: [] }));
+                setDiagramas(diagSnap.docs.map(d => d.data()));
             } finally {
                 setLoading(false);
             }
@@ -305,6 +315,136 @@ export default function DashboardsGestionScreen({ onBack }) {
 
         return { porMes, totProg, totTrab, totNoCub, totAus, adicionales, pctCub, capData, regimenData, distribucion, nocubObjData, adicObjData, cobClienteData };
     }, [filteredDocs, legajosEnZona, capacitaciones, meses]);
+
+    // ── Extras del mes actual ─────────────────────────────────────────────────
+    const extrasDelMes = useMemo(() => {
+        const hoy   = new Date();
+        const año   = hoy.getFullYear();
+        const mes   = hoy.getMonth() + 1;
+        const dias  = getDias(año, mes);
+
+        // Maps desde legajos
+        const regimenMap  = {};
+        const grupoMap    = {};
+        const excluidos   = new Set();
+        const EXCL_TAREA  = new Set(["Jefe", "Supervisor (FC)"]);
+        legajos.forEach(l => {
+            const leg = String(l.legajo || "");
+            regimenMap[leg] = l.regimen || "";
+            grupoMap[leg]   = l.grupoTurno14 || "";
+            if ((l.estado && l.estado !== "Activo") ||
+                (l.cargo || "").includes("(FC)") ||
+                EXCL_TAREA.has(l.tarea))
+                excluidos.add(leg);
+        });
+
+        // Franco map
+        const francosMap = {};
+        diagramas.forEach(g => {
+            if (g.grupo && g.francos) francosMap[g.grupo] = new Set(g.francos);
+        });
+
+        // Acumular horas reales por persona solo en docs del mes actual
+        const byLeg = {};
+        const docsDelMes = progDocs.filter(d => d._mes?.año === año && d._mes?.mes === mes);
+        docsDelMes.forEach(doc => {
+            const vistoEnDoc = new Set();
+            (doc.personal || []).forEach(p => {
+                const leg = String(p.legajo || "");
+                if (excluidos.has(leg) || vistoEnDoc.has(leg)) return;
+                vistoEnDoc.add(leg);
+                if (!byLeg[leg]) byLeg[leg] = { nombre: p.nombre || leg, data: {} };
+                // Reales
+                Object.entries(p.real || {}).forEach(([key, val]) => {
+                    const hs = horasDeValor(normalizarTurno(val));
+                    if (hs > 0) byLeg[leg].data[key] = (byLeg[leg].data[key] || 0) + hs;
+                    else if (!byLeg[leg].data[key]) byLeg[leg].data[key] = val || "";
+                });
+                // Capacitación
+                Object.entries(p.capacitacion || {}).forEach(([key, val]) => {
+                    const hc = Number(val) || 0;
+                    if (hc <= 0) return;
+                    if (typeof byLeg[leg].data[key] === "number")
+                        byLeg[leg].data[key] += hc;
+                    else if (!byLeg[leg].data[key])
+                        byLeg[leg].data[key] = hc;
+                });
+            });
+        });
+
+        // Calcular extras por persona
+        const personas = Object.entries(byLeg).map(([leg, r]) => {
+            const reg    = regimenMap[leg] || "";
+            const grupo  = grupoMap[leg]   || "";
+            let ext50 = 0, ext100 = 0, lvHs = 0, sadomHs = 0;
+
+            const hsDelDia = key => {
+                const v = r.data[key];
+                return typeof v === "number" ? v : horasDeValor(normalizarTurno(v || ""));
+            };
+
+            if (reg === "14 x 14 x 8" || reg === "14 x 14 x 12") {
+                const umbral  = reg === "14 x 14 x 8" ? 8 : 12;
+                const francos = francosMap[grupo] || new Set();
+                dias.forEach(d => {
+                    const key = fmtKey(d);
+                    const hs  = hsDelDia(key);
+                    if (hs <= 0) return;
+                    if (francos.has(key)) ext100 += hs;
+                    else if (hs > umbral) ext50  += hs - umbral;
+                });
+            } else if (reg === "200") {
+                const total = dias.reduce((s, d) => s + hsDelDia(fmtKey(d)), 0);
+                ext50 = Math.max(0, total - 200);
+            } else {
+                const umbral = reg === "4 x 2 x 12" ? 10
+                             : reg === "5 x 2 x 12" ? 9.5
+                             : reg === "6 x 1 x 8"  ? 8
+                             : reg === "12 x 36"    ? 13
+                             : null;
+                if (umbral !== null) {
+                    dias.forEach(d => {
+                        const key  = fmtKey(d);
+                        const hs   = hsDelDia(key);
+                        if (hs <= umbral) return;
+                        const exc  = hs - umbral;
+                        const dow  = d.getDay();
+                        const esFer = !!FERIADOS_ARG[key];
+                        if (esFer || dow === 0 || dow === 6) ext100 += exc;
+                        else                                  ext50  += exc;
+                    });
+                }
+            }
+
+            // Autorizado estimado por DOW
+            dias.forEach(d => {
+                const key  = fmtKey(d);
+                const hs   = hsDelDia(key);
+                if (hs <= 0) return;
+                const dow  = d.getDay();
+                const esFer = !!FERIADOS_ARG[key];
+                if (esFer || dow === 0 || dow === 6) sadomHs += hs;
+                else                                  lvHs    += hs;
+            });
+
+            return {
+                nombre: r.nombre.trim(),
+                ext50:  Math.round(ext50  * 10) / 10,
+                ext100: Math.round(ext100 * 10) / 10,
+                lvHs, sadomHs,
+            };
+        });
+
+        const totExt50  = Math.round(personas.reduce((s, p) => s + p.ext50,  0) * 10) / 10;
+        const totExt100 = Math.round(personas.reduce((s, p) => s + p.ext100, 0) * 10) / 10;
+        const autExt50  = Math.round(personas.reduce((s, p) => s + p.lvHs,   0) * 0.07 * 10) / 10;
+        const autExt100 = Math.round(personas.reduce((s, p) => s + p.sadomHs,0) * 0.07 * 10) / 10;
+
+        const top50  = personas.filter(p => p.ext50  > 0).sort((a,b) => b.ext50  - a.ext50).slice(0,15);
+        const top100 = personas.filter(p => p.ext100 > 0).sort((a,b) => b.ext100 - a.ext100).slice(0,10);
+
+        return { totExt50, totExt100, autExt50, autExt100, top50, top100 };
+    }, [progDocs, legajos, diagramas]);
 
     const mesActual = meses[meses.length - 1];
     const datosMesActual = metricas.porMes[metricas.porMes.length - 1] ?? {};
@@ -519,6 +659,73 @@ export default function DashboardsGestionScreen({ onBack }) {
                     )}
                 </ChartCard>
             </div>
+
+            {/* ── Extras del mes actual ── */}
+            {(extrasDelMes.top50.length > 0 || extrasDelMes.top100.length > 0) && (
+                <div className="dg-extras-section">
+                    <div className="dg-extras-titulo">
+                        ⏰ Horas extra — {mesActual.label} {mesActual.año}
+                    </div>
+
+                    {/* KPIs de extras */}
+                    <div className="dg-extras-kpis">
+                        {[
+                            { label: "Ext 50% pagadas",   val: extrasDelMes.totExt50,  aut: extrasDelMes.autExt50,  color: "#f59e0b" },
+                            { label: "Ext 100% pagadas",  val: extrasDelMes.totExt100, aut: extrasDelMes.autExt100, color: "#ef4444" },
+                        ].map(k => {
+                            const desv = Math.round((k.val - k.aut) * 10) / 10;
+                            const pct  = k.aut > 0 ? Math.round((k.val / k.aut - 1) * 1000) / 10 : null;
+                            return (
+                                <div key={k.label} className="dg-extras-kpi">
+                                    <div className="dg-extras-kpi-label">{k.label}</div>
+                                    <div className="dg-extras-kpi-val" style={{ color: k.color }}>{k.val} hs</div>
+                                    <div className="dg-extras-kpi-meta">
+                                        <span>Aut. estimado: {k.aut} hs</span>
+                                        <span className={desv > 0 ? "dg-extras-pos" : desv < 0 ? "dg-extras-neg" : ""}>
+                                            Desvío: {desv > 0 ? "+" : ""}{desv} hs
+                                            {pct != null && ` (${pct > 0 ? "+" : ""}${pct}%)`}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Gráficos top personas */}
+                    <div className="dg-charts-row dg-charts-row--2">
+                        {extrasDelMes.top50.length > 0 && (
+                            <ChartCard titulo="🔶 Top — Ext 50%">
+                                <ResponsiveContainer width="100%" height={Math.max(180, extrasDelMes.top50.length * 24)}>
+                                    <BarChart data={extrasDelMes.top50} layout="vertical"
+                                        margin={{ left: 4, right: 24, top: 4, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                                        <XAxis type="number" tick={{ fontSize: 10 }} height={18} />
+                                        <YAxis type="category" dataKey="nombre" tick={{ fontSize: 10 }} width={150}
+                                            tickFormatter={v => v.length > 22 ? v.slice(0,22)+"…" : v} />
+                                        <Tooltip formatter={(v) => [`${v} hs`, "Ext 50%"]} />
+                                        <Bar dataKey="ext50" name="Ext 50%" fill="#f59e0b" radius={[0,4,4,0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                        )}
+                        {extrasDelMes.top100.length > 0 && (
+                            <ChartCard titulo="🔴 Top — Ext 100%">
+                                <ResponsiveContainer width="100%" height={Math.max(180, extrasDelMes.top100.length * 24)}>
+                                    <BarChart data={extrasDelMes.top100} layout="vertical"
+                                        margin={{ left: 4, right: 24, top: 4, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                                        <XAxis type="number" tick={{ fontSize: 10 }} height={18} />
+                                        <YAxis type="category" dataKey="nombre" tick={{ fontSize: 10 }} width={150}
+                                            tickFormatter={v => v.length > 22 ? v.slice(0,22)+"…" : v} />
+                                        <Tooltip formatter={(v) => [`${v} hs`, "Ext 100%"]} />
+                                        <Bar dataKey="ext100" name="Ext 100%" fill="#ef4444" radius={[0,4,4,0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* ── Resumen mes actual ── */}
             <div className="dg-resumen-mes">

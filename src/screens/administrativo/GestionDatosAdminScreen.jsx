@@ -144,6 +144,7 @@ const COLECCIONES = [
             { key: "nombreProyecto", label: "Nº Proyecto" },
             { key: "nombre",         label: "Nombre objetivo", renderFn: d => fmtObjetivo(d) },
             { key: "clienteNombre",  label: "Cliente",    renderFn: d => d.clienteNombre || d.nombreProyecto || "—" },
+            { key: "clienteId",      label: "ClienteID",  renderFn: d => d.clienteId || "—" },
             { key: "domicilio",      label: "Domicilio"  },
             { key: "localidad",      label: "Localidad"  },
             { key: "zona",           label: "Zona"       },

@@ -147,7 +147,7 @@ export default function Diagramas14x14Screen({ onBack }) {
     // ── Años disponibles ──────────────────────────────────────────────────────
     const mesesDisp = useMemo(() => {
         const meses = [];
-        for (let y = 2026; y <= 2028; y++) {
+        for (let y = 2025; y <= 2028; y++) {
             for (let m = 1; m <= 12; m++) {
                 meses.push(`${y}-${String(m).padStart(2,"0")}`);
             }

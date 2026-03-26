@@ -67,6 +67,11 @@ export default function OtraActividadScreen({ geo, onBack }) {
                             <option value="">— Seleccionar tipo —</option>
                             {data.tiposActividad.map((t) => <option key={t}>{t}</option>)}
                         </select>
+                        {data.tiposActividad.length === 0 && (
+                            <small style={{ color: "var(--color-warning, #f59e0b)", marginTop: 4, display: "block" }}>
+                                Sin tipos de actividad. El administrador debe cargarlos en Configuración.
+                            </small>
+                        )}
                     </div>
                     <div className="field">
                         <label className="label">Observaciones (opcional)</label>

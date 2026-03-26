@@ -119,6 +119,11 @@ export default function JornadaScreen({ user, onStarted, onBack }) {
                         <option value="">— Seleccionar vehículo —</option>
                         {data.vehiculos.map((v) => <option key={v}>{v}</option>)}
                     </select>
+                    {data.vehiculos.length === 0 && (
+                        <small style={{ color: "var(--color-muted)", marginTop: 4, display: "block" }}>
+                            Sin vehículos cargados — el administrador puede agregarlos en Configuración.
+                        </small>
+                    )}
                 </div>
                 <div className="field">
                     <label className="label">Km Inicial <span style={{fontSize:"0.75em",color:"var(--color-muted)",fontWeight:400}}>(opcional)</span></label>

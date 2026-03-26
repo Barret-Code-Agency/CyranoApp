@@ -6,6 +6,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { MESES_CORTO as MESES_ES } from "../../utils/periodoUtils";
 import { useWhatsApp } from "../../hooks/useWhatsApp";
+import { useActividadesSemana } from "../../hooks/useActividadesSemana";
 import { buildResumenDiario } from "../../utils/whatsapp";
 import { useAuth }              from "../../context/AuthContext";
 import { useAppData }           from "../../context/AppDataContext";
@@ -28,6 +29,7 @@ import ControlClienteScreen     from "../shared/ControlClienteScreen";
 import ConsolidadoScreen        from "../shared/ConsolidadoScreen";
 import Diagramas14x14Screen     from "../shared/Diagramas14x14Screen";
 import PedidoInsumosScreen      from "../shared/PedidoInsumosScreen";
+import DashboardsGestionScreen  from "../gerencia/DashboardsGestionScreen";
 import AppHeader from "../../components/AppHeader";
 import "../../styles/ConsolidadoScreen.css";
 import "../../styles/SupervisorHome.css";
@@ -56,7 +58,7 @@ function PeriodoCard({ icono, titulo, onVer }) {
                         {MESES_LARGO.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                     </select>
                     <select className="con-select con-select--año" value={año} onChange={e => setAño(Number(e.target.value))}>
-                        {[2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={y}>{y}</option>)}
+                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <button className="con-btn-abrir" onClick={() => onVer(año, mes)}>Ver →</button>
                 </div>
@@ -170,20 +172,29 @@ function CalendarioSemanal({ actividades = {}, legajos = [] }) {
     );
 }
 
-const MODULOS = [
-    { id: "muro_comunicacion",          icon: "📢", titulo: "Muro de Comunicación y Novedades",  desc: "Novedades y comunicados de tu empresa",                          color: "blue"  },
-    { id: "supervision",                icon: "🔍", titulo: "Supervisión",                        desc: "Accedé a tu panel de supervisión y control de objetivos",         color: "blue"  },
-    { id: "rondas_plantillas",          icon: "🗺️", titulo: "Cargar plantillas de ronda",         desc: "Creá y configurá rondas con checkpoints y actividades GPS",       color: "blue"  },
-    { id: "control_actividades_vigilador", icon: "👁️", titulo: "Control de Actividades Vigilador", desc: "Monitor de rondas, planillas, actas, vehículos, insumos e informes", color: "blue" },
-    { id: "redactar_informe",           icon: "✏️", titulo: "Redactar informe",                   desc: "Creá un informe de supervisión o novedad",                        color: "green" },
-    { id: "turnos",                     icon: "📅", titulo: "Gestión de horarios",               desc: "Cargá y gestioná los turnos del personal",                       color: "blue"  },
-    { id: "auditoria_puesto",           icon: "🔎", titulo: "Auditoría de Puesto",                desc: "Realizá auditorías operativas del puesto asignado",               color: "blue"  },
-    { id: "dashboard_personal",         icon: "👥", titulo: "Dashboard de personal",              desc: "Estado y novedades del personal",                                 color: "blue"  },
-    { id: "felicitaciones_sanciones",   icon: "📋", titulo: "Registro de Felicitaciones y Sanciones", desc: "Registrá felicitaciones o sanciones del personal",           color: "blue"  },
-    { id: "informe_gestion",            icon: "📊", titulo: "Informe de Gestión",                 desc: "Generá el informe de gestión del período",                        color: "blue"  },
-    { id: "informe_visita",             icon: "🤝", titulo: "Informe de Visita al Cliente",       desc: "Registrá las novedades de la visita al cliente",                  color: "blue"  },
-    { id: "muro_procedimientos",        icon: "📌", titulo: "Muro de Procedimientos",             desc: "Consultá los procedimientos operativos vigentes",                  color: "blue"  },
-    { id: "capacitacion",               icon: "🎓", titulo: "Capacitación y Entrenamiento",       desc: "Accedé a los cursos y materiales de formación",                   color: "blue"  },
+const MODULOS = {
+    "muro_comunicacion":             { icon: "📢", titulo: "Comunicación",           desc: "Novedades y comunicados de tu empresa",                           color: "purple"  },
+    "supervision":                   { icon: "🔍", titulo: "Supervisión",             desc: "Tu panel de supervisión y control de objetivos",                  color: "blue"    },
+    "rondas_plantillas":             { icon: "🗺️", titulo: "Plantillas de Ronda",    desc: "Configurá rondas con checkpoints y actividades GPS",              color: "green"   },
+    "control_actividades_vigilador": { icon: "👁️", titulo: "Control de Actividades", desc: "Rondas, planillas, actas, vehículos e informes",                  color: "cyan"    },
+    "redactar_informe":              { icon: "✏️", titulo: "Informes",               desc: "Creá un informe de supervisión o novedad",                        color: "teal"    },
+    "turnos":                        { icon: "📅", titulo: "Gestión de horarios",     desc: "Cargá y gestioná los turnos del personal",                        color: "indigo"  },
+    "auditoria_puesto":              { icon: "🔎", titulo: "Auditoría de Puesto",     desc: "Realizá auditorías operativas del puesto",                        color: "orange"  },
+    "dashboard_personal":            { icon: "👥", titulo: "Dashboard de personal",   desc: "Estado y novedades del personal",                                 color: "cyan"    },
+    "felicitaciones_sanciones":      { icon: "📋", titulo: "Felicitaciones/Sanciones",desc: "Registrá felicitaciones o sanciones del personal",               color: "amber"   },
+    "dashboards_gestion":            { icon: "📊", titulo: "Dashboard de gestión",    desc: "KPIs y métricas operativas de tu zona",                           color: "orange"  },
+    "informe_gestion":               { icon: "📈", titulo: "Informe de Gestión",      desc: "Generá el informe de gestión del período",                        color: "slate"   },
+    "informe_visita":                { icon: "🤝", titulo: "Informe de Visita",       desc: "Registrá las novedades de la visita al cliente",                  color: "teal"    },
+    "realizar_pedido_insumos":       { icon: "📦", titulo: "Realizar pedido de insumos", desc: "Creá un nuevo pedido de insumos para el puesto",                color: "green"   },
+    "muro_procedimientos":           { icon: "📌", titulo: "Procedimientos",          desc: "Consultá los procedimientos operativos vigentes",                 color: "navy"    },
+    "capacitacion":                  { icon: "🎓", titulo: "Capacitación",            desc: "Accedé a los cursos y materiales de formación",                   color: "amber"   },
+};
+
+const GRUPOS_MENU = [
+    { label: "Operaciones", ids: ["supervision", "rondas_plantillas", "control_actividades_vigilador", "redactar_informe", "realizar_pedido_insumos", "turnos", "dashboards_gestion"] },
+    { label: "Personal",    ids: ["dashboard_personal", "felicitaciones_sanciones", "auditoria_puesto"] },
+    { label: "Reportes",    ids: ["informe_gestion", "informe_visita"] },
+    { label: "Formación",   ids: ["muro_comunicacion", "muro_procedimientos", "capacitacion"] },
 ];
 
 const SUB_MODULOS_ACTIVIDADES = [
@@ -191,7 +202,7 @@ const SUB_MODULOS_ACTIVIDADES = [
     { id: "planillas",             icon: "📊", titulo: "Ver Planillas",               desc: "Consultá las planillas operativas del puesto"           },
     { id: "ver_libro_actas",       icon: "📖", titulo: "Ver Libro de Actas",          desc: "Consultá el libro de actas digital de los puestos"      },
     { id: "ver_control_vehicular", icon: "🚗", titulo: "Ver Controles de Vehículos",  desc: "Consultá los controles vehiculares registrados"          },
-    { id: "ver_pedido_insumos",    icon: "📦", titulo: "Pedido de Insumos",           desc: "Creá o consultá pedidos de insumos del puesto"          },
+    { id: "ver_pedido_insumos",    icon: "✅", titulo: "Revisar pedidos de insumos",  desc: "Revisá y aprobá los pedidos de insumos del personal"    },
     { id: "ver_inventarios",       icon: "🗃️", titulo: "Ver Inventarios",             desc: "Consultá el inventario de los puestos"                  },
     { id: "ver_informes",          icon: "📄", titulo: "Ver Informes",                desc: "Consultá los informes redactados"                       },
 ];
@@ -213,11 +224,13 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
             .then(snap => setLegajos(snap.docs.map(d => d.data())))
             .catch(err => console.error("Error cargando legajos:", err));
     }, [empresaId]);
+    const actividadesSemana = useActividadesSemana(empresaId, legajos);
 
-    const modActivo   = MODULOS.find(m => m.id === seccion);
+    const modActivo   = MODULOS[seccion];
+    const tituloRol   = /encargado/i.test(user?.cargo || "") ? "Encargado" : "Supervisor";
     const subline     = seccion
         ? `${modActivo?.icon ?? ""} ${modActivo?.titulo ?? seccion}`.trim()
-        : "🔍 Supervisor / Encargado";
+        : `🔍 ${tituloRol}`;
     const renderHeader = () => <AppHeader onLogout={handleLogout} subline={subline} />;
 
     const volverBtn = (onClick) => (
@@ -243,7 +256,11 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
         if (subSeccion === "ver_pedido_insumos") return (
             <div className="sh-supervision-wrapper">
                 {renderHeader()}
-                <PedidoInsumosScreen onBack={() => setSubSeccion(null)} />
+                {volverBtn(() => setSubSeccion(null))}
+                <div className="sh-subpanel">
+                    <div className="sh-subpanel-title">✅ Revisar pedidos de insumos</div>
+                    <div className="sh-coming-soon">Próximamente</div>
+                </div>
             </div>
         );
         if (subSeccion) {
@@ -268,10 +285,10 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
                     {SUB_MODULOS_ACTIVIDADES.map(m => (
                         <button
                             key={m.id}
-                            className="sh-modulo sh-modulo--blue"
+                            className="sh-modulo sh-modulo--cyan"
                             onClick={() => setSubSeccion(m.id)}
                         >
-                            <span className="sh-modulo-icon">{m.icon}</span>
+                            <span className="sh-modulo-icon sh-modulo-icon--cyan">{m.icon}</span>
                             <div className="sh-modulo-info">
                                 <strong>{m.titulo}</strong>
                                 <small>{m.desc}</small>
@@ -314,8 +331,8 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
                     <div className="vh-subpanel-title">📢 Muro de Comunicación y Novedades</div>
                     <div className="sh-grid">
                         {MURO_MENUS.map(m => (
-                            <button key={m.id} className="sh-modulo" onClick={() => setSubSub(m.id)}>
-                                <span className="sh-modulo-icon">{m.icon}</span>
+                            <button key={m.id} className="sh-modulo sh-modulo--purple" onClick={() => setSubSub(m.id)}>
+                                <span className="sh-modulo-icon sh-modulo-icon--purple">{m.icon}</span>
                                 <div className="sh-modulo-info">
                                     <strong>{m.titulo}</strong>
                                     <small>{m.desc}</small>
@@ -343,8 +360,8 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
                 {volverBtn(() => setSeccion(null))}
                 <div className="sh-grid">
                     {PROC_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSub(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
+                        <button key={m.id} className="sh-modulo sh-modulo--navy" onClick={() => setSubSub(m.id)}>
+                            <span className="sh-modulo-icon sh-modulo-icon--navy">{m.icon}</span>
                             <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
                             <span className="sh-modulo-arrow">›</span>
                         </button>
@@ -368,8 +385,8 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
                 {volverBtn(() => setSeccion(null))}
                 <div className="sh-grid">
                     {CAP_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSub(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
+                        <button key={m.id} className="sh-modulo sh-modulo--amber" onClick={() => setSubSub(m.id)}>
+                            <span className="sh-modulo-icon sh-modulo-icon--amber">{m.icon}</span>
                             <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
                             <span className="sh-modulo-arrow">›</span>
                         </button>
@@ -379,22 +396,34 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
         );
     }
 
-    // Redactar informe → submenú sencillo / gravedad
+    // Redactar informe → submenú sencillo / gravedad / condición insegura / informes vigiladores
     if (seccion === "redactar_informe") {
         if (subSub === "sencillo")  return <><AppHeader onLogout={handleLogout} subline={subline} /><InformeSencilloScreen onBack={() => setSubSub(null)} /></>;
         if (subSub === "gravedad")  return <><AppHeader onLogout={handleLogout} subline={subline} /><InformeNovedadScreen  onBack={() => setSubSub(null)} /></>;
+        if (subSub === "condicion_insegura" || subSub === "ver_informes_vigiladores") {
+            const sub = { condicion_insegura: { icon: "⚠️", titulo: "Condición Insegura" }, ver_informes_vigiladores: { icon: "📋", titulo: "Informes de Vigiladores" } }[subSub];
+            return (
+                <div className="sh-supervision-wrapper">
+                    {renderHeader()}
+                    {volverBtn(() => setSubSub(null))}
+                    <div className="sh-subpanel"><div className="sh-subpanel-title">{sub.icon} {sub.titulo}</div><div className="sh-coming-soon">Próximamente</div></div>
+                </div>
+            );
+        }
         const CREAR_MENUS = [
-            { id: "sencillo", icon: "📝", titulo: "Informe sencillo",   desc: "Redactá un informe no urgente de tu turno o puesto" },
-            { id: "gravedad", icon: "🚨", titulo: "Informe de gravedad", desc: "Registrá un incidente con daños a personas o bienes" },
+            { id: "sencillo",                 icon: "📝", titulo: "Informe sencillo",          desc: "Redactá un informe no urgente de tu turno o puesto"        },
+            { id: "gravedad",                 icon: "🚨", titulo: "Informe de gravedad",        desc: "Registrá un incidente con daños a personas o bienes"       },
+            { id: "condicion_insegura",       icon: "⚠️", titulo: "Condición insegura",        desc: "Reportá una condición insegura detectada en el puesto"     },
+            { id: "ver_informes_vigiladores", icon: "📋", titulo: "Informes de vigiladores",   desc: "Consultá los informes de jornada y novedades del personal" },
         ];
         return (
-            <div className="sh-root">
+            <div className="sh-supervision-wrapper">
                 {renderHeader()}
                 {volverBtn(() => setSeccion(null))}
                 <div className="sh-grid">
                     {CREAR_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo" onClick={() => setSubSub(m.id)}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
+                        <button key={m.id} className="sh-modulo sh-modulo--teal" onClick={() => setSubSub(m.id)}>
+                            <span className="sh-modulo-icon sh-modulo-icon--teal">{m.icon}</span>
                             <div className="sh-modulo-info">
                                 <strong>{m.titulo}</strong>
                                 <small>{m.desc}</small>
@@ -485,9 +514,9 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
                 {volverBtn(() => setSeccion(null))}
                 <div className="sh-grid">
                     {HORARIOS_MENUS.map(m => (
-                        <button key={m.id} className="sh-modulo"
+                        <button key={m.id} className="sh-modulo sh-modulo--indigo"
                             onClick={() => { setPeriodoSel(null); setSubSeccion(m.id); }}>
-                            <span className="sh-modulo-icon">{m.icon}</span>
+                            <span className="sh-modulo-icon sh-modulo-icon--indigo">{m.icon}</span>
                             <div className="sh-modulo-info">
                                 <strong>{m.titulo}</strong>
                                 <small>{m.desc}</small>
@@ -500,15 +529,36 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
         );
     }
 
+    // Dashboard de gestión
+    if (seccion === "dashboards_gestion") {
+        return (
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                {renderHeader()}
+                {volverBtn(() => setSeccion(null))}
+                <DashboardsGestionScreen onBack={() => setSeccion(null)} />
+            </div>
+        );
+    }
+
+    // Realizar pedido de insumos (menú principal)
+    if (seccion === "realizar_pedido_insumos") {
+        return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <PedidoInsumosScreen onBack={() => setSeccion(null)} />
+            </div>
+        );
+    }
+
     // Otras secciones — placeholder
     if (seccion) {
-        const mod = MODULOS.find(m => m.id === seccion);
+        const mod = MODULOS[seccion];
         return (
             <div className="sh-root">
                 {renderHeader()}
                 {volverBtn(() => setSeccion(null))}
                 <div className="sh-subpanel">
-                    <div className="sh-subpanel-title">{mod.icon} {mod.titulo}</div>
+                    <div className="sh-subpanel-title">{mod?.icon} {mod?.titulo}</div>
                     <div className="sh-coming-soon">Próximamente</div>
                 </div>
             </div>
@@ -518,26 +568,32 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
     return (
         <div className="sh-root">
             <AppHeader onLogout={handleLogout} subline={subline} />
-
-            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} legajos={legajos} />
-
-            <div className="sh-grid">
-                {MODULOS.map(m => {
-                    const habilitado = tieneAcceso(empresaModulos, user, m.id);
+            <CalendarioSemanal actividades={actividadesSemana} legajos={legajos} />
+            <div style={{ padding: "var(--space-4) var(--space-5) var(--space-8)" }}>
+                {GRUPOS_MENU.map(grupo => {
+                    const items = grupo.ids.map(id => ({ id, ...MODULOS[id] })).filter(m => m.titulo);
                     return (
-                    <button
-                        key={m.id}
-                        className={`sh-modulo sh-modulo--${m.color} ${!habilitado ? "sh-modulo--disabled" : ""}`}
-                        disabled={!habilitado}
-                        onClick={() => { if (habilitado) { setSubSub(null); setSubSeccion(null); setPeriodoSel(null); setSeccion(m.id); } }}
-                    >
-                        <span className="sh-modulo-icon">{m.icon}</span>
-                        <div className="sh-modulo-info">
-                            <strong>{m.titulo}</strong>
-                            <small>{habilitado ? m.desc : "Sin acceso"}</small>
+                        <div key={grupo.label} className="sh-grupo">
+                            <div className="sh-grupo-label">{grupo.label}</div>
+                            {items.map(m => {
+                                const habilitado = tieneAcceso(empresaModulos, user, m.id);
+                                return (
+                                    <button
+                                        key={m.id}
+                                        className={`sh-modulo sh-modulo--${m.color} ${!habilitado ? "sh-modulo--disabled" : ""}`}
+                                        disabled={!habilitado}
+                                        onClick={() => { if (habilitado) { setSubSub(null); setSubSeccion(null); setPeriodoSel(null); setSeccion(m.id); } }}
+                                    >
+                                        <span className={`sh-modulo-icon sh-modulo-icon--${m.color}`}>{m.icon}</span>
+                                        <div className="sh-modulo-info">
+                                            <strong>{m.titulo}</strong>
+                                            <small>{habilitado ? m.desc : "Sin acceso"}</small>
+                                        </div>
+                                        {habilitado && <span className="sh-modulo-arrow">›</span>}
+                                    </button>
+                                );
+                            })}
                         </div>
-                        {habilitado && <span className="sh-modulo-arrow">›</span>}
-                    </button>
                     );
                 })}
             </div>

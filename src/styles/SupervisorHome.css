@@ -263,6 +263,11 @@
 .sh-cal-dia-chip--informe      { background: var(--color-warn-ghost);    color: var(--color-warn);    }
 .sh-cal-dia-chip--default      { background: var(--color-surface2);      color: var(--color-muted);   }
 .sh-cal-dia-chip--cumple       { background: #fde68a;                    color: #92400e;              }
+.sh-cal-dia-chip--alta        { background: rgba(239,  68,  68, 0.18); color: #991b1b; }
+.sh-cal-dia-chip--aniversario { background: rgba(245, 158, 11, 0.18); color: #92400e; }
+.sh-cal-dia-chip--supervision { background: rgba(59,  130, 246, 0.15); color: #1e40af; }
+.sh-cal-dia-chip--inconclusa  { background: rgba(239,  68,  68, 0.15); color: #991b1b; }
+.sh-cal-dia-chip--vtv         { background: rgba(16,  185, 129, 0.15); color: #065f46; }
 .sh-cal-act--cumple            { background: #fffbeb; border-color: #fcd34d; }
 
 .sh-cal-wa-btn {
@@ -423,3 +428,84 @@
 .sh-proximamente-icon { font-size: 2rem; margin-bottom: 1rem; }
 .sh-proximamente-titulo { font-weight: 600; }
 .sh-back-btn--mt { margin-top: 1.5rem; }
+
+/* ── Grupos del menú principal ── */
+.sh-grupo { margin-bottom: var(--space-5); }
+
+.sh-grupo-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    padding: 0 var(--space-1) var(--space-2);
+    margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Íconos con fondo de color ── */
+.sh-modulo-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 76, 165, 0.08);
+}
+
+.sh-modulo-icon--purple  { background: rgba(124, 58, 237, 0.10); }
+.sh-modulo-icon--blue    { background: rgba(15,  76, 165, 0.10); }
+.sh-modulo-icon--green   { background: rgba(16, 185, 129, 0.10); }
+.sh-modulo-icon--slate   { background: rgba(100,116, 139, 0.10); }
+.sh-modulo-icon--teal    { background: rgba( 13,148, 136, 0.10); }
+.sh-modulo-icon--indigo  { background: rgba( 99,102, 241, 0.10); }
+.sh-modulo-icon--cyan    { background: rgba(  6,182, 212, 0.10); }
+.sh-modulo-icon--orange  { background: rgba(249,115,  22, 0.10); }
+.sh-modulo-icon--amber   { background: rgba(245,158,  11, 0.10); }
+.sh-modulo-icon--navy    { background: rgba( 30, 58, 138, 0.10); }
+.sh-modulo-icon--red     { background: rgba(239, 68,  68, 0.10); }
+.sh-modulo-icon--gold    { background: rgba(201,162,  39, 0.10); }
+.sh-modulo-icon--pink    { background: rgba(236, 72, 153, 0.10); }
+
+/* ── Colores de acento por módulo ── */
+.sh-modulo--purple  { border-left-color: #7c3aed; }
+.sh-modulo--purple:hover  { background: rgba(124,58,237,0.04);  border-color: #7c3aed; }
+.sh-modulo--green   { border-left-color: #10b981; }
+.sh-modulo--green:hover   { background: rgba(16,185,129,0.04);  border-color: #10b981; }
+.sh-modulo--slate   { border-left-color: #64748b; }
+.sh-modulo--slate:hover   { background: rgba(100,116,139,0.04); border-color: #64748b; }
+.sh-modulo--teal    { border-left-color: #0d9488; }
+.sh-modulo--teal:hover    { background: rgba(13,148,136,0.04);  border-color: #0d9488; }
+.sh-modulo--indigo  { border-left-color: #6366f1; }
+.sh-modulo--indigo:hover  { background: rgba(99,102,241,0.04);  border-color: #6366f1; }
+.sh-modulo--cyan    { border-left-color: #06b6d4; }
+.sh-modulo--cyan:hover    { background: rgba(6,182,212,0.04);   border-color: #06b6d4; }
+.sh-modulo--orange  { border-left-color: #f97316; }
+.sh-modulo--orange:hover  { background: rgba(249,115,22,0.04);  border-color: #f97316; }
+.sh-modulo--amber   { border-left-color: #f59e0b; }
+.sh-modulo--amber:hover   { background: rgba(245,158,11,0.04);  border-color: #f59e0b; }
+.sh-modulo--navy    { border-left-color: #1e3a8a; }
+.sh-modulo--navy:hover    { background: rgba(30,58,138,0.04);   border-color: #1e3a8a; }
+.sh-modulo--red     { border-left-color: #ef4444; }
+.sh-modulo--red:hover     { background: rgba(239,68,68,0.04);   border-color: #ef4444; }
+.sh-modulo--gold    { border-left-color: #c9a227; }
+.sh-modulo--gold:hover    { background: rgba(201,162,39,0.04);  border-color: #c9a227; }
+.sh-modulo--pink    { border-left-color: #ec4899; }
+.sh-modulo--pink:hover    { background: rgba(236,72,153,0.04);  border-color: #ec4899; }
+
+/* Hover: flecha de cada color */
+.sh-modulo--purple:hover  .sh-modulo-arrow { color: #7c3aed; }
+.sh-modulo--green:hover   .sh-modulo-arrow { color: #10b981; }
+.sh-modulo--slate:hover   .sh-modulo-arrow { color: #64748b; }
+.sh-modulo--teal:hover    .sh-modulo-arrow { color: #0d9488; }
+.sh-modulo--indigo:hover  .sh-modulo-arrow { color: #6366f1; }
+.sh-modulo--cyan:hover    .sh-modulo-arrow { color: #06b6d4; }
+.sh-modulo--orange:hover  .sh-modulo-arrow { color: #f97316; }
+.sh-modulo--amber:hover   .sh-modulo-arrow { color: #f59e0b; }
+.sh-modulo--navy:hover    .sh-modulo-arrow { color: #1e3a8a; }
+.sh-modulo--red:hover     .sh-modulo-arrow { color: #ef4444; }
+.sh-modulo--gold:hover    .sh-modulo-arrow { color: #c9a227; }
+.sh-modulo--pink:hover    .sh-modulo-arrow { color: #ec4899; }

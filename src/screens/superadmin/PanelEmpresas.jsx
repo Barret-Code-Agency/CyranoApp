@@ -5,6 +5,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage
 import { db, storage } from "../../firebase";
 import ModalNuevaEmpresa, { MODULOS_DEFAULT } from "./ModalNuevaEmpresa";
 import { MODULOS_DEF } from "../../config/roles";
+import { setupEmpresa } from "../../utils/setupEmpresa";
 
 export default function PanelEmpresas() {
     const [empresas,     setEmpresas]     = useState([]);
@@ -106,6 +107,19 @@ export default function PanelEmpresas() {
             await cargar();
         } catch (e) {
             setMsg({ texto: "❌ Error: " + e.message, ok: false });
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    const reinicializar = async () => {
+        if (!seleccionada) return;
+        setGuardando(true); setMsg(null);
+        try {
+            await setupEmpresa(seleccionada.id, seleccionada.nombre ?? seleccionada.id, modulos);
+            setMsg({ texto: "✅ Estructura reinicializada. Los datos operativos (config, planes) fueron recreados.", ok: true });
+        } catch (e) {
+            setMsg({ texto: "❌ Error al reinicializar: " + e.message, ok: false });
         } finally {
             setGuardando(false);
         }
@@ -225,6 +239,21 @@ export default function PanelEmpresas() {
                 </button>
                 <button className="sa-ur-btn-cancel" onClick={() => { setSeleccionada(null); setMsg(null); }}>
                     Cancelar
+                </button>
+            </div>
+
+            <div className="sa-emp-reinit-section">
+                <div className="sa-emp-reinit-title">🔧 Mantenimiento de estructura</div>
+                <div className="sa-emp-reinit-desc">
+                    Si se perdieron datos de configuración (config_global, plan_global, planes de supervisores),
+                    usá este botón para reconstruir la estructura base de la empresa. <strong>No borra datos de colecciones</strong> (legajos, clientes, etc).
+                </div>
+                <button
+                    className="sa-ur-btn-cancel sa-emp-reinit-btn"
+                    onClick={reinicializar}
+                    disabled={guardando}
+                >
+                    🔄 Reinicializar estructura de datos
                 </button>
             </div>
         </div>

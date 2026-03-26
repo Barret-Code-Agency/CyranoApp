@@ -1,0 +1,226 @@
+/* ── AusentismoScreen ──────────────────────────────────────────────── */
+.aus-root {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 12px 16px;
+    min-height: 0;
+}
+
+/* Header */
+.aus-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.aus-title {
+    font-weight: 700;
+    font-size: 16px;
+    color: #1e293b;
+    flex-shrink: 0;
+}
+.aus-controles {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.aus-sel {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 13px;
+    background: #fff;
+    cursor: pointer;
+}
+.aus-busq {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    width: 180px;
+}
+.aus-loading,
+.aus-empty {
+    text-align: center;
+    color: #64748b;
+    padding: 32px;
+    font-size: 14px;
+}
+
+/* Tabla */
+.aus-tabla-wrap {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 60vh;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+.aus-table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+/* Sticky columns */
+.aus-th-sticky,
+.aus-td-sticky {
+    position: sticky;
+    background: #f8fafc;
+    z-index: 2;
+}
+.aus-th-sticky { top: 0; z-index: 3; }
+.aus-th-leg, .aus-td-leg { left: 0; width: 44px; min-width: 44px; }
+.aus-th-nom, .aus-td-nom { left: 44px; min-width: 140px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Header días */
+.aus-th-dia {
+    position: sticky;
+    top: 0;
+    background: #f1f5f9;
+    text-align: center;
+    width: 28px;
+    min-width: 28px;
+    padding: 2px 1px;
+    border: 1px solid #e2e8f0;
+    z-index: 1;
+}
+.aus-th-fin { background: #dbeafe; }
+.aus-th-fer { background: #fef2f2; color: #991b1b; }
+.aus-th-mes { font-size: 7px; color: #94a3b8; }
+.aus-th-num { font-weight: 700; font-size: 10px; }
+.aus-th-dow { font-size: 7px; color: #94a3b8; }
+
+/* Header resumen */
+.aus-th-sum {
+    position: sticky;
+    top: 0;
+    text-align: center;
+    width: 36px;
+    min-width: 36px;
+    padding: 4px 2px;
+    border: 1px solid #e2e8f0;
+    font-size: 9px;
+    font-weight: 700;
+    z-index: 1;
+}
+.aus-th-total { background: #1e293b; color: #fff; }
+
+/* Body */
+.aus-row { border-bottom: 1px solid #f1f5f9; }
+.aus-row:hover { background: #f8fafc; }
+.aus-td-leg {
+    text-align: center;
+    padding: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    border-right: 1px solid #e2e8f0;
+}
+.aus-td-nom {
+    padding: 3px 6px;
+    font-size: 10px;
+    border-right: 1px solid #e2e8f0;
+}
+
+/* Celdas de días */
+.aus-celda {
+    text-align: center;
+    width: 28px;
+    min-width: 28px;
+    padding: 2px 1px;
+    border: 1px solid #e2e8f0;
+    font-size: 8px;
+    font-weight: 700;
+}
+.aus-celda--fin { background: #f0f9ff; }
+
+/* Celdas resumen */
+.aus-td-sum {
+    text-align: center;
+    padding: 2px 4px;
+    border: 1px solid #e2e8f0;
+    font-size: 10px;
+    font-weight: 700;
+    color: #475569;
+}
+.aus-td-total { background: #1e293b; color: #fff; }
+
+/* Tfoot */
+.aus-tfoot-row { background: #f1f5f9; }
+.aus-tfoot-label {
+    padding: 4px 8px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #64748b;
+    text-align: right;
+    border-right: 1px solid #e2e8f0;
+}
+.aus-tfoot-cel {
+    text-align: center;
+    padding: 2px 1px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+.aus-tfoot-sum {
+    text-align: center;
+    padding: 3px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    border: 1px solid #e2e8f0;
+}
+.aus-tfoot-total { background: #1e293b; color: #fff; }
+
+/* ── Estadísticas ── */
+.aus-stats {
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+.aus-stats-titulo {
+    font-weight: 700;
+    font-size: 14px;
+    color: #1e293b;
+    margin-bottom: 14px;
+}
+.aus-stats-grid {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.aus-stat-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    min-width: 110px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.aus-stat-label {
+    font-weight: 700;
+    font-size: 13px;
+    color: #1e293b;
+}
+.aus-stat-desc {
+    font-size: 10px;
+    color: #64748b;
+}
+.aus-stat-val {
+    font-size: 28px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+    margin-top: 4px;
+}
+.aus-stat-sub {
+    font-size: 10px;
+    color: #94a3b8;
+}
+.aus-stat-card--total { border-left: 4px solid #1e293b; }
+.aus-stat-card--emp   { border-left: 4px solid #0ea5e9; }

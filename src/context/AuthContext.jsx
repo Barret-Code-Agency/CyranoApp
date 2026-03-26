@@ -41,6 +41,7 @@ function buildUser(uid, email, data) {
                             ? "admin" : "operator",
         empresaId:       data.empresaId       ?? null,
         contratoIds:     data.contratoIds     ?? [],
+        cargo:           data.cargo           ?? null,
         permisos,
         permisosModulos: data.permisosModulos ?? null,
         activo:          data.activo !== false,

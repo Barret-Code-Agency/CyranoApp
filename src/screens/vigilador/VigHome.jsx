@@ -16,6 +16,7 @@ import ControlVehicularScreen from "./ControlVehicularScreen";
 import { collection, addDoc, serverTimestamp, getDocs, query, where } from "firebase/firestore";
 import { OPCIONES, MESES_CORTO as MESES_ES } from "../../utils/periodoUtils";
 import { useWhatsApp } from "../../hooks/useWhatsApp";
+import { useActividadesSemana } from "../../hooks/useActividadesSemana";
 import { buildResumenDiario } from "../../utils/whatsapp";
 import { db } from "../../firebase";
 import { useClientesData } from "../../hooks/useClientesData";
@@ -81,18 +82,24 @@ function SelectorVehiculo({ vehiculos = [], supervisor, onBack }) {
     );
 }
 
-const MODULOS = [
-    { id: "muro_comunicacion",   icon: "📢", titulo: "Muro de Comunicación y Novedades", desc: "Novedades y comunicados de tu empresa",             permiso: "muro_comunicacion"   },
-    { id: "libro_actas",         icon: "📖", titulo: "Libro de Actas Digital",            desc: "Registrá novedades y actas de tu turno",            permiso: "libro_actas"         },
-    { id: "realizar_ronda",      icon: "🗺️", titulo: "Realizar Ronda",                   desc: "Iniciá y registrá tu ronda de vigilancia",          permiso: "realizar_ronda"      },
-    { id: "control_vehicular",   icon: "🚗", titulo: "Control de Vehículo",              desc: "Realizá el checklist de tu vehículo asignado",      permiso: "control_vehicular"   },
-    { id: "planillas",           icon: "📊", titulo: "Planillas",                         desc: "Consultá tus planillas operativas",                 permiso: "planillas"           },
-    { id: "informes",            icon: "📄", titulo: "Informes",                          desc: "Creá o consultá informes de tu puesto",             permiso: "informes"            },
-    { id: "turnos_ver",          icon: "🕐", titulo: "Mis Turnos",                        desc: "Consultá tu calendario de turnos",                  permiso: "turnos_ver"          },
-    { id: "pedido_insumos",      icon: "📦", titulo: "Pedido de Insumos",                 desc: "Solicitá materiales o insumos para tu puesto",      permiso: "pedido_insumos"      },
-    { id: "inventarios",         icon: "🗃️", titulo: "Inventarios",                       desc: "Consultá y gestioná el inventario de tu puesto",    permiso: "inventarios"         },
-    { id: "muro_procedimientos", icon: "📌", titulo: "Muro de Procedimientos",            desc: "Consultá los procedimientos operativos vigentes",   permiso: "muro_procedimientos" },
-    { id: "capacitacion",        icon: "🎓", titulo: "Capacitación y Entrenamiento",      desc: "Accedé a tus cursos y materiales de formación",     permiso: "capacitacion"        },
+const MODULOS = {
+    "muro_comunicacion":   { icon: "📢", titulo: "Comunicación",         desc: "Novedades y comunicados de tu empresa",             permiso: "muro_comunicacion",   color: "purple"  },
+    "libro_actas":         { icon: "📖", titulo: "Libro de Actas",       desc: "Registrá novedades y actas de tu turno",            permiso: "libro_actas",         color: "blue"    },
+    "realizar_ronda":      { icon: "🗺️", titulo: "Realizar Ronda",       desc: "Iniciá y registrá tu ronda de vigilancia",          permiso: "realizar_ronda",      color: "green"   },
+    "control_vehicular":   { icon: "🚗", titulo: "Control de Vehículo",  desc: "Realizá el checklist de tu vehículo asignado",      permiso: "control_vehicular",   color: "orange"  },
+    "planillas":           { icon: "📊", titulo: "Planillas",             desc: "Consultá tus planillas operativas",                 permiso: "planillas",           color: "slate"   },
+    "informes":            { icon: "📄", titulo: "Informes",              desc: "Creá o consultá informes de tu puesto",             permiso: "informes",            color: "teal"    },
+    "turnos_ver":          { icon: "🕐", titulo: "Mis Turnos",            desc: "Consultá tu calendario de turnos",                  permiso: "turnos_ver",          color: "indigo"  },
+    "pedido_insumos":      { icon: "📦", titulo: "Pedido de Insumos",     desc: "Solicitá materiales o insumos para tu puesto",      permiso: "pedido_insumos",      color: "cyan"    },
+    "inventarios":         { icon: "🗃️", titulo: "Inventarios",           desc: "Consultá y gestioná el inventario de tu puesto",    permiso: "inventarios",         color: "amber"   },
+    "muro_procedimientos": { icon: "📌", titulo: "Procedimientos",        desc: "Consultá los procedimientos operativos vigentes",   permiso: "muro_procedimientos", color: "navy"    },
+    "capacitacion":        { icon: "🎓", titulo: "Capacitación",          desc: "Accedé a tus cursos y materiales de formación",     permiso: "capacitacion",        color: "amber"   },
+};
+
+const GRUPOS_MENU = [
+    { label: "Operaciones", ids: ["libro_actas", "realizar_ronda", "control_vehicular", "planillas"] },
+    { label: "Reportes",    ids: ["informes", "turnos_ver", "pedido_insumos", "inventarios"] },
+    { label: "Formación",   ids: ["muro_comunicacion", "muro_procedimientos", "capacitacion"] },
 ];
 
 // ── Calendario semanal ─────────────────────────────────────────────────────────
@@ -275,8 +282,8 @@ function PanelInformes({ onBack }) {
             <div className="vh-subpanel-title">📄 Informes</div>
             <div className="sh-grid" style={{ padding: "var(--space-3) 0 0" }}>
                 {OPCIONES_INFORMES.map(op => (
-                    <button key={op.id} className="sh-modulo" onClick={() => setVista(op.id)}>
-                        <span className="sh-modulo-icon">{op.icon}</span>
+                    <button key={op.id} className="sh-modulo sh-modulo--teal" onClick={() => setVista(op.id)}>
+                        <span className="sh-modulo-icon sh-modulo-icon--teal">{op.icon}</span>
                         <div className="sh-modulo-info">
                             <strong>{op.titulo}</strong>
                             <small>{op.desc}</small>
@@ -319,8 +326,8 @@ function PanelPlanillas({ onBack }) {
             <div className="vh-subpanel-title">📊 Planillas</div>
             <div className="sh-grid" style={{ padding: "var(--space-3) 0 0" }}>
                 {OPCIONES_PLANILLAS.map(op => (
-                    <button key={op.id} className="sh-modulo" onClick={() => setVista(op.id)}>
-                        <span className="sh-modulo-icon">{op.icon}</span>
+                    <button key={op.id} className="sh-modulo sh-modulo--slate" onClick={() => setVista(op.id)}>
+                        <span className="sh-modulo-icon sh-modulo-icon--slate">{op.icon}</span>
                         <div className="sh-modulo-info">
                             <strong>{op.titulo}</strong>
                             <small>{op.desc}</small>
@@ -362,8 +369,8 @@ function PanelCapacitacion({ onBack }) {
             <div className="vh-subpanel-title">🎓 Capacitación y Entrenamiento</div>
             <div className="sh-grid" style={{ padding: "var(--space-3) 0 0" }}>
                 {OPCIONES_CAPACITACION.map(op => (
-                    <button key={op.id} className="sh-modulo" onClick={() => setVista(op.id)}>
-                        <span className="sh-modulo-icon">{op.icon}</span>
+                    <button key={op.id} className="sh-modulo sh-modulo--amber" onClick={() => setVista(op.id)}>
+                        <span className="sh-modulo-icon sh-modulo-icon--amber">{op.icon}</span>
                         <div className="sh-modulo-info">
                             <strong>{op.titulo}</strong>
                             <small>{op.desc}</small>
@@ -402,8 +409,8 @@ function PanelInventarios({ onBack }) {
             <div className="vh-subpanel-title">🗃️ Inventarios</div>
             <div className="sh-grid" style={{ padding: "var(--space-3) 0 0" }}>
                 {OPCIONES_INVENTARIOS.map(op => (
-                    <button key={op.id} className="sh-modulo" onClick={() => setVista(op.id)}>
-                        <span className="sh-modulo-icon">{op.icon}</span>
+                    <button key={op.id} className="sh-modulo sh-modulo--amber" onClick={() => setVista(op.id)}>
+                        <span className="sh-modulo-icon sh-modulo-icon--amber">{op.icon}</span>
                         <div className="sh-modulo-info">
                             <strong>{op.titulo}</strong>
                             <small>{op.desc}</small>
@@ -718,6 +725,7 @@ export default function VigHome({ onLogout, user: propUser }) {
             .then(snap => setLegajos(snap.docs.map(d => d.data())))
             .catch(err => console.error("Error cargando legajos:", err));
     }, [empresaId]);
+    const actividadesSemana = useActividadesSemana(empresaId, legajos);
 
     const [vehiculosFS, setVehiculosFS] = useState([]);
     const [cargandoVehiculos, setCargandoVehiculos] = useState(false);
@@ -741,7 +749,7 @@ export default function VigHome({ onLogout, user: propUser }) {
 
     const handleModulo = (id) => { setSeccion(id); };
 
-    const modActivo = MODULOS.find(m => m.id === seccion);
+    const modActivo = MODULOS[seccion];
     const subline   = seccion
         ? `${modActivo?.icon ?? ""} ${modActivo?.titulo ?? seccion}`.trim()
         : "👷 Vigilador";
@@ -828,25 +836,32 @@ export default function VigHome({ onLogout, user: propUser }) {
     return (
         <div className="vh-root">
             {headerJSX}
-            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} legajos={legajos} />
-
-            <div className="sh-grid">
-                {MODULOS.map(m => {
-                    const habilitado = tieneAcceso(empresaModulos, user, m.permiso);
+            <CalendarioSemanal actividades={actividadesSemana} legajos={legajos} />
+            <div style={{ padding: "var(--space-4) var(--space-5) var(--space-8)" }}>
+                {GRUPOS_MENU.map(grupo => {
+                    const items = grupo.ids.map(id => ({ id, ...MODULOS[id] })).filter(m => m.titulo);
                     return (
-                        <button
-                            key={m.id}
-                            className={`sh-modulo ${!habilitado ? "sh-modulo--disabled" : ""}`}
-                            disabled={!habilitado}
-                            onClick={() => habilitado && handleModulo(m.id)}
-                        >
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info">
-                                <strong>{m.titulo}</strong>
-                                <small>{habilitado ? m.desc : "Sin acceso"}</small>
-                            </div>
-                            {habilitado && <span className="sh-modulo-arrow">›</span>}
-                        </button>
+                        <div key={grupo.label} className="sh-grupo">
+                            <div className="sh-grupo-label">{grupo.label}</div>
+                            {items.map(m => {
+                                const habilitado = tieneAcceso(empresaModulos, user, m.permiso);
+                                return (
+                                    <button
+                                        key={m.id}
+                                        className={`sh-modulo sh-modulo--${m.color} ${!habilitado ? "sh-modulo--disabled" : ""}`}
+                                        disabled={!habilitado}
+                                        onClick={() => habilitado && handleModulo(m.id)}
+                                    >
+                                        <span className={`sh-modulo-icon sh-modulo-icon--${m.color}`}>{m.icon}</span>
+                                        <div className="sh-modulo-info">
+                                            <strong>{m.titulo}</strong>
+                                            <small>{habilitado ? m.desc : "Sin acceso"}</small>
+                                        </div>
+                                        {habilitado && <span className="sh-modulo-arrow">›</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     );
                 })}
             </div>

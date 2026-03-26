@@ -5,13 +5,15 @@ import { db } from "../../firebase";
 import { correrMigracion } from "../../utils/migracionEmpresaId";
 
 // ── Colecciones a limpiar ─────────────────────────────────────────────────
+// Nota: supervisores, vigiladores y encargados ya no son colecciones separadas.
+// Todo el personal está en "legajos" con su respectivo cargo/rol.
 const COLECCIONES = [
     {
         id:    "legajos",
         label: "Personal (legajos)",
         icon:  "👷",
         keyFn: d => d.legajo || d.nombre || d.dni || null,
-        desc:  "Registros de personal cargados desde el Excel",
+        desc:  "Registros de personal — vigiladores, supervisores y encargados",
     },
     {
         id:    "clientes",
@@ -24,29 +26,8 @@ const COLECCIONES = [
         id:    "objetivos",
         label: "Objetivos / Servicios",
         icon:  "📍",
-        keyFn: d => d.nombre || d.direccion || null,
-        desc:  "Objetivos de servicio",
-    },
-    {
-        id:    "supervisores",
-        label: "Supervisores",
-        icon:  "🔍",
-        keyFn: d => d.legajo || d.email || d.nombre || null,
-        desc:  "Tabla de supervisores del sistema",
-    },
-    {
-        id:    "vigiladores",
-        label: "Vigiladores",
-        icon:  "👮",
-        keyFn: d => d.legajo || d.dni || d.nombre || null,
-        desc:  "Tabla de vigiladores del sistema",
-    },
-    {
-        id:    "encargados",
-        label: "Encargados",
-        icon:  "📋",
-        keyFn: d => d.legajo || d.email || d.nombre || null,
-        desc:  "Tabla de encargados del sistema",
+        keyFn: d => d.nombre || d.codigo || d.direccion || null,
+        desc:  "Objetivos y puestos de servicio",
     },
     {
         id:    "vehiculos",
@@ -54,6 +35,20 @@ const COLECCIONES = [
         icon:  "🚗",
         keyFn: d => d.patente || d.dominio || d.interno || null,
         desc:  "Flota de vehículos registrados",
+    },
+    {
+        id:    "programacionServicios",
+        label: "Programación de servicios",
+        icon:  "📅",
+        keyFn: d => (d.año && d.mes && d.objetivoId) ? `${d.año}-${d.mes}-${d.objetivoId}` : null,
+        desc:  "Planillas de programación mensual",
+    },
+    {
+        id:    "jornadas",
+        label: "Jornadas",
+        icon:  "⏱️",
+        keyFn: d => d.jornadaID || null,
+        desc:  "Registros de jornada de supervisores",
     },
 ];
 
@@ -200,10 +195,11 @@ function CardLimpiador({ col }) {
 
 // ── Migración forzada: pone empresaId a TODOS los docs sin él ──────────────
 const COLECCIONES_MIGRAR = [
-    "legajos","clientes","objetivos","vehiculos","supervisores","conductores",
-    "encargados","admins","informes","comunicaciones","procedimientos",
-    "capacitaciones","rondas","plantillasRonda","programacionServicios",
-    "diagramas14x14","ingresosTurno","planCapacitacion",
+    "legajos","clientes","objetivos","vehiculos",
+    "informes","comunicaciones","procedimientos",
+    "capacitaciones","rondas_ejecucion","plantillas_ronda","programacionServicios",
+    "diagramas14x14","planCapacitacion","jornadas","pedidosInsumos",
+    "auditorias","condicionesInseguras",
 ];
 
 function PanelMigracionForzada() {

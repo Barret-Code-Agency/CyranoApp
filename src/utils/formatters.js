@@ -3,7 +3,7 @@
 
 /**
  * Formatea un objetivo para mostrar en UI.
- * Formato completo: "217 103 2 Cerro Moro PAS Supervisor"
+ * Formato completo: "217-103-2 Cerro Moro PAS Supervisor"
  *
  * Campos del documento:
  *   cCosto        — C Costo          (ej: 217)
@@ -17,9 +17,9 @@
  */
 export function fmtObjetivo(o) {
     if (!o) return "";
-    return [o.cCosto, o.numProyecto, o.numObjetivo, o.nombreProyecto, o.nombre]
-        .filter(v => v !== undefined && v !== null && v !== "")
-        .join(" ");
+    const codigo = [o.cCosto, o.numProyecto, o.numObjetivo].filter(Boolean).join("-");
+    const partes  = [codigo, o.nombreProyecto, o.nombre].filter(Boolean);
+    return partes.join(" ");
 }
 
 /**

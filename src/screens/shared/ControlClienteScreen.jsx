@@ -10,7 +10,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import "./ProgramacionServiciosScreen.css";
 import "./ControlClienteScreen.css";
-import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES, AUS_CODES, HORAS_KEYS, horasDeValor, r1 } from "../../utils/periodoUtils";
+import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES, AUS_CODES, HORAS_KEYS, horasDeValor, normalizarTurno, r1 } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 
 // ── Colecciones Firestore ─────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ const COL_PROG = "programacionServicios";
 
 function CeldaContenido({ val, op }) {
     if (!val) return <span className="ps-celda-vacio">—</span>;
-    const hs = horasDeValor(val);
+    const hs = horasDeValor(normalizarTurno(val));
     if (hs > 0) {
         return <span>{hs.toFixed(2).replace(".", ",")}</span>;
     }
@@ -150,7 +150,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
 
     const hsRealesDia = (personal, dia) => {
         const key = fmtKey(dia);
-        return r1(personal.reduce((s, p) => s + horasDeValor((p.programado || {})[key] || ""), 0));
+        return r1(personal.reduce((s, p) => s + horasDeValor(normalizarTurno((p.real || p.programado || {})[key] || "")), 0));
     };
 
     const ausentismoDia = (personal, dia) => {
@@ -168,8 +168,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
         <div className="ps-vt-root">
             {/* Header */}
             <div className="ps-vt-header">
-                <span className="ps-vt-title">Control Cliente</span>
-                <span className="ps-vt-hint">
+                <span className="ps-vt-hint" style={{ margin: "0 auto", fontWeight: 600 }}>
                     24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior} — 23/{String(mes).padStart(2,"0")}/{año}
                 </span>
                 {docs.length > 0 && (
@@ -206,9 +205,11 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                         <div key={d.docId} className="ps-vt-objetivo" id={`cc-obj-${d.docId}`}>
                             {/* Cabecera del objetivo */}
                             <div className="ps-vt-obj-header">
-                                <span className="ps-vt-obj-cliente">{d.clienteNombre}</span>
-                                {d.proyectoNombre  && <span className="ps-vt-obj-sep"> · {d.proyectoNombre}</span>}
-                                {d.objetivoNombre  && <span className="ps-vt-obj-sep"> · {d.objetivoNombre}</span>}
+                                <div className="ps-vt-obj-info">
+                                    <span className="ps-vt-obj-cliente">{d.clienteNombre}</span>
+                                    {d.proyectoNombre  && <span className="ps-vt-obj-sep"> · {d.proyectoNombre}</span>}
+                                    {d.objetivoNombre  && <span className="ps-vt-obj-sep"> · {d.objetivoNombre}</span>}
+                                </div>
                                 <span className="ps-vt-obj-count">{personal.length} personas</span>
                                 <div className="ps-vt-obj-dl">
                                     <button className="ps-vt-dl-btn ps-vt-dl-btn--jpg" disabled={descargando}
@@ -254,8 +255,11 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
 
                                             <tbody>
                                                 {personal.map((p, i) => {
-                                                    const data   = p.programado || {};
-                                                    const hsTrab = r1(dias.reduce((s, dia) => s + horasDeValor(data[fmtKey(dia)] || ""), 0));
+                                                    const data   = p.real || p.programado || {};
+                                                    const hsTrab = r1(
+                                                        dias.reduce((s, dia) => s + horasDeValor(normalizarTurno(data[fmtKey(dia)] || "")), 0) +
+                                                        dias.reduce((s, dia) => s + (Number(p.capacitacion?.[fmtKey(dia)]) || 0), 0)
+                                                    );
                                                     return (
                                                         <tr key={p.legajo + i} className="ps-row">
                                                             <td className="ps-td-sticky ps-td-legajo">{p.legajo}</td>
@@ -350,7 +354,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                                                 </tr>
 
                                                 {/* Horas capacitación */}
-                                                <tr className="cc-tfoot-row">
+                                                <tr className="cc-tfoot-row cc-tfoot-row--cap">
                                                     <td colSpan={2} className="ps-tfoot-label">Hs. capacitación</td>
                                                     {dias.map(dia => {
                                                         const v = hsCapacitacionDia(personal, dia);

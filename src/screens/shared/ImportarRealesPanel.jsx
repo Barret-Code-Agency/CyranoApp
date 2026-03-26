@@ -21,6 +21,21 @@ import "./ImportarRealesPanel.css";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Códigos de texto que se importan directamente (sin parsear como hora) */
+const CODIGOS_TURNO = new Set([
+    "Fco", "Vac", "Lic", "Enf", "Art", "Asa", "Aca", "Sus", "FER", "Com",
+    "fco", "vac", "lic", "enf", "art", "asa", "aca", "sus", "fer", "com",
+]);
+
+/** Normaliza un código de texto al formato canónico de la app */
+function normalizarCodigo(raw) {
+    const s = String(raw).trim();
+    // Capitalización canónica: primera letra mayúscula, resto minúscula
+    const canon = { fco:"Fco", vac:"Vac", lic:"Lic", enf:"Enf", art:"Art",
+                    asa:"Asa", aca:"Aca", sus:"Sus", fer:"FER", com:"Com" };
+    return canon[s.toLowerCase()] || s;
+}
+
 /** Convierte decimal de tiempo Excel (0.375 → "09:00").
  *  val = 0 → null (celda vacía con valor numérico cero, no representa un turno).
  *  Usa solo la parte fraccionaria para tolerar celdas con fecha+hora completa.
@@ -56,30 +71,54 @@ function serialADateKey(serial) {
  * Parsea el buffer del Excel y devuelve un array de:
  *   { legajo: string, nombre: string, real: { "YYYY-MM-DD": "HH:MM – HH:MM" } }
  * Solo incluye entradas cuya fecha esté en `fechasPermitidas` (Set de dateKeys).
+ *
+ * Auto-detecta dos formatos:
+ *   A) Estándar: filas 1-3 cabecera, fila 4 = encabezados, fila 5 = fechas, col B = legajo
+ *   B) Adm:      fila 1 = fechas directamente, col A = legajo, col B = nombre
  */
 function parsearExcel(buffer, fechasPermitidas) {
     const wb   = read(new Uint8Array(buffer), { type: "array", cellDates: false });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = utils.sheet_to_json(ws, { header: 1, defval: null });
 
-    if (rows.length < 6) throw new Error("El archivo no tiene el formato esperado (menos de 6 filas).");
+    if (rows.length < 2) throw new Error("El archivo no tiene el formato esperado.");
 
-    // ── Fila de fechas (índice 4 = fila 5) ─────────────────────────────────
-    const fechaRow = rows[4];
-    // Columnas que son seriales de fecha válidos (entre 2020 y 2035 ≈ 43831–46386)
-    const fechaCols = []; // [{ colIdx, dateKey }]
+    const esSerial = (v) => typeof v === "number" && v > 43000 && v < 48000;
+
+    // ── Auto-detectar formato ──────────────────────────────────────────────────
+    let fechaRowIdx, legajoCol, nombreCol, dataStartIdx;
+
+    if (rows[4] && rows[4].some(esSerial)) {
+        // Formato A (estándar): fechas en fila 5 (índice 4), legajo en col B (índice 1)
+        fechaRowIdx  = 4;
+        legajoCol    = 1;
+        nombreCol    = 0; // col A o col C como fallback
+        dataStartIdx = 5;
+    } else if (rows[0] && rows[0].some(esSerial)) {
+        // Formato B (Adm): fechas en fila 1 (índice 0), legajo en col A (índice 0)
+        fechaRowIdx  = 0;
+        legajoCol    = 0;
+        nombreCol    = 1; // col B = nombre
+        dataStartIdx = 1;
+    } else {
+        throw new Error("No se encontraron fechas en el archivo. Verificá el formato.");
+    }
+
+    // ── Fila de fechas ─────────────────────────────────────────────────────────
+    const fechaRow  = rows[fechaRowIdx];
+    const fechaCols = [];
     fechaRow.forEach((val, ci) => {
-        if (typeof val === "number" && val > 43000 && val < 48000) {
+        if (esSerial(val)) {
             const dk = serialADateKey(val);
             if (dk) fechaCols.push({ colIdx: ci, dateKey: dk });
         }
     });
 
     if (fechaCols.length === 0)
-        throw new Error("No se encontraron fechas en la fila 5. Verificá el formato del archivo.");
+        throw new Error("No se encontraron fechas válidas. Verificá el formato del archivo.");
 
-    // ── Filas de datos (índice 5 en adelante, de a 2) ───────────────────────
-    const dataRows = rows.slice(5);
+    // ── Filas de datos (de a 2 filas por agente) ───────────────────────────────
+    const dataRows = rows.slice(dataStartIdx);
     const personal = [];
 
     for (let i = 0; i + 1 < dataRows.length; i += 2) {
@@ -87,24 +126,36 @@ function parsearExcel(buffer, fechasPermitidas) {
         const salidaRow  = dataRows[i + 1];
         if (!entradaRow) break;
 
-        // Legajo en col B (índice 1)
-        const legajoRaw = entradaRow[1];
-        if (!legajoRaw && legajoRaw !== 0) continue; // fila vacía
-        const legajo = String(legajoRaw).trim();
+        const legajoRaw = entradaRow[legajoCol];
+        if (legajoRaw === null || legajoRaw === undefined || legajoRaw === "") continue;
+        // Quitar decimales de legajos numéricos (ej: 20248.0 → "20248")
+        const legajo = String(legajoRaw).trim().replace(/\.0+$/, "");
         if (!legajo) continue;
 
-        // Nombre: buscar en col A (índice 0) o col C (índice 2)
-        const nombre = (entradaRow[0] || entradaRow[2] || legajo).toString().trim();
+        const nombre = (
+            entradaRow[nombreCol] ||
+            (legajoCol === 1 ? entradaRow[2] : null) || // fallback col C en formato A
+            legajo
+        ).toString().trim();
 
         const real = {};
         fechaCols.forEach(({ colIdx, dateKey }) => {
-            if (!fechasPermitidas.has(dateKey)) return; // fuera del período
+            if (!fechasPermitidas.has(dateKey)) return;
 
-            const entrada = decimalAHora(entradaRow[colIdx]);
-            const salida  = decimalAHora(salidaRow  ? salidaRow[colIdx] : null);
-            if (!entrada || !salida) return; // sin turno
+            const valEntrada = entradaRow[colIdx];
 
-            real[dateKey] = `${entrada} – ${salida}`;
+            // ── Código de texto (Fco, Lic, Enf, Asa, Aca, Sus, etc.) ──────────
+            if (typeof valEntrada === "string" && CODIGOS_TURNO.has(valEntrada.trim())) {
+                real[dateKey] = normalizarCodigo(valEntrada);
+                return;
+            }
+
+            // ── Turno numérico (hora entrada + hora salida) ───────────────────
+            const entrada = decimalAHora(valEntrada);
+            const salida  = decimalAHora(salidaRow ? salidaRow[colIdx] : null);
+            if (!entrada || !salida) return; // celda vacía → no importar
+
+            real[dateKey] = `${entrada} \u2013 ${salida}`;
         });
 
         if (Object.keys(real).length > 0) {
@@ -457,7 +508,7 @@ export default function ImportarRealesPanel({ año, mes }) {
                         Arrastrá el archivo Excel aquí o hacé clic para seleccionarlo
                     </div>
                     <div className="imp-dropzone-hint">
-                        Formato: 2 filas por agente · Fila 5 = fechas · Col B = Legajo
+                        2 filas por agente · Formato A: fila 5 = fechas, col B = legajo · Formato B (Adm): fila 1 = fechas, col A = legajo
                     </div>
                 </div>
             )}

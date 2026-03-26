@@ -6,6 +6,7 @@ import { db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
 import "./SupervisorDashboard.css";
 import AnalistaDashboard from "../AnalistaDashboard";
+import { getVisitasDesglosadas } from "./PlanSupervisorScreen";
 
 const WEEK_RANGES = { 1: "1–7", 2: "8–14", 3: "15–21", 4: "22–28" };
 const TURNO_ICON  = { diurno: "☀️", nocturno: "🌙", mixto: "🔄" };
@@ -229,11 +230,11 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
 
     // ── Plan global ───────────────────────────────────────────────────────────
     const objGlobalSemana = useMemo(() =>
-        (planGlobal || []).filter(p => (p.visitasPorSemana || 0) > 0),
+        (planGlobal || []).filter(p => { const vv = getVisitasDesglosadas(p); return (vv.diurnas + vv.nocturnas + vv.fds) > 0; }),
         [planGlobal]
     );
     const sinPlanGlobal    = objGlobalSemana.length === 0;
-    const reqGlobalSemana  = objGlobalSemana.reduce((s, o) => s + (o.visitasPorSemana || 1), 0);
+    const reqGlobalSemana  = objGlobalSemana.reduce((s, o) => { const vv = getVisitasDesglosadas(o); return s + (vv.diurnas + vv.nocturnas + vv.fds || 1); }, 0);
     const realGlobalSemana = controlesSemana.length;
     const pctGlobalSemana  = reqGlobalSemana > 0 ? Math.min(Math.round(realGlobalSemana / reqGlobalSemana * 100), 100) : 0;
     const reqGlobalMes     = reqGlobalSemana * 4;
@@ -247,28 +248,32 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
         return getObjetivosSemana(user.email, semana);
     }, [ps, semana, user.email, getObjetivosSemana]);
 
-    const reqIndivSemana = objIndivSemana.reduce((s, o) => s + (o.visitasPorSemana || 1), 0);
+    const reqIndivSemana = objIndivSemana.reduce((s, o) => { const vv = getVisitasDesglosadas(o); return s + (vv.diurnas + vv.nocturnas + vv.fds || 1); }, 0);
     const pctIndivSemana = reqIndivSemana > 0 ? Math.min(Math.round(realGlobalSemana / reqIndivSemana * 100), 100) : 0;
-    const reqIndivMes    = (ps?.objetivos || []).reduce((s, o) =>
-        s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1), 0);
+    const reqIndivMes    = (ps?.objetivos || []).reduce((s, o) => {
+        const vv = getVisitasDesglosadas(o);
+        const sems = semanasDePatron(o.patron, o.semanasCustom);
+        const fdsW = vv.semanasConFdS.length || sems.length;
+        return s + sems.length * (vv.diurnas + vv.nocturnas) + fdsW * vv.fds;
+    }, 0);
     const pctIndivMes    = reqIndivMes > 0 ? Math.min(Math.round(controlesMes.length / reqIndivMes * 100), 100) : 0;
 
     // Requeridos por turno según plan individual — semana
     const reqDiurnoSem = !sinPlanIndivid
-        ? objIndivSemana.filter(o => (o.turnoEfectivo || ps.turnoBase) === "diurno").reduce((s,o) => s + (o.visitasPorSemana||1), 0)
+        ? objIndivSemana.reduce((s, o) => s + (getVisitasDesglosadas(o).diurnas || 0), 0)
         : reqGlobalSemana;
     const reqNocturnoSem = !sinPlanIndivid
-        ? objIndivSemana.filter(o => (o.turnoEfectivo || ps.turnoBase) === "nocturno").reduce((s,o) => s + (o.visitasPorSemana||1), 0)
+        ? objIndivSemana.reduce((s, o) => s + (getVisitasDesglosadas(o).nocturnas || 0), 0)
         : 0;
 
     // Requeridos por turno según plan individual — mes
     const reqDiurnoMes = (ps?.objetivos || []).reduce((s, o) => {
-        const t = (!o.turno || o.turno === "base") ? (ps?.turnoBase || "mixto") : o.turno;
-        return t === "diurno" ? s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1) : s;
+        const vv = getVisitasDesglosadas(o);
+        return s + semanasDePatron(o.patron, o.semanasCustom).length * vv.diurnas;
     }, 0);
     const reqNocturnoMes = (ps?.objetivos || []).reduce((s, o) => {
-        const t = (!o.turno || o.turno === "base") ? (ps?.turnoBase || "mixto") : o.turno;
-        return t === "nocturno" ? s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1) : s;
+        const vv = getVisitasDesglosadas(o);
+        return s + semanasDePatron(o.patron, o.semanasCustom).length * vv.nocturnas;
     }, 0);
 
     // ── Panel 3: contribución al plan maestro ────────────────────────────────
@@ -284,6 +289,33 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
     // Cumplimiento del equipo contra plan global
     const pctEquipoMes   = reqGlobalMes > 0 ? Math.min(Math.round(totalEquipo / reqGlobalMes * 100), 100) : 0;
 
+    // ── Cumplimiento mensual por objetivo (plan individual) ─────────────────
+    const objCumplMes = useMemo(() => {
+        if (!ps?.objetivos?.length) return [];
+        return ps.objetivos.map(o => {
+            const vDes = getVisitasDesglosadas(o);
+            const sems = semanasDePatron(o.patron, o.semanasCustom);
+            const fdsW = vDes.semanasConFdS.length || sems.length;
+            const reqDia = sems.length * vDes.diurnas;
+            const reqNoc = sems.length * vDes.nocturnas;
+            const reqFdS = fdsW * vDes.fds;
+            const reqTot = reqDia + reqNoc + reqFdS;
+
+            const ctrlsO   = controlesMes.filter(c => normObj(c.objetivo) === normObj(o.objetivo));
+            const realDia  = ctrlsO.filter(c => c.turno !== "nocturno" && !c.esFinDeSemana).length;
+            const realNoc  = ctrlsO.filter(c => c.turno === "nocturno"  && !c.esFinDeSemana).length;
+            const realFdS  = ctrlsO.filter(c => c.esFinDeSemana).length;
+            const real     = ctrlsO.length;
+            const pct      = reqTot > 0 ? Math.min(Math.round(real / reqTot * 100), 100) : 0;
+            const pctDia   = reqDia > 0 ? Math.round(realDia / reqDia * 100) : null;
+            const pctNoc   = reqNoc > 0 ? Math.round(realNoc / reqNoc * 100) : null;
+            const pctFdS   = reqFdS > 0 ? Math.round(realFdS / reqFdS * 100) : null;
+            // semanas activas para mostrar patrón
+            const semsLabel = sems.length === 4 ? "todas" : `sem ${sems.join(",")}`;
+            return { objetivo: o.objetivo, reqTot, reqDia, reqNoc, reqFdS, real, realDia, realNoc, realFdS, pct, pctDia, pctNoc, pctFdS, semsLabel };
+        });
+    }, [ps, controlesMes]);
+
     // Alertas semanas anteriores — usa plan individual si existe, si no plan global
     const alertasPlan = useMemo(() => {
         if (!semana || semana <= 1) return [];
@@ -291,7 +323,7 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
         // Prioridad: plan individual del supervisor
         const usarIndividual = !sinPlanIndivid && (ps?.objetivos || []).length > 0;
         const objetivosBase  = usarIndividual
-            ? (ps?.objetivos || []).filter(o => (o.visitasPorSemana || 0) > 0)
+            ? (ps?.objetivos || []).filter(o => { const vv = getVisitasDesglosadas(o); return (vv.diurnas + vv.nocturnas + vv.fds) > 0; })
             : objGlobalSemana;
 
         if (objetivosBase.length === 0) return [];
@@ -304,10 +336,11 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
                     const semanasActivas = semanasDePatron(o.patron, o.semanasCustom);
                     if (!semanasActivas.includes(w)) return;
                 }
-                const real      = controlesMes.filter(c =>
+                const real = controlesMes.filter(c =>
                     normObj(c.objetivo) === normObj(o.objetivo) && getSemanaDeCtrl(c) === w
                 ).length;
-                const requeridas = o.visitasPorSemana || 1;
+                const vvO = getVisitasDesglosadas(o);
+                const requeridas = vvO.diurnas + vvO.nocturnas + vvO.fds || 1;
                 if (real < requeridas)
                     lista.push({ semana: w, objetivo: o.objetivo, realizadas: real, requeridas });
             });
@@ -350,19 +383,30 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
                         <div className="sup-week-num">{semana}</div>
                         <div className="sup-week-range">Días {WEEK_RANGES[semana]}</div>
                         <div className="sup-week-circles" style={{ marginTop: 10 }}>
-                            {!sinPlanGlobal && (
+                            {/* Siempre mostrar círculo de actividad */}
+                            {sinPlanGlobal && sinPlanIndivid ? (
                                 <div className="sup-week-circle-item">
-                                    <div className="sup-circle-label">Plan gral.</div>
-                                    <CircleProgress pct={pctGlobalSemana} size={54} />
-                                    <div className="sup-circle-sub">{realGlobalSemana}/{reqGlobalSemana}</div>
+                                    <div className="sup-circle-label">Controles</div>
+                                    <CircleProgress pct={controlesSemana.length > 0 ? 100 : 0} size={54} />
+                                    <div className="sup-circle-sub">{controlesSemana.length} realizados</div>
                                 </div>
-                            )}
-                            {!sinPlanIndivid && (
-                                <div className="sup-week-circle-item">
-                                    <div className="sup-circle-label">Mi plan</div>
-                                    <CircleProgress pct={pctIndivSemana} size={54} />
-                                    <div className="sup-circle-sub">{realGlobalSemana}/{reqIndivSemana}</div>
-                                </div>
+                            ) : (
+                                <>
+                                    {!sinPlanGlobal && (
+                                        <div className="sup-week-circle-item">
+                                            <div className="sup-circle-label">Plan gral.</div>
+                                            <CircleProgress pct={pctGlobalSemana} size={54} />
+                                            <div className="sup-circle-sub">{realGlobalSemana}/{reqGlobalSemana}</div>
+                                        </div>
+                                    )}
+                                    {!sinPlanIndivid && (
+                                        <div className="sup-week-circle-item">
+                                            <div className="sup-circle-label">Mi plan</div>
+                                            <CircleProgress pct={pctIndivSemana} size={54} />
+                                            <div className="sup-circle-sub">{realGlobalSemana}/{reqIndivSemana}</div>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
@@ -386,6 +430,68 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
                 </div>
             ) : (
                 <div className="sup-no-plan">⚠️ Días 29–31 — Sin plan para estos días.</div>
+            )}
+
+            {/* ── Plan individual esta semana ── SIEMPRE visible ── */}
+            {semana && (
+                <div className="sup-card">
+                    <div className="sup-card-title">
+                        👤 Mi plan — semana {semana}
+                        <span style={{ marginLeft: 6, fontSize: 10, opacity: .7 }}>días {WEEK_RANGES[semana]}</span>
+                    </div>
+
+                    {sinPlanIndivid ? (
+                        /* ── Sin plan: mostrar actividad libre ── */
+                        <div>
+                            <div style={{ fontSize: 11, color: "var(--color-muted)", marginBottom: 10, fontStyle: "italic" }}>
+                                ℹ️ No tenés plan individual configurado. Podés solicitar al administrador que configure tu plan.
+                            </div>
+                            {/* Actividad libre de la semana */}
+                            {controlesSemana.length === 0 ? (
+                                <div className="sup-empty">Sin controles registrados esta semana.</div>
+                            ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                    <TurnoRow icon="☀️" label="Diurnas realizadas" realizado={diurnosSem}  requerido={0} color="#d97706" />
+                                    <TurnoRow icon="🌙" label="Nocturnas realizadas" realizado={nocturnosSem} requerido={0} color="var(--color-primary)" />
+                                    <TurnoRow icon="📅" label="Fin de semana" realizado={fdsSem} requerido={0} color="#8b5cf6" />
+                                    <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4, textAlign: "right" }}>
+                                        Total esta semana: <strong style={{ color: "var(--color-text)" }}>{controlesSemana.length}</strong> controles
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : objIndivSemana.length === 0 ? (
+                        <div className="sup-empty">Sin objetivos esta semana según tu patrón.</div>
+                    ) : (
+                        objIndivSemana.map((o, i) => {
+                            const realizadas = getVisitas(o.objetivo);
+                            const vvO = getVisitasDesglosadas(o);
+                            const requeridas = vvO.diurnas + vvO.nocturnas + vvO.fds || 1;
+                            const turnoEf = vvO.nocturnas > 0 && vvO.diurnas === 0 ? "nocturno"
+                                          : vvO.diurnas  > 0 && vvO.nocturnas === 0 ? "diurno"
+                                          : "mixto";
+                            const done = realizadas >= requeridas;
+                            return (
+                                <div key={i} className="sup-obj-row">
+                                    <div className={`sup-obj-status ${done ? "done" : "pending"}`}>
+                                        {done ? "✓" : realizadas > 0 ? "~" : "!"}
+                                    </div>
+                                    <div className="sup-obj-body">
+                                        <div className="sup-obj-name">{o.objetivo}</div>
+                                        <div className="sup-obj-meta">
+                                            <span className="sup-obj-turno" data-turno={turnoEf}>{TURNO_ICON[turnoEf]}</span>
+                                            <span className="sup-obj-count">{realizadas}/{requeridas} visitas</span>
+                                            {vvO.diurnas > 0 && <span style={{ fontSize: 10, color: "#d97706" }}>☀️ {vvO.diurnas} día</span>}
+                                            {vvO.nocturnas > 0 && <span style={{ fontSize: 10, color: "var(--color-primary)" }}>🌙 {vvO.nocturnas} noc</span>}
+                                            {vvO.fds > 0 && <span style={{ fontSize: 10, color: "#8b5cf6" }}>📅 {vvO.fds} FdS</span>}
+                                        </div>
+                                        <ProgressBar value={realizadas} max={requeridas} />
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
             )}
 
             {/* ══ PANEL 2: MENSUAL ══ */}
@@ -440,6 +546,103 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
                 </div>
             </div>
 
+            {/* ══ PANEL 2b: PLAN DEL MES — objetivos con desglose turno ══ */}
+            {/* Siempre visible: con plan muestra objetivos, sin plan muestra actividad libre */}
+            <div className="sup-card">
+                    <div className="sup-card-title">
+                        📋 Mi plan — {new Date().toLocaleString("es-AR", { month: "long" })}
+                        {objCumplMes.length > 0 && (
+                            <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 400, color: "var(--color-muted)" }}>
+                                {objCumplMes.length} objetivo{objCumplMes.length !== 1 ? "s" : ""}
+                            </span>
+                        )}
+                    </div>
+
+                    {objCumplMes.length === 0 && (
+                        <div>
+                            <div style={{ fontSize: 11, color: "var(--color-muted)", marginBottom: 10, fontStyle: "italic" }}>
+                                Sin plan mensual configurado — actividad libre del mes:
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                <TurnoRow icon="☀️" label={`Diurnas — ${diurnosMes} realizadas`}    realizado={diurnosMes}   requerido={0} color="#d97706" />
+                                <TurnoRow icon="🌙" label={`Nocturnas — ${nocturnosMes} realizadas`} realizado={nocturnosMes} requerido={0} color="var(--color-primary)" />
+                                <TurnoRow icon="📅" label={`Fin de semana — ${fdsMes} realizados`}   realizado={fdsMes}       requerido={0} color="#8b5cf6" />
+                                <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4, textAlign: "right" }}>
+                                    Total del mes: <strong style={{ color: "var(--color-text)" }}>{controlesMes.length}</strong> controles
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {objCumplMes.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {objCumplMes.map((o, i) => {
+                            const col = o.pct >= 100 ? "var(--color-success)"
+                                      : o.pct >= 60  ? "#f59e0b"
+                                      : "var(--color-danger)";
+                            return (
+                                <div key={i} style={{
+                                    background: "var(--color-bg)",
+                                    border: `1px solid var(--color-border)`,
+                                    borderLeft: `3px solid ${col}`,
+                                    borderRadius: "var(--radius-lg)",
+                                    padding: "10px 12px",
+                                }}>
+                                    {/* Nombre + % */}
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text)", flex: 1, marginRight: 8 }}>
+                                            {o.objetivo}
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                                            <span style={{ fontSize: 13, fontWeight: 900, color: col }}>{o.pct}%</span>
+                                            <span style={{ fontSize: 10, color: "var(--color-muted)" }}>{o.real}/{o.reqTot}</span>
+                                        </div>
+                                    </div>
+                                    {/* Barra total */}
+                                    <div className="sup-prog-bar" style={{ marginBottom: 6 }}>
+                                        <div className="sup-prog-fill" style={{
+                                            width: Math.min(o.pct, 100) + "%",
+                                            background: col,
+                                        }} />
+                                    </div>
+                                    {/* Chips turno */}
+                                    {(o.reqDia > 0 || o.reqNoc > 0 || o.reqFdS > 0) && (
+                                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                            {o.reqDia > 0 && (() => {
+                                                const c = (o.pctDia ?? 0) >= 100 ? "var(--color-success)" : (o.pctDia ?? 0) >= 50 ? "#f59e0b" : "var(--color-danger)";
+                                                return (
+                                                    <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: `${c}18`, color: c, border: `1px solid ${c}44`, fontWeight: 700 }}>
+                                                        ☀️ {o.realDia}/{o.reqDia} {o.pctDia !== null ? `(${o.pctDia}%)` : ""}
+                                                    </span>
+                                                );
+                                            })()}
+                                            {o.reqNoc > 0 && (() => {
+                                                const c = (o.pctNoc ?? 0) >= 100 ? "var(--color-success)" : (o.pctNoc ?? 0) >= 50 ? "#f59e0b" : "var(--color-danger)";
+                                                return (
+                                                    <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: `${c}18`, color: c, border: `1px solid ${c}44`, fontWeight: 700 }}>
+                                                        🌙 {o.realNoc}/{o.reqNoc} {o.pctNoc !== null ? `(${o.pctNoc}%)` : ""}
+                                                    </span>
+                                                );
+                                            })()}
+                                            {o.reqFdS > 0 && (() => {
+                                                const c = (o.pctFdS ?? 0) >= 100 ? "var(--color-success)" : (o.pctFdS ?? 0) >= 50 ? "#f59e0b" : "var(--color-danger)";
+                                                return (
+                                                    <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: `${c}18`, color: c, border: `1px solid ${c}44`, fontWeight: 700 }}>
+                                                        📅 {o.realFdS}/{o.reqFdS} {o.pctFdS !== null ? `(${o.pctFdS}%)` : ""}
+                                                    </span>
+                                                );
+                                            })()}
+                                            <span style={{ fontSize: 10, color: "var(--color-muted)", marginLeft: "auto" }}>
+                                                {o.semsLabel}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    )}
+                </div>
+
             {/* ══ PANEL 3: CONTRIBUCIÓN AL PLAN MAESTRO ══ */}
             <div className="sup-card sup-panel sup-card-week">
                 <div className="sup-card-title">🏆 Mi contribución al plan general</div>
@@ -491,48 +694,7 @@ export default function SupervisorDashboard({ user: userProp, onIniciarJornada, 
                 </div>
             )}
 
-            {/* ── Plan individual esta semana ── */}
-            {!sinPlanIndivid && semana && (
-                <div className="sup-card">
-                    <div className="sup-card-title">
-                        👤 Mi plan individual — Semana {semana}
-                        <span style={{ marginLeft: 6, fontSize: 10, opacity: .7 }}>
-                            {TURNO_ICON[ps.turnoBase || "mixto"]} {ps.turnoBase || "mixto"}
-                        </span>
-                    </div>
-                    {objIndivSemana.length === 0 ? (
-                        <div className="sup-empty">Sin objetivos esta semana según el patrón asignado.</div>
-                    ) : (
-                        objIndivSemana.map((o, i) => {
-                            const realizadas = getVisitas(o.objetivo);
-                            const requeridas = o.visitasPorSemana || 1;
-                            const turnoEf    = o.turnoEfectivo || ps.turnoBase || "mixto";
-                            return (
-                                <div key={i} className="sup-obj-row">
-                                    <div className={`sup-obj-status ${realizadas >= requeridas ? "done" : "pending"}`}>
-                                        {realizadas >= requeridas ? "✓" : realizadas > 0 ? "~" : "!"}
-                                    </div>
-                                    <div className="sup-obj-body">
-                                        <div className="sup-obj-name">{o.objetivo}</div>
-                                        <div className="sup-obj-meta">
-                                            <span className="sup-obj-turno" data-turno={turnoEf}>{TURNO_ICON[turnoEf]}</span>
-                                            <span className="sup-obj-count">{realizadas}/{requeridas} visitas</span>
-                                        </div>
-                                        <ProgressBar value={realizadas} max={requeridas} />
-                                    </div>
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
-            )}
-
-            {sinPlanGlobal && sinPlanIndivid && (
-                <div className="sup-no-plan">
-                    ⚠️ El administrador aún no configuró ningún plan de supervisión.
-                    Podés iniciar jornada y registrar actividades libremente.
-                </div>
-            )}
+            {/* El aviso se muestra dentro de cada card cuando no hay plan — no hace falta aquí */}
 
             {/* ── Alertas vehículos ── */}
             {alertasVehiculos.length > 0 && (

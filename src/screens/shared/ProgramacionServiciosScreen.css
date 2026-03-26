@@ -536,8 +536,16 @@
 .ps-td-sticky {
     position: sticky;
     z-index: 3;
-    background: #1e3a5f;
-    color: #fff;
+}
+
+.ps-th-sticky {
+    background: var(--table-header-bg);
+    color: var(--color-white);
+}
+
+.ps-td-sticky {
+    background: var(--table-sticky-bg);
+    color: var(--color-text);
 }
 
 .ps-th-legajo,
@@ -554,34 +562,58 @@
     width: 240px;
 }
 
+.ps-th-regimen,
+.ps-td-regimen {
+    left: 300px;
+    min-width: 72px;
+    width: 72px;
+    text-align: center;
+    font-size: 9px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ps-td-regimen {
+    background: var(--table-sticky-bg);
+    border-right: 1px solid var(--table-cell-border);
+}
+
+.ps-th-regimen {
+    z-index: 4;
+    border-right: 1px solid var(--table-header-border);
+}
+
 .ps-th-acciones,
 .ps-td-acciones {
-    left: 300px;
+    left: 372px;
     min-width: 68px;
     width: 68px;
 }
 
 .ps-td-legajo,
-.ps-td-nombre {
-    background: #f8fafc;
+.ps-td-nombre,
+.ps-td-regimen {
+    background: var(--table-sticky-bg);
     color: var(--color-text);
-    border-right: 1px solid var(--color-border);
+    border-right: 1px solid var(--table-cell-border);
 }
 
 .ps-td-acciones {
     background: #f0f4ff;
-    border-right: 1px solid var(--color-border);
+    border-right: 1px solid var(--table-cell-border);
     text-align: center;
     padding: 0 2px;
     white-space: nowrap;
 }
 
 thead th {
-    background: #1e3a5f;
-    color: #fff;
+    background: var(--table-header-bg);
+    color: var(--color-white);
     padding: 4px 2px;
     text-align: center;
-    border-bottom: 2px solid #0f2744;
+    border-right: 1px solid var(--table-header-border);
+    border-bottom: 1px solid var(--table-header-border);
     white-space: nowrap;
     position: sticky;
     top: 0;
@@ -605,19 +637,19 @@ thead th {
 .ps-th-hs {
     min-width: 60px;
     width: 60px;
-    background: #0f2744;
+    background: var(--table-header-bg-dark);
 }
 
 .ps-th-del {
     min-width: 28px;
-    background: #0f2744;
+    background: var(--table-header-bg-dark);
 }
 
 .ps-th-dia {
-    min-width: 40px;
-    width: 40px;
+    min-width: 36px;
+    width: 36px;
     padding: 2px 1px 4px;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: 1px solid var(--table-header-border);
 }
 
 .ps-th-dia--fin {
@@ -712,12 +744,12 @@ thead th {
     font-size: 9px;
     font-weight: 700;
     padding: 0;
-    height: 38px;
-    min-width: 40px;
-    width: 40px;
+    height: 36px;
+    min-width: 36px;
+    width: 36px;
     cursor: pointer;
-    border-left: 1px solid #e5e7eb;
-    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid var(--table-cell-border);
+    border-bottom: 1px solid var(--table-cell-border);
     user-select: none;
     transition: filter 0.1s;
     vertical-align: middle;
@@ -777,6 +809,7 @@ thead th {
     background: #16a34a;
     color: #fff;
     font-weight: 700;
+    border-color: rgba(0,0,0,0.15);
 }
 
 .ps-celda--com {
@@ -798,30 +831,35 @@ thead th {
     background: #38bdf8;
     color: #000;
     font-weight: 700;
+    border-color: rgba(0,0,0,0.15);
 }
 
 .ps-celda--enf {
     background: #fbbf24;
     color: #000;
     font-weight: 700;
+    border-color: rgba(0,0,0,0.15);
 }
 
 .ps-celda--art {
     background: #0369a1;
     color: #fff;
     font-weight: 700;
+    border-color: rgba(0,0,0,0.15);
 }
 
 .ps-celda--asa {
     background: #dc2626;
     color: #fff;
     font-weight: 700;
+    border-color: rgba(0,0,0,0.15);
 }
 
 .ps-celda--aca {
     background: #ef4444;
     color: #fff;
     font-weight: 700;
+    border-color: rgba(0,0,0,0.15);
 }
 
 .ps-celda--sus {
@@ -835,8 +873,8 @@ thead th {
     font-size: 11px;
     font-weight: 700;
     color: var(--color-text-secondary);
-    background: #f8fafc;
-    border-left: 2px solid #cbd5e1;
+    background: var(--table-sticky-bg);
+    border-left: 1px solid var(--table-cell-border);
     min-width: 60px;
     width: 60px;
     padding: 0 4px;
@@ -851,22 +889,24 @@ thead th {
 
 .ps-cap-label {
     left: 0;
-    background: #f0f9ff;
-    color: #0369a1;
+    background: var(--table-cap-bg);
+    color: var(--table-cap-color);
     font-size: 9px;
     font-weight: 800;
     text-align: right;
     padding-right: 8px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    border-right: 1px solid #bae6fd;
+    border-right: 1px solid var(--table-cell-border);
+    border-bottom: 1px solid var(--table-cell-border);
     z-index: 3;
 }
 
 .ps-cap-cel {
-    background: #f0f9ff;
+    background: var(--table-cap-bg);
     padding: 1px 2px;
-    border-left: 1px solid #e0f2fe;
+    border-left: 1px solid var(--table-cell-border);
+    border-bottom: 1px solid var(--table-cell-border);
     text-align: center;
 }
 
@@ -891,9 +931,10 @@ thead th {
     text-align: center;
     font-size: 10px;
     font-weight: 700;
-    color: #0369a1;
-    background: #e0f2fe;
-    border-left: 2px solid #7dd3fc;
+    color: var(--table-cap-color);
+    background: var(--table-cap-total-bg);
+    border-left: 1px solid var(--table-cell-border);
+    border-bottom: 1px solid var(--table-cell-border);
 }
 
 /* ── Footer totales ───────────────────────────────── */
@@ -904,14 +945,14 @@ thead th {
 }
 
 .ps-tfoot td {
-    background: #0f2744;
-    color: #93c5fd;
+    background: var(--table-header-bg);
+    color: var(--color-white);
     font-size: 10px;
     font-weight: 700;
     text-align: center;
     height: 38px;
     padding: 0 2px;
-    border-top: 2px solid #1e3a5f;
+    border: 1px solid var(--table-header-border);
 }
 
 .ps-tfoot-label {
@@ -921,7 +962,8 @@ thead th {
     letter-spacing: 0.05em;
     position: sticky;
     left: 0;
-    background: #0f2744;
+    background: var(--table-header-bg);
+    color: var(--color-white);
     z-index: 3;
 }
 
@@ -930,8 +972,8 @@ thead th {
 }
 
 .ps-tfoot-total {
-    background: #1e3a5f !important;
-    color: #4ade80 !important;
+    background: var(--table-header-bg-dark) !important;
+    color: var(--color-white) !important;
     font-size: 12px !important;
 }
 

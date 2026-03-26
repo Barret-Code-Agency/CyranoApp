@@ -6,6 +6,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { MESES_ES, DIAS_ES, fmtKey } from "../../utils/periodoUtils";
 import { useWhatsApp } from "../../hooks/useWhatsApp";
+import { useActividadesSemana } from "../../hooks/useActividadesSemana";
 import { buildResumenDiario } from "../../utils/whatsapp";
 import { useAuth }             from "../../context/AuthContext";
 import { useAppData }          from "../../context/AppDataContext";
@@ -29,8 +30,11 @@ import FacturacionScreen             from "./FacturacionScreen";
 import AnalisisHorasPASScreen        from "./AnalisisHorasPASScreen";
 import Diagramas14x14Screen          from "../shared/Diagramas14x14Screen";
 import ControlClienteScreen          from "../shared/ControlClienteScreen";
+import AusentismoScreen              from "../shared/AusentismoScreen";
 import GestionPremiosScreen          from "./GestionPremiosScreen";
 import AdminScreen                   from "../AdminScreen";
+import DesignarSupervisoresPanel     from "./DesignarSupervisoresPanel";
+import PedidoInsumosScreen           from "../shared/PedidoInsumosScreen";
 import { tieneAcceso }               from "../../config/roles";
 import AppHeader                     from "../../components/AppHeader";
 import "../../styles/SupervisorHome.css";
@@ -157,7 +161,7 @@ function PeriodoCard({ icono, titulo, onVer }) {
                         {MESES_ES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                     </select>
                     <select className="con-select con-select--año" value={año} onChange={e => setAño(Number(e.target.value))}>
-                        {[2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={y}>{y}</option>)}
+                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <button className="con-btn-abrir" onClick={() => onVer(año, mes)}>Ver →</button>
                 </div>
@@ -166,110 +170,36 @@ function PeriodoCard({ icono, titulo, onVer }) {
     );
 }
 
-const MODULOS = [
-    {
-        id:     "muro_comunicacion",
-        icon:   "📢",
-        titulo: "Muro de Comunicación y Novedades",
-        desc:   "Ver y publicar comunicaciones para todo el personal",
-        color:  "blue",
-    },
-    {
-        id:     "supervision",
-        icon:   "🔍",
-        titulo: "Supervisión",
-        desc:   "Panel completo de supervisión, objetivos y cumplimiento",
-        color:  "blue",
-    },
-    {
-        id:     "gestion_datos",
-        icon:   "🗄️",
-        titulo: "Gestión de datos",
-        desc:   "Clientes, objetivos y datos operativos del contrato",
-        color:  "blue",
-    },
-    {
-        id:     "dashboards_gestion",
-        icon:   "📊",
-        titulo: "Dashboards de gestión",
-        desc:   "Métricas y KPIs de la empresa",
-        color:  "blue",
-    },
-    {
-        id:     "dashboard_personal",
-        icon:   "👥",
-        titulo: "Dashboard de personal",
-        desc:   "Estado y novedades del personal",
-        color:  "blue",
-    },
-    {
-        id:     "turnos",
-        icon:   "📅",
-        titulo: "Gestión de horas",
-        desc:   "Cargá y gestioná los turnos del personal del contrato",
-        color:  "blue",
-    },
-    {
-        id:     "informes",
-        icon:   "📄",
-        titulo: "Informes",
-        desc:   "Ver y redactar informes del contrato",
-        color:  "blue",
-    },
-    {
-        id:     "rondas_monitor",
-        icon:   "📡",
-        titulo: "Monitor de Rondas",
-        desc:   "Ver resultados, mapa y cumplimiento en tiempo real",
-        color:  "blue",
-    },
-    {
-        id:     "plan_seguridad",
-        icon:   "🛡️",
-        titulo: "Plan de seguridad",
-        desc:   "Cargá y gestioná el plan de seguridad del contrato",
-        color:  "blue",
-    },
-    {
-        id:     "plan_capacitacion",
-        icon:   "🎓",
-        titulo: "Plan de capacitación",
-        desc:   "Planificá y registrá las capacitaciones del personal",
-        color:  "blue",
-    },
-    {
-        id:     "muro_procedimientos",
-        icon:   "📌",
-        titulo: "Muro de Procedimientos",
-        desc:   "Ver y publicar procedimientos operativos vigentes",
-        color:  "blue",
-    },
-    {
-        id:     "capacitacion",
-        icon:   "🎓",
-        titulo: "Capacitación y Entrenamiento",
-        desc:   "Ver y subir cursos y materiales de formación",
-        color:  "blue",
-    },
-    {
-        id:     "analisis_riesgos",
-        icon:   "⚠️",
-        titulo: "Análisis de riesgos",
-        desc:   "Relevamiento y gestión de riesgos del objetivo",
-        color:  "gold",
-    },
-    {
-        id:     "gestion_premios",
-        icon:   "🎁",
-        titulo: "Premios y Tokens",
-        desc:   "Catálogo de premios y aprobación de canjes del personal",
-        color:  "blue",
-    },
+const MODULOS = {
+    "muro_comunicacion":  { icon: "📢", titulo: "Comunicación",         desc: "Publicar y ver novedades para todo el personal",       color: "purple"  },
+    "supervision":        { icon: "🔍", titulo: "Supervisión",           desc: "Planes, cumplimiento y dashboard de supervisores",     color: "blue"    },
+    "rondas_monitor":     { icon: "📡", titulo: "Monitor de Rondas",     desc: "Resultados y cumplimiento en tiempo real",             color: "green"   },
+    "informes":           { icon: "📄", titulo: "Informes",              desc: "Ver y redactar informes del contrato",                 color: "slate"   },
+    "gestion_datos":      { icon: "🗄️", titulo: "Gestión de datos",      desc: "Personal, clientes, objetivos y vehículos",            color: "teal"    },
+    "turnos":             { icon: "📅", titulo: "Gestión de horas",      desc: "Turnos, programación y control del personal",          color: "indigo"  },
+    "dashboard_personal": { icon: "👥", titulo: "Dashboard de personal", desc: "Estado, novedades y métricas del personal",            color: "cyan"    },
+    "dashboards_gestion": { icon: "📊", titulo: "Dashboards de gestión", desc: "KPIs y métricas de la empresa",                       color: "orange"  },
+    "plan_capacitacion":  { icon: "🎓", titulo: "Plan de capacitación",  desc: "Planificá las capacitaciones del personal",            color: "amber"   },
+    "muro_procedimientos":{ icon: "📌", titulo: "Procedimientos",        desc: "Ver y publicar procedimientos operativos",             color: "navy"    },
+    "capacitacion":       { icon: "🎒", titulo: "Capacitación",          desc: "Ver y subir cursos y materiales de formación",         color: "amber"   },
+    "plan_seguridad":              { icon: "🛡️", titulo: "Plan de seguridad",          desc: "Cargá y gestioná el plan de seguridad del contrato",        color: "red"     },
+    "analisis_riesgos":            { icon: "⚠️", titulo: "Análisis de riesgos",          desc: "Relevamiento y gestión de riesgos del objetivo",            color: "gold"    },
+    "gestion_premios":             { icon: "🎁", titulo: "Premios y Tokens",             desc: "Catálogo y aprobación de canjes del personal",              color: "pink"    },
+    "felicitaciones_sanciones":    { icon: "📋", titulo: "Felicitaciones/Sanciones",     desc: "Registrá felicitaciones o sanciones del personal",           color: "amber"   },
+    "control_actividades_vigilador":{ icon: "👁️", titulo: "Control de Actividades",      desc: "Rondas, planillas, actas, vehículos e informes",            color: "cyan"    },
+};
+
+const GRUPOS_MENU = [
+    { label: "Operaciones",   ids: ["supervision", "rondas_monitor", "muro_comunicacion", "control_actividades_vigilador"] },
+    { label: "Gestión",       ids: ["gestion_datos", "turnos", "dashboard_personal", "dashboards_gestion", "felicitaciones_sanciones"] },
+    { label: "Formación",     ids: ["plan_capacitacion", "capacitacion", "muro_procedimientos"] },
+    { label: "Otros",         ids: ["plan_seguridad", "analisis_riesgos", "gestion_premios"] },
 ];
+
 
 export default function AdminContratoHome({ onExit }) {
     const { user, logout }                              = useAuth();
-    const { empresaModulos, empresaId, data, userZona } = useAppData();
+    const { empresaModulos, empresaId, data, updateConfig, userZona } = useAppData();
     const [seccion, setSeccion]               = useState(null);
     const [subSeccion, setSubSeccion]         = useState(null);
     const [periodoSel, setPeriodoSel]         = useState(null);
@@ -284,8 +214,9 @@ export default function AdminContratoHome({ onExit }) {
             .then(snap => setLegajos(snap.docs.map(d => d.data())))
             .catch(err => console.error("Error cargando legajos:", err));
     }, [empresaId]);
+    const actividadesSemana = useActividadesSemana(empresaId, legajos);
 
-    const modActivo   = MODULOS.find(m => m.id === seccion);
+    const modActivo   = MODULOS[seccion];
     const subline     = seccion
         ? `${modActivo?.icon ?? ""} ${modActivo?.titulo ?? seccion}`.trim()
         : "🏢 Gerencia de Operaciones";
@@ -296,6 +227,69 @@ export default function AdminContratoHome({ onExit }) {
             <button className="sh-back-btn" onClick={onClick}>← Volver al panel</button>
         </div>
     );
+
+    // Control de actividades vigilador
+    const SUB_MODULOS_ACTIVIDADES = [
+        { id: "rondas_monitor",        icon: "📡", titulo: "Monitor de Rondas",         desc: "Ver resultados y cumplimiento de rondas en tiempo real" },
+        { id: "planillas",             icon: "📊", titulo: "Ver Planillas",              desc: "Consultá las planillas operativas del puesto"           },
+        { id: "ver_libro_actas",       icon: "📖", titulo: "Ver Libro de Actas",         desc: "Consultá el libro de actas digital de los puestos"      },
+        { id: "ver_control_vehicular", icon: "🚗", titulo: "Ver Controles de Vehículos", desc: "Consultá los controles vehiculares registrados"          },
+        { id: "ver_pedido_insumos",    icon: "📦", titulo: "Pedido de Insumos",          desc: "Creá o consultá pedidos de insumos del puesto"          },
+        { id: "ver_inventarios",       icon: "🗃️", titulo: "Ver Inventarios",            desc: "Consultá el inventario de los puestos"                  },
+        { id: "ver_informes",          icon: "📄", titulo: "Ver Informes",               desc: "Consultá los informes redactados"                       },
+    ];
+    if (seccion === "control_actividades_vigilador") {
+        if (subSeccion === "rondas_monitor") return (
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                {renderHeader()}
+                <MonitorRondasScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+        if (subSeccion === "ver_informes") return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <VerInformesScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+        if (subSeccion === "ver_pedido_insumos") return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <PedidoInsumosScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+        return (
+            <div className="sh-root">
+                {renderHeader()}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">👁️ Control de Actividades Vigilador</div>
+                    <div className="sh-grid">
+                        {SUB_MODULOS_ACTIVIDADES.map(m => (
+                            <button key={m.id} className="sh-modulo sh-modulo--cyan" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon sh-modulo-icon--cyan">{m.icon}</span>
+                                <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Felicitaciones y sanciones
+    if (seccion === "felicitaciones_sanciones") {
+        return (
+            <div className="vh-root">
+                {renderHeader()}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">📋 Felicitaciones / Sanciones</div>
+                    <div className="vh-coming-soon">Próximamente</div>
+                </div>
+            </div>
+        );
+    }
 
     // Muro de comunicación → submenú ver / crear
     if (seccion === "muro_comunicacion") {
@@ -313,8 +307,8 @@ export default function AdminContratoHome({ onExit }) {
                     <div className="vh-subpanel-title">📢 Muro de Comunicación y Novedades</div>
                     <div className="sh-grid">
                         {MURO_MENUS.map(m => (
-                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                                <span className="sh-modulo-icon">{m.icon}</span>
+                            <button key={m.id} className="sh-modulo sh-modulo--purple" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon sh-modulo-icon--purple">{m.icon}</span>
                                 <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
                                 <span className="sh-modulo-arrow">›</span>
                             </button>
@@ -341,8 +335,8 @@ export default function AdminContratoHome({ onExit }) {
                     <div className="vh-subpanel-title">📌 Muro de Procedimientos</div>
                     <div className="sh-grid">
                         {PROC_MENUS.map(m => (
-                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                                <span className="sh-modulo-icon">{m.icon}</span>
+                            <button key={m.id} className="sh-modulo sh-modulo--navy" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon sh-modulo-icon--navy">{m.icon}</span>
                                 <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
                                 <span className="sh-modulo-arrow">›</span>
                             </button>
@@ -369,8 +363,8 @@ export default function AdminContratoHome({ onExit }) {
                     <div className="vh-subpanel-title">🎓 Capacitación y Entrenamiento</div>
                     <div className="sh-grid">
                         {CAP_MENUS.map(m => (
-                            <button key={m.id} className="sh-modulo" onClick={() => setSubSeccion(m.id)}>
-                                <span className="sh-modulo-icon">{m.icon}</span>
+                            <button key={m.id} className="sh-modulo sh-modulo--amber" onClick={() => setSubSeccion(m.id)}>
+                                <span className="sh-modulo-icon sh-modulo-icon--amber">{m.icon}</span>
                                 <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
                                 <span className="sh-modulo-arrow">›</span>
                             </button>
@@ -396,7 +390,7 @@ export default function AdminContratoHome({ onExit }) {
         return (
             <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
-                <MonitorRondasScreen onBack={() => setSeccion(null)} />
+                <MonitorRondasScreen onBack={() => { setSeccion(null); setSubSeccion(null); }} />
             </div>
         );
     }
@@ -407,12 +401,16 @@ export default function AdminContratoHome({ onExit }) {
     if (seccion === "supervision") {
         return (
             <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
-                {renderHeader()}
-                <div className="vh-subpanel">
-                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
-                    <div className="vh-subpanel-title">🔍 Supervisión — Plan, cumplimiento y carga</div>
+                <div style={{ maxWidth: "50%", margin: "0 auto", boxShadow: "var(--shadow-xl)", border: "2px solid var(--color-border2)", minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+                    {renderHeader()}
+                    <div className="vh-subpanel">
+                        <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">🔍 Supervisión — Plan, cumplimiento y carga</div>
+                    </div>
+                    <div style={{ padding: "0 var(--space-5, 1.5rem)", flex: 1 }}>
+                        <AdminScreen onExit={() => setSeccion(null)} />
+                    </div>
                 </div>
-                <AdminScreen onExit={() => setSeccion(null)} />
             </div>
         );
     }
@@ -427,16 +425,46 @@ export default function AdminContratoHome({ onExit }) {
     }
 
     if (seccion === "gestion_datos") {
-        if (subSeccion === "datos_operativos") return (
+        // Sub-sección: datos maestros (legajos, clientes, objetivos, vehículos)
+        if (subSeccion === "datos_maestros" || subSeccion === "datos_operativos") return (
             <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
                 <GestionDatosAdminScreen onBack={() => setSubSeccion(null)} canCreate={true} />
             </div>
         );
-        return (
+        // Sub-sección: designar supervisores
+        if (subSeccion === "config_operativa") return (
             <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
-                <GestionDatosAdminScreen onBack={() => { setSeccion(null); setSubSeccion(null); }} canCreate={true} />
+                <div className="vh-subpanel">
+                    <DesignarSupervisoresPanel
+                        empresaId={empresaId}
+                        onBack={() => setSubSeccion(null)}
+                    />
+                </div>
+            </div>
+        );
+        // Menú de Gestión de datos
+        const SUB_GESTION = [
+            { id: "datos_maestros",   icon: "🗄️", titulo: "Datos maestros",          desc: "Personal (legajos), clientes, objetivos y vehículos — importar Excel o editar uno por uno", color: "teal" },
+            { id: "config_operativa", icon: "👤", titulo: "Supervisores",              desc: "Designar qué personas del personal actúan como supervisores", color: "teal" },
+        ];
+        return (
+            <div className="vh-root">
+                {renderHeader()}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">🗄️ Gestión de datos</div>
+                    <div className="sh-grid">
+                        {SUB_GESTION.map(m => (
+                            <button key={m.id} className={`sh-modulo sh-modulo--${m.color}`} onClick={() => setSubSeccion(m.id)}>
+                                <span className={`sh-modulo-icon sh-modulo-icon--${m.color}`}>{m.icon}</span>
+                                <div className="sh-modulo-info"><strong>{m.titulo}</strong><small>{m.desc}</small></div>
+                                <span className="sh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
@@ -523,6 +551,7 @@ export default function AdminContratoHome({ onExit }) {
             { id: "facturacion",     icon: "💰", titulo: "Facturación",               desc: "Generá y gestioná la facturación mensual al cliente",  color: "blue" },
             { id: "analisis_pas",    icon: "📊", titulo: "Análisis de horas PAS",      desc: "Análisis de cobertura y horas por puesto del período", color: "blue" },
             { id: "importacion",     icon: "📥", titulo: "Importación de horarios",    desc: "Importación de horarios desde archivo externo",         color: "gold" },
+            { id: "ausentismo",      icon: "📉", titulo: "Ausentismo",                 desc: "Registro y análisis de ausentismo del período",          color: "blue" },
         ];
         const CON_PERIODO = ["programacion", "real", "vista", "diagramas14", "control_cliente", "facturacion", "analisis_pas", "importacion"];
 
@@ -621,6 +650,19 @@ export default function AdminContratoHome({ onExit }) {
             );
         }
 
+        // Ausentismo sin PeriodoCard (gestiona su propio período)
+        if (subSeccion === "ausentismo") {
+            return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    {renderHeader()}
+                    <div style={{ padding: "12px 16px" }}>
+                        <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
+                    </div>
+                    <AusentismoScreen />
+                </div>
+            );
+        }
+
         // Menú principal de turnos
         return (
             <div className="sh-supervision-wrapper">
@@ -654,7 +696,7 @@ export default function AdminContratoHome({ onExit }) {
 
     // Resto de secciones — placeholder
     if (seccion) {
-        const mod = MODULOS.find(m => m.id === seccion);
+        const mod = MODULOS[seccion];
         return (
             <div className="vh-root">
                 {renderHeader()}
@@ -671,24 +713,35 @@ export default function AdminContratoHome({ onExit }) {
     return (
         <div className="sh-root">
             {renderHeader()}
-            <CalendarioSemanal actividades={data?.actividadesSemana ?? {}} legajos={legajos} />
-            <div className="sh-grid">
-                {MODULOS.map(m => {
-                    const habilitado = tieneAcceso(empresaModulos, user, m.id);
+            <CalendarioSemanal actividades={actividadesSemana} legajos={legajos} />
+            <div style={{ padding: "var(--space-4) var(--space-5) var(--space-8)" }}>
+                {GRUPOS_MENU.map(grupo => {
+                    const items = grupo.ids
+                        .map(id => ({ id, ...MODULOS[id] }))
+                        .filter(m => m.titulo);
+                    if (!items.length) return null;
                     return (
-                        <button
-                            key={m.id}
-                            className={`sh-modulo sh-modulo--${m.color} ${!habilitado ? "sh-modulo--disabled" : ""}`}
-                            disabled={!habilitado}
-                            onClick={() => { if (habilitado) { setSubSeccion(null); setSeccion(m.id); } }}
-                        >
-                            <span className="sh-modulo-icon">{m.icon}</span>
-                            <div className="sh-modulo-info">
-                                <strong>{m.titulo}</strong>
-                                <small>{habilitado ? m.desc : "Sin acceso"}</small>
-                            </div>
-                            {habilitado && <span className="sh-modulo-arrow">›</span>}
-                        </button>
+                        <div key={grupo.label} className="sh-grupo">
+                            <div className="sh-grupo-label">{grupo.label}</div>
+                            {items.map(m => {
+                                const habilitado = tieneAcceso(empresaModulos, user, m.id);
+                                return (
+                                    <button
+                                        key={m.id}
+                                        className={`sh-modulo sh-modulo--${m.color} ${!habilitado ? "sh-modulo--disabled" : ""}`}
+                                        disabled={!habilitado}
+                                        onClick={() => { if (habilitado) { setSubSeccion(null); setSeccion(m.id); } }}
+                                    >
+                                        <span className={`sh-modulo-icon sh-modulo-icon--${m.color}`}>{m.icon}</span>
+                                        <div className="sh-modulo-info">
+                                            <strong>{m.titulo}</strong>
+                                            <small>{habilitado ? m.desc : "Sin acceso"}</small>
+                                        </div>
+                                        {habilitado && <span className="sh-modulo-arrow">›</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     );
                 })}
             </div>

@@ -14,12 +14,10 @@ import "../styles/AdminScreen.css";
 const ADMIN_TABS = [
     { key: "dashboard",      icon: "📊", label: "Dashboard" },
     { key: "planes",         icon: "📋", label: "Planes" },
-    { key: "usuarios",       icon: "👥", label: "Usuarios" },
     { key: "vehiculos",      icon: "🚗", label: "Vehículos" },
     { key: "capacitaciones", icon: "🎓", label: "Capacitaciones" },
     { key: "exportar",       icon: "📤", label: "Exportar" },
     { key: "historial",      icon: "🗂️",  label: "Historial" },
-    { key: "config",         icon: "⚙️",  label: "Config" },
 ];
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
@@ -94,9 +92,7 @@ export default function AdminScreen({ onExit }) {
                 </>
             )}
 
-            <div style={{ marginTop:"var(--space-5)" }}>
-                <button className="btn btn-secondary" onClick={onExit}>← Salir del panel admin</button>
-            </div>
+
             {toast && <div className="admin-toast">{toast}</div>}
         </>
     );

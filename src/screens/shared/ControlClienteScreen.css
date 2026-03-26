@@ -11,52 +11,61 @@
 }
 
 .cc-tfoot-row td {
-    background: #0f2744;
-    color: #93c5fd;
+    background: #e0f2fe !important;
+    color: #0369a1 !important;
     font-size: 10px;
     font-weight: 700;
     text-align: center;
     height: 28px;
     padding: 0 2px;
-    border-top: 1px solid #162f4f;
+    border-top: 1px solid #bae6fd;
+    border-right: 1px solid #bae6fd;
 }
 
 /* Label sticky igual que ps-tfoot-label */
 .cc-tfoot-row .ps-tfoot-label {
     position: sticky;
     left: 0;
-    background: #0f2744;
+    background: #e0f2fe !important;
+    color: #0369a1 !important;
     z-index: 3;
 }
 
 /* Total igual que ps-tfoot-total */
 .cc-tfoot-row .ps-tfoot-total {
-    background: #1e3a5f !important;
-    color: #4ade80 !important;
+    background: #0369a1 !important;
+    color: #fff !important;
     font-size: 12px !important;
 }
 
-/* Horas NO cubiertas — alerta roja */
-.cc-tfoot-row--nocub td        { background: #3b0000; color: #fca5a5; }
-.cc-tfoot-row--nocub .ps-tfoot-label { background: #3b0000; }
-.cc-tfoot-row--nocub .ps-tfoot-total { background: #5c0000 !important; color: #fca5a5 !important; }
+/* Horas NO cubiertas — alerta roja suave */
+.cc-tfoot-row--nocub td                    { background: #fee2e2 !important; color: #dc2626 !important; border-color: #fecaca; }
+.cc-tfoot-row--nocub .ps-tfoot-label       { background: #fee2e2 !important; color: #dc2626 !important; }
+.cc-tfoot-row--nocub .ps-tfoot-total       { background: #dc2626 !important; color: #fff !important; }
 
-/* Horas adicionales — verde */
-.cc-tfoot-row--adic .ps-tfoot-total  { color: #86efac !important; }
+/* Horas adicionales — verde suave */
+.cc-tfoot-row--adic td                     { background: #dcfce7 !important; color: #16a34a !important; border-color: #bbf7d0; }
+.cc-tfoot-row--adic .ps-tfoot-label        { background: #dcfce7 !important; color: #16a34a !important; }
+.cc-tfoot-row--adic .ps-tfoot-total        { background: #16a34a !important; color: #fff !important; }
 
-/* Horas a Facturar — destacado azul claro */
-.cc-tfoot-row--fact td               { background: #0c2a5e; color: #bfdbfe; }
-.cc-tfoot-row--fact .ps-tfoot-label  { background: #0c2a5e; }
-.cc-tfoot-row--fact .ps-tfoot-total  { background: #1e3a8a !important; color: #93c5fd !important; font-size: 12px !important; }
+/* Horas a Facturar — azul medio destacado */
+.cc-tfoot-row--fact td                     { background: #dbeafe !important; color: #1d4ed8 !important; border-color: #bfdbfe; }
+.cc-tfoot-row--fact .ps-tfoot-label        { background: #dbeafe !important; color: #1d4ed8 !important; }
+.cc-tfoot-row--fact .ps-tfoot-total        { background: #1d4ed8 !important; color: #fff !important; font-size: 12px !important; }
 
-/* Ausentismo — separación visual */
-.cc-tfoot-row--aus td           { background: #2d1b3d; color: #e9d5ff; border-top: 2px solid #4a1d6b; }
-.cc-tfoot-row--aus .ps-tfoot-label { background: #2d1b3d; }
-.cc-tfoot-row--aus .ps-tfoot-total { background: #4a1d6b !important; color: #e9d5ff !important; }
+/* Capacitación — amarillo suave */
+.cc-tfoot-row--cap td                      { background: #fefce8 !important; color: #854d0e !important; border-color: #fef08a; }
+.cc-tfoot-row--cap .ps-tfoot-label         { background: #fefce8 !important; color: #854d0e !important; }
+.cc-tfoot-row--cap .ps-tfoot-total         { background: #854d0e !important; color: #fff !important; }
+
+/* Ausentismo — violeta suave */
+.cc-tfoot-row--aus td                      { background: #f3e8ff !important; color: #7c3aed !important; border-color: #e9d5ff; border-top: 2px solid #c4b5fd; }
+.cc-tfoot-row--aus .ps-tfoot-label         { background: #f3e8ff !important; color: #7c3aed !important; }
+.cc-tfoot-row--aus .ps-tfoot-total         { background: #7c3aed !important; color: #fff !important; }
 
 /* Celdas pendientes de fórmula */
 .cc-tfoot-cel--pending {
-    color: rgba(147, 197, 253, 0.3) !important;
+    color: rgba(3, 105, 161, 0.3) !important;
     font-style: italic;
 }
 

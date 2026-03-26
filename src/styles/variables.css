@@ -96,6 +96,16 @@
 
     /* ── Header ── */
     --header-height: 68px;
+
+    /* ── Tablas de programación ── */
+    --table-header-bg:         #2e6da4;   /* Header de tablas de horarios */
+    --table-header-bg-dark:    #1e5080;   /* Header oscuro / total */
+    --table-header-border:     rgba(255,255,255,0.35);
+    --table-sticky-bg:         #f8fafc;   /* Fondo columnas sticky del body */
+    --table-cell-border:       #e5e7eb;   /* Bordes de celdas del body */
+    --table-cap-bg:            #f0f9ff;   /* Fondo filas CAP */
+    --table-cap-total-bg:      #e0f2fe;   /* Fondo total CAP */
+    --table-cap-color:         #0369a1;   /* Texto filas CAP */
 }
 
 /* ── Reset base ── */

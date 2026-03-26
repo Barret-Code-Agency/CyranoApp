@@ -126,7 +126,7 @@ export default function FacturacionScreen({ año, mes, onBack, zonaFija = null }
             const vendidas = r1(dias.reduce((s, dia) => s + (horasDiaObj(dia, obj, diasEsp) ?? 0), 0));
             const reales   = r1(dias.reduce((s, dia) => {
                 const key = fmtKey(dia);
-                return s + personal.reduce((ps, p) => ps + horasDeValor((p.programado || {})[key] || ""), 0);
+                return s + personal.reduce((ps, p) => ps + horasDeValor((p.real || p.programado || {})[key] || ""), 0);
             }, 0));
             const noCubiertas  = r1(Math.max(0, vendidas - reales));
             const adicionales  = r1(Math.max(0, reales - vendidas));

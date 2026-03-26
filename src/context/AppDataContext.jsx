@@ -65,6 +65,14 @@ export function AppDataProvider({ children, uid }) {
     const [mantenimiento, setMantenimiento] = useState([]);
     const [dbReady,       setDbReady]       = useState(false);
     const [dbError,       setDbError]       = useState(null);
+
+    // Datos vivos desde colecciones maestras (override config_global para esos campos)
+    const [liveData, setLiveData] = useState({
+        vehiculos:   null,
+        objetivos:   null,
+        vigiladores: null,
+        supervisores: null,
+    });
     const [empresaLogos,   setEmpresaLogos]   = useState({ splash: null, panel: null });
     const [empresaNombre,  setEmpresaNombre]  = useState("");
     const [empresaModulos, setEmpresaModulos] = useState(null);
@@ -112,6 +120,9 @@ export function AppDataProvider({ children, uid }) {
 
                 empresaIdRef.current = empresaId;
                 suscripcionIniciada = true;
+
+        // Reset live data on empresa change
+        setLiveData({ vehiculos: null, objetivos: null, vigiladores: null, supervisores: null });
 
         const unsubs = [];
         let ready = 0;
@@ -216,7 +227,7 @@ export function AppDataProvider({ children, uid }) {
             ));
         } catch (e) { setPlanState(load("cyrano_plan", DEFAULT_PLAN)); markReady(); }
 
-        // 4. Config global (objetivos, vehículos, vigiladores, etc.)
+        // 4. Config global (tiposActividad, distritos, etc.)
         try {
             unsubs.push(onSnapshot(
                 doc(db, "empresas", empresaId, "datos", "config_global"),
@@ -228,6 +239,66 @@ export function AppDataProvider({ children, uid }) {
                 (err) => { console.warn("[Firestore] config_global:", err.code); }
             ));
         } catch (e) { /* usa DEFAULT_CONFIG */ }
+
+        // 5. Vehículos desde colección maestra (tiempo real)
+        try {
+            unsubs.push(onSnapshot(
+                query(collection(db, "vehiculos"), where("empresaId", "==", empresaId)),
+                (snap) => {
+                    const list = snap.docs
+                        .map(d => d.data().patente)
+                        .filter(Boolean)
+                        .sort();
+                    setLiveData(p => ({ ...p, vehiculos: list }));
+                },
+                (err) => { console.warn("[AppData] vehiculos:", err.code); }
+            ));
+        } catch {}
+
+        // 6. Objetivos desde colección maestra (tiempo real)
+        try {
+            unsubs.push(onSnapshot(
+                query(collection(db, "objetivos"), where("empresaId", "==", empresaId)),
+                (snap) => {
+                    const obs = snap.docs
+                        .map(d => {
+                            const o = d.data();
+                            const codigo = [o.cCosto, o.numProyecto, o.numObjetivo].filter(Boolean).join("-");
+                            const label  = [codigo, o.nombreProyecto, o.nombre].filter(Boolean).join(" ");
+                            return label;
+                        })
+                        .filter(Boolean)
+                        .sort();
+                    setLiveData(p => ({ ...p, objetivos: obs }));
+                },
+                (err) => { console.warn("[AppData] objetivos:", err.code); }
+            ));
+        } catch {}
+
+        // 7. Legajos → vigiladores y supervisores (tiempo real)
+        try {
+            unsubs.push(onSnapshot(
+                query(collection(db, "legajos"), where("empresaId", "==", empresaId)),
+                (snap) => {
+                    const docs = snap.docs.map(d => d.data());
+                    const nombre = (d) =>
+                        `${d.apellido || ""} ${d.nombre || ""}`.trim() ||
+                        `${d.nombre || ""} ${d.apellido || ""}`.trim();
+                    const vig = docs
+                        .filter(d => /vigilad/i.test(d.rol || d.cargo || ""))
+                        .map(nombre)
+                        .filter(Boolean)
+                        .sort();
+                    const sup = docs
+                        .filter(d => d.esSupervisor === true || /supervis/i.test(d.rol || d.cargo || ""))
+                        .map(nombre)
+                        .filter(Boolean)
+                        .sort();
+                    setLiveData(p => ({ ...p, vigiladores: vig, supervisores: sup }));
+                },
+                (err) => { console.warn("[AppData] legajos:", err.code); }
+            ));
+        } catch {}
 
             unsubs.forEach(u => u && unsubFirestore.push(u));
             }, (err) => {
@@ -319,13 +390,15 @@ export function AppDataProvider({ children, uid }) {
     };
 
     const getSupervisoresConEmail = () => {
+        // Usa liveData (legajos con esSupervisor=true) si disponible, sino config_global
+        const listaSuper = liveData.supervisores ?? config.supervisores ?? [];
         const conEmail = Object.entries(planesSuper).map(([email, v]) => {
             const nombrePlan   = v.nombre || email;
-            const nombreConfig = (config.supervisores || []).find(n => normNombre(n) === normNombre(nombrePlan));
+            const nombreConfig = listaSuper.find(n => normNombre(n) === normNombre(nombrePlan));
             return { email, nombre: nombreConfig || normNombre(nombrePlan), turnoBase: v.turnoBase || "mixto" };
         });
         const emailsConPlan = new Set(conEmail.map(s => normNombre(s.nombre)));
-        const sinEmail = (config.supervisores || [])
+        const sinEmail = listaSuper
             .filter(n => !emailsConPlan.has(normNombre(n)))
             .map(n => ({ email: null, nombre: n, turnoBase: null }));
         return [...conEmail, ...sinEmail];
@@ -424,9 +497,18 @@ export function AppDataProvider({ children, uid }) {
         setActividadActiva(null);
     };
 
+    // Mezcla: las colecciones maestras tienen prioridad sobre config_global para esos campos
+    const mergedData = {
+        ...config,
+        vehiculos:   liveData.vehiculos   ?? config.vehiculos,
+        objetivos:   liveData.objetivos   ?? config.objetivos,
+        vigiladores: liveData.vigiladores ?? config.vigiladores,
+        supervisores: liveData.supervisores ?? config.supervisores,
+    };
+
     return (
         <AppDataContext.Provider value={{
-            data: config, updateConfig, resetConfig, update: updateConfig, resetToDefaults: resetConfig,
+            data: mergedData, updateConfig, resetConfig, update: updateConfig, resetToDefaults: resetConfig,
             plan, savePlan,
             planesSuper, savePlanSupervisor, getPlanSupervisor, getObjetivosSemana, getSupervisoresConEmail,
             mantenimiento, addMantenimiento, updateMantenimiento, deleteMantenimiento, getAlertasMantenimiento,

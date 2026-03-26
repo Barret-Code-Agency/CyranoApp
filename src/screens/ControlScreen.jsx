@@ -186,6 +186,11 @@ export default function ControlScreen({ geo, onBack }) {
                                 <option value="">— Seleccionar objetivo —</option>
                                 {data.objetivos.map((o) => <option key={o}>{o}</option>)}
                             </select>
+                            {data.objetivos.length === 0 && (
+                                <small style={{ color: "var(--color-warning, #f59e0b)", marginTop: 4, display: "block" }}>
+                                    Sin objetivos cargados. El administrador debe cargarlos en Configuración → Objetivos.
+                                </small>
+                            )}
                         </div>
                         <div className="row">
                             <div className="field">
@@ -215,6 +220,11 @@ export default function ControlScreen({ geo, onBack }) {
                                         : data.vigiladores
                                     ).map((v) => <option key={v}>{v}</option>)}
                                 </select>
+                                {data.vigiladores.length === 0 && (
+                                    <small style={{ color: "var(--color-warning, #f59e0b)", marginTop: 4, display: "block" }}>
+                                        Sin vigiladores cargados. El administrador debe cargarlos en Configuración → Vigiladores.
+                                    </small>
+                                )}
                             </div>
                             <div className="field">
                                 <label className="label">Página del libro</label>

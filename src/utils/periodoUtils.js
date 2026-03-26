@@ -75,15 +75,22 @@ export function r1(n) { return Math.round(n * 10) / 10; }
 // Convierte "6-14", "06/14", "6 a 14", "6:00-14" → "06:00 – 14:00"
 export function normalizarTurno(str) {
     if (typeof str !== "string") return str;
-    const s = str.trim();
+    // Normalizar newlines → espacio para unificar patrones
+    const s = str.trim().replace(/\n+/g, " ");
     if (!s) return s;
+    // "HH:MM – HH:MM" (cualquier guión)
     const ya = s.match(/^(\d{1,2}):(\d{2})\s*[-\u2013\u2014]\s*(\d{1,2}):(\d{2})$/);
     if (ya) return `${String(ya[1]).padStart(2,"0")}:${ya[2]} \u2013 ${String(ya[3]).padStart(2,"0")}:${ya[4]}`;
-    // "16:00 a 20:00" — con minutos y separador "a"
+    // "HH:MM a HH:MM" (separador "a" con minutos)
     const conA = s.match(/^(\d{1,2}):(\d{2})\s+a\s+(\d{1,2}):(\d{2})$/i);
     if (conA) return `${String(conA[1]).padStart(2,"0")}:${conA[2]} \u2013 ${String(conA[3]).padStart(2,"0")}:${conA[4]}`;
+    // "HH:MM HH:MM" (solo espacio o newline como separador)
+    const solo = s.match(/^(\d{1,2}):(\d{2})\s+(\d{1,2}):(\d{2})$/);
+    if (solo) return `${String(solo[1]).padStart(2,"0")}:${solo[2]} \u2013 ${String(solo[3]).padStart(2,"0")}:${solo[4]}`;
+    // "H-H", "H/H", "H a H" (sin minutos)
     const sin = s.match(/^(\d{1,2})\s*[-\u2013\u2014\/a]\s*(\d{1,2})$/i);
     if (sin) return `${String(sin[1]).padStart(2,"0")}:00 \u2013 ${String(sin[2]).padStart(2,"0")}:00`;
+    // Mix: un lado con minutos, separador guión/barra/a
     const mix = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(?:[-\u2013\u2014\/]|a)\s*(\d{1,2})(?::(\d{2}))?$/i);
     if (mix) {
         const h1 = String(mix[1]).padStart(2,"0"); const m1 = String(mix[2] || "00").padStart(2,"0");

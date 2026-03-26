@@ -1,13 +1,57 @@
 // src/screens/PlanSupervisorScreen.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
 import "./PlanSupervisorScreen.css";
+
+/** Returns array of working day numbers (1-31) for current month for a 14x14 worker.
+ *  grupo: "A" or "B", diagramas: array of { grupo, francos: ["YYYY-MM-DD", ...] } docs */
+function getDiasTrabajoMes(grupo, diagramas) {
+    if (!grupo || !diagramas?.length) return [];
+    const hoy     = new Date();
+    const anio    = hoy.getFullYear();
+    const mes     = hoy.getMonth(); // 0-based
+    const diasMes = new Date(anio, mes + 1, 0).getDate();
+
+    // Collect franco dates for this grupo
+    const francos = new Set();
+    diagramas
+        .filter(d => d.grupo === grupo)
+        .forEach(d => (d.francos || []).forEach(f => francos.add(f)));
+
+    // Days of current month that are NOT franco
+    const dias = [];
+    for (let d = 1; d <= diasMes; d++) {
+        const key = `${anio}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        if (!francos.has(key)) dias.push(d);
+    }
+    return dias;
+}
 
 const WEEK_RANGES  = { 1: "1–7", 2: "8–14", 3: "15–21", 4: "22–28" };
 const TURNOS       = ["diurno", "nocturno", "mixto"];
 const TURNO_ICON   = { diurno: "☀️", nocturno: "🌙", mixto: "🔄", base: "↑" };
 const TURNO_LABEL  = { diurno: "Diurno", nocturno: "Nocturno", mixto: "Mixto" };
 const PATRON_LABEL = { todas: "Todas (1,2,3,4)", impares: "Impares (1 y 3)", pares: "Pares (2 y 4)", custom: "Personalizado" };
+
+/** Compatibilidad hacia atrás: extrae diurnas/nocturnas/fds desde un objetivo del plan */
+export function getVisitasDesglosadas(obj) {
+    if (obj.visitasDiurnas !== undefined || obj.visitasNocturnas !== undefined) {
+        return {
+            diurnas:      obj.visitasDiurnas   ?? 0,
+            nocturnas:    obj.visitasNocturnas  ?? 0,
+            fds:          obj.visitasFdS        ?? 0,
+            semanasConFdS: obj.semanasConFdS    ?? [],
+        };
+    }
+    // Modelo viejo: inferir desde turno + visitasPorSemana
+    const total = obj.visitasPorSemana || 1;
+    const turno = obj.turno || "diurno";
+    if (turno === "nocturno") return { diurnas: 0, nocturnas: total, fds: 0, semanasConFdS: [] };
+    if (turno === "mixto")    return { diurnas: Math.ceil(total/2), nocturnas: Math.floor(total/2), fds: 0, semanasConFdS: [] };
+    return { diurnas: total, nocturnas: 0, fds: 0, semanasConFdS: [] };
+}
 
 const getSemanaActual = () => {
     const d = new Date().getDate();
@@ -30,16 +74,25 @@ const semanasDePatron = (patron, custom) => {
 };
 
 // ── Fila de objetivo expandible ───────────────────────────────────────────────
-function ObjetivoRow({ obj, turnoBase, onChange, onRemove }) {
+function ObjetivoRow({ obj, onChange, onRemove }) {
     const [expanded, setExpanded] = useState(false);
 
-    const turnoEfectivo = (!obj.turno || obj.turno === "base") ? turnoBase : obj.turno;
+    const v            = getVisitasDesglosadas(obj);
+    const { diurnas, nocturnas, fds } = v;
+    const semasConFdS  = v.semanasConFdS;
     const semanasActivas = semanasDePatron(obj.patron, obj.semanasCustom);
+    const totalMes = semanasActivas.length * (diurnas + nocturnas)
+                   + (semasConFdS.length || semanasActivas.length) * fds;
 
     const toggleSemanaCustom = (w) => {
         const cur = obj.semanasCustom || [];
         const next = cur.includes(w) ? cur.filter(x => x !== w) : [...cur, w].sort();
         onChange({ ...obj, semanasCustom: next });
+    };
+    const toggleSemanaFdS = (w) => {
+        const cur = obj.semanasConFdS || [];
+        const next = cur.includes(w) ? cur.filter(x => x !== w) : [...cur, w].sort();
+        onChange({ ...obj, semanasConFdS: next });
     };
 
     return (
@@ -52,12 +105,9 @@ function ObjetivoRow({ obj, turnoBase, onChange, onRemove }) {
                     )}
                 </div>
                 <div className="ps-obj-badges">
-                    <span className={`ps-badge ps-badge-turno turno-${turnoEfectivo}`}>
-                        {TURNO_ICON[turnoEfectivo]} {TURNO_LABEL[turnoEfectivo]}
-                    </span>
-                    <span className="ps-badge ps-badge-visitas">
-                        {obj.visitasPorSemana || 1}×/sem
-                    </span>
+                    {diurnas > 0   && <span className="ps-badge ps-badge-turno turno-diurno">☀️ {diurnas}×</span>}
+                    {nocturnas > 0 && <span className="ps-badge ps-badge-turno turno-nocturno">🌙 {nocturnas}×</span>}
+                    {fds > 0       && <span className="ps-badge ps-badge-turno" style={{ background: "rgba(236,72,153,0.12)", color: "#9d174d" }}>📅 {fds} FdS</span>}
                     <span className="ps-badge ps-badge-patron">
                         {obj.patron === "custom"
                             ? `Sem ${semanasActivas.join(",")}`
@@ -65,7 +115,7 @@ function ObjetivoRow({ obj, turnoBase, onChange, onRemove }) {
                     </span>
                 </div>
                 <div className="ps-obj-actions">
-                    <button className="ps-obj-expand-btn" onClick={e => { e.stopPropagation(); setExpanded(e2 => !e2); }}>
+                    <button className="ps-obj-expand-btn" onClick={e => { e.stopPropagation(); setExpanded(x => !x); }}>
                         {expanded ? "▲" : "▼"}
                     </button>
                     <button className="ps-obj-remove-btn" onClick={e => { e.stopPropagation(); onRemove(); }}>✕</button>
@@ -74,49 +124,66 @@ function ObjetivoRow({ obj, turnoBase, onChange, onRemove }) {
 
             {expanded && (
                 <div className="ps-obj-detail">
-                    {/* Visitas por semana */}
+                    {/* ── Visitas diurnas ── */}
                     <div className="ps-detail-row">
-                        <label className="ps-detail-label">Visitas por semana activa</label>
+                        <label className="ps-detail-label">☀️ Visitas diurnas por semana activa</label>
                         <div className="ps-visitas-ctrl">
-                            <button onClick={() => onChange({ ...obj, visitasPorSemana: Math.max(1, (obj.visitasPorSemana || 1) - 1) })}>−</button>
-                            <span className="ps-visitas-num">{obj.visitasPorSemana || 1}</span>
-                            <button onClick={() => onChange({ ...obj, visitasPorSemana: (obj.visitasPorSemana || 1) + 1 })}>+</button>
+                            <button onClick={() => onChange({ ...obj, visitasDiurnas: Math.max(0, diurnas - 1) })}>−</button>
+                            <span className="ps-visitas-num">{diurnas}</span>
+                            <button onClick={() => onChange({ ...obj, visitasDiurnas: diurnas + 1 })}>+</button>
                         </div>
                     </div>
 
-                    {/* Turno */}
+                    {/* ── Visitas nocturnas ── */}
                     <div className="ps-detail-row">
-                        <label className="ps-detail-label">Turno para este objetivo</label>
-                        <div className="ps-turno-opts">
-                            <button
-                                className={`ps-turno-btn ${(!obj.turno || obj.turno === "base") ? "active" : ""} turno-${turnoBase}`}
-                                onClick={() => onChange({ ...obj, turno: "base" })}
-                            >
-                                {TURNO_ICON[turnoBase]} Igual al supervisor ({TURNO_LABEL[turnoBase]})
-                            </button>
-                            {TURNOS.map(t => (
-                                <button
-                                    key={t}
-                                    className={`ps-turno-btn ${obj.turno === t ? "active" : ""} turno-${t}`}
-                                    onClick={() => onChange({ ...obj, turno: t })}
-                                >
-                                    {TURNO_ICON[t]} {TURNO_LABEL[t]}
-                                </button>
-                            ))}
+                        <label className="ps-detail-label">🌙 Visitas nocturnas por semana activa</label>
+                        <div className="ps-visitas-ctrl">
+                            <button onClick={() => onChange({ ...obj, visitasNocturnas: Math.max(0, nocturnas - 1) })}>−</button>
+                            <span className="ps-visitas-num">{nocturnas}</span>
+                            <button onClick={() => onChange({ ...obj, visitasNocturnas: nocturnas + 1 })}>+</button>
                         </div>
                     </div>
 
-                    {/* Patrón */}
+                    {/* ── Visitas fin de semana ── */}
                     <div className="ps-detail-row">
-                        <label className="ps-detail-label">Patrón de semanas</label>
+                        <label className="ps-detail-label">📅 Visitas fin de semana por mes</label>
+                        <div className="ps-visitas-ctrl">
+                            <button onClick={() => onChange({ ...obj, visitasFdS: Math.max(0, fds - 1) })}>−</button>
+                            <span className="ps-visitas-num">{fds}</span>
+                            <button onClick={() => onChange({ ...obj, visitasFdS: fds + 1 })}>+</button>
+                        </div>
+                    </div>
+
+                    {/* ── Semanas con FdS (solo si fds > 0) ── */}
+                    {fds > 0 && (
+                        <div className="ps-detail-row">
+                            <label className="ps-detail-label">Semanas que incluyen FdS <span style={{ fontWeight: 400, color: "var(--color-muted)" }}>(vacío = todas las activas)</span></label>
+                            <div className="ps-semanas-check">
+                                {[1, 2, 3, 4].map(w => (
+                                    <button
+                                        key={w}
+                                        className={`ps-sem-btn ${semasConFdS.includes(w) ? "active" : ""}`}
+                                        onClick={() => toggleSemanaFdS(w)}
+                                    >
+                                        <div className="ps-sem-num">Sem {w}</div>
+                                        <div className="ps-sem-range">{WEEK_RANGES[w]}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Patrón de semanas ── */}
+                    <div className="ps-detail-row">
+                        <label className="ps-detail-label">Patrón de semanas activas</label>
                         <div className="ps-patron-opts">
-                            {Object.entries(PATRON_LABEL).map(([k, v]) => (
+                            {Object.entries(PATRON_LABEL).map(([k, vv]) => (
                                 <button
                                     key={k}
                                     className={`ps-patron-btn ${obj.patron === k ? "active" : ""}`}
                                     onClick={() => onChange({ ...obj, patron: k })}
                                 >
-                                    {v}
+                                    {vv}
                                 </button>
                             ))}
                         </div>
@@ -141,12 +208,15 @@ function ObjetivoRow({ obj, turnoBase, onChange, onRemove }) {
                     )}
 
                     <div className="ps-semanas-preview">
-                        Activo en: {semanasActivas.length > 0
-                            ? semanasActivas.map(w => `Sem ${w}`).join(", ")
-                            : <span style={{ color: "var(--color-danger)" }}>Ninguna semana seleccionada</span>}
-                        {semanasActivas.length > 0 && (
-                            <> · <strong>{semanasActivas.length * (obj.visitasPorSemana || 1)} visitas/mes</strong></>
-                        )}
+                        {semanasActivas.length === 0
+                            ? <span style={{ color: "var(--color-danger)" }}>Ninguna semana seleccionada</span>
+                            : <>
+                                {diurnas > 0   && <span>☀️ {diurnas}×{semanasActivas.length}={diurnas * semanasActivas.length}</span>}
+                                {nocturnas > 0 && <span> · 🌙 {nocturnas}×{semanasActivas.length}={nocturnas * semanasActivas.length}</span>}
+                                {fds > 0       && <span> · 📅 {fds}×{semasConFdS.length || semanasActivas.length}={fds * (semasConFdS.length || semanasActivas.length)}</span>}
+                                <strong> · Total: {totalMes} visitas/mes</strong>
+                            </>
+                        }
                     </div>
                 </div>
             )}
@@ -155,7 +225,7 @@ function ObjetivoRow({ obj, turnoBase, onChange, onRemove }) {
 }
 
 // ── Editor ────────────────────────────────────────────────────────────────────
-function EditorSupervisor({ sup, onBack, onSaved }) {
+function EditorSupervisor({ sup, onBack, onSaved, legajoMap = {}, diagramas14 = [] }) {
     const { data, getPlanSupervisor, savePlanSupervisor, jornadas } = useAppData();
 
     const planActual = getPlanSupervisor(sup.email || sup.nombre) || { nombre: sup.nombre, turnoBase: "mixto", objetivos: [] };
@@ -177,7 +247,10 @@ function EditorSupervisor({ sup, onBack, onSaved }) {
     controlesDelMes.forEach(c => { visitasPorObj[c.objetivo] = (visitasPorObj[c.objetivo] || 0) + 1; });
 
     const totalRequeridas = objetivos.reduce((s, o) => {
-        return s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1);
+        const v = getVisitasDesglosadas(o);
+        const sems = semanasDePatron(o.patron, o.semanasCustom);
+        const fdsWeeks = v.semanasConFdS.length || sems.length;
+        return s + sems.length * (v.diurnas + v.nocturnas) + fdsWeeks * v.fds;
     }, 0);
 
     const updateObj = (idx, v) => { setSaved(false); setObjetivos(p => p.map((o, i) => i === idx ? v : o)); };
@@ -185,7 +258,11 @@ function EditorSupervisor({ sup, onBack, onSaved }) {
 
     const addObj = () => {
         if (!objToAdd || objetivos.some(o => o.objetivo === objToAdd)) return;
-        setObjetivos(p => [...p, { objetivo: objToAdd, visitasPorSemana: 1, turno: "base", patron: "todas", semanasCustom: [] }]);
+        setObjetivos(p => [...p, {
+            objetivo: objToAdd,
+            visitasDiurnas: 1, visitasNocturnas: 0, visitasFdS: 0,
+            semanasConFdS: [], patron: "todas", semanasCustom: [],
+        }]);
         setObjToAdd(""); setShowAdd(false); setSaved(false);
     };
 
@@ -210,6 +287,16 @@ function EditorSupervisor({ sup, onBack, onSaved }) {
                 <div className="ps-editor-info">
                     <div className="ps-editor-name">{sup.nombre}</div>
                     <div className="ps-editor-email">{sup.email}</div>
+                    {(() => {
+                        const legajo = legajoMap[sup.nombre.toUpperCase()];
+                        const es14x14 = legajo && (legajo.regimen === "14 x 14 x 8" || legajo.regimen === "14 x 14 x 12");
+                        const dias = es14x14 ? getDiasTrabajoMes(legajo.grupoTurno14, diagramas14) : [];
+                        return es14x14 && dias.length > 0 ? (
+                            <div style={{ fontSize: "0.7rem", color: "var(--color-muted)", marginTop: 3, lineHeight: 1.4 }}>
+                                📅 Días de trabajo: <strong>{dias.join(", ")}</strong>
+                            </div>
+                        ) : null;
+                    })()}
                 </div>
                 <div className="ps-editor-mes">{mesNombre()}</div>
             </div>
@@ -260,13 +347,14 @@ function EditorSupervisor({ sup, onBack, onSaved }) {
                         {objetivos.map((obj, idx) => {
                             const realizadas  = visitasPorObj[obj.objetivo] || 0;
                             const sems        = semanasDePatron(obj.patron, obj.semanasCustom);
-                            const requeridas  = sems.length * (obj.visitasPorSemana || 1);
+                            const vvR         = getVisitasDesglosadas(obj);
+                            const fdsWR       = vvR.semanasConFdS.length || sems.length;
+                            const requeridas  = sems.length * (vvR.diurnas + vvR.nocturnas) + fdsWR * vvR.fds;
                             const pct         = requeridas > 0 ? Math.min(realizadas / requeridas, 1) : 0;
                             return (
                                 <div key={idx} className="ps-obj-wrap">
                                     <ObjetivoRow
                                         obj={obj}
-                                        turnoBase={turnoBase}
                                         onChange={v => updateObj(idx, v)}
                                         onRemove={() => removeObj(idx)}
                                     />
@@ -312,21 +400,12 @@ function EditorSupervisor({ sup, onBack, onSaved }) {
 }
 
 // ── Lista supervisores ────────────────────────────────────────────────────────
-function ListaSupervisores({ onEdit }) {
-    const { getSupervisoresConEmail, getPlanSupervisor, savePlanSupervisor, data, jornadas } = useAppData();
-    const [showForm, setShowForm] = useState(false);
-    const [nuevoNombre, setNuevoNombre] = useState("");
-    const [nuevoEmail,  setNuevoEmail]  = useState("");
+function ListaSupervisores({ onEdit, legajoMap = {}, diagramas14 = [] }) {
+    const { getSupervisoresConEmail, getPlanSupervisor, jornadas } = useAppData();
 
     const semanaActual = getSemanaActual();
     const supervisores = getSupervisoresConEmail();
     const mesInicio    = new Date(); mesInicio.setDate(1); mesInicio.setHours(0,0,0,0);
-
-    const registrar = () => {
-        if (!nuevoEmail.includes("@") || !nuevoNombre.trim()) return;
-        savePlanSupervisor(nuevoEmail.trim(), { nombre: nuevoNombre.trim(), turnoBase: "mixto", objetivos: [] });
-        setNuevoNombre(""); setNuevoEmail(""); setShowForm(false);
-    };
 
     return (
         <div className="ps-list-wrap">
@@ -336,11 +415,21 @@ function ListaSupervisores({ onEdit }) {
                 {semanaActual && ` · Semana ${semanaActual} activa (días ${WEEK_RANGES[semanaActual]})`}
             </div>
 
+            {supervisores.length === 0 && (
+                <div className="alert alert-info" style={{ marginTop: "var(--space-3)" }}>
+                    Sin supervisores designados. Ir a Gestión de datos → Supervisores para designarlos.
+                </div>
+            )}
+
             {supervisores.map((sup, i) => {
-                const plan     = getPlanSupervisor(sup.email || "");
+                const plan     = getPlanSupervisor(sup.email || sup.nombre);
                 const objCount = plan?.objetivos?.length || 0;
-                const totalReq = plan?.objetivos?.reduce((s, o) =>
-                    s + semanasDePatron(o.patron, o.semanasCustom).length * (o.visitasPorSemana || 1), 0) || 0;
+                const totalReq = plan?.objetivos?.reduce((s, o) => {
+                    const vv = getVisitasDesglosadas(o);
+                    const sems = semanasDePatron(o.patron, o.semanasCustom);
+                    const fdsW = vv.semanasConFdS.length || sems.length;
+                    return s + sems.length * (vv.diurnas + vv.nocturnas) + fdsW * vv.fds;
+                }, 0) || 0;
 
                 const controlesMes = sup.email ? jornadas
                     .filter(j => j.email === sup.email && new Date(j.creadaEn || 0) >= mesInicio)
@@ -349,13 +438,21 @@ function ListaSupervisores({ onEdit }) {
                 const pct = totalReq > 0 ? Math.min(Math.round(controlesMes / totalReq * 100), 100) : null;
                 const turnoIcon = plan ? TURNO_ICON[plan.turnoBase || "mixto"] : "";
 
+                const legajoKey = sup.nombre.toUpperCase();
+                const legajo = legajoMap[legajoKey];
+                const es14x14 = legajo && (legajo.regimen === "14 x 14 x 8" || legajo.regimen === "14 x 14 x 12");
+                const diasTrabajo = es14x14 ? getDiasTrabajoMes(legajo.grupoTurno14, diagramas14) : [];
+
                 return (
-                    <div key={i} className={`ps-sup-row`} onClick={() => onEdit(sup)}>
+                    <div key={i} className="ps-sup-row" onClick={() => onEdit(sup)}>
                         <div className="ps-sup-avatar">{sup.nombre[0]}</div>
                         <div className="ps-sup-info">
                             <div className="ps-sup-name">{sup.nombre}</div>
                             <div className="ps-sup-email">
-                                {sup.email ? <>{turnoIcon} {sup.email}</> : <span style={{color:"#f59e0b", fontSize:11}}>⚠️ Sin email — plan por nombre</span>}
+                                {sup.email
+                                    ? <>{turnoIcon} {sup.email}</>
+                                    : <span style={{ color: "var(--color-muted)", fontSize: 11 }}>Sin cuenta de usuario vinculada</span>
+                                }
                             </div>
                             <div className="ps-sup-detail">
                                 {plan
@@ -377,31 +474,6 @@ function ListaSupervisores({ onEdit }) {
                     </div>
                 );
             })}
-
-            {!showForm ? (
-                <button className="btn btn-secondary" style={{ marginTop: "var(--space-3)" }} onClick={() => setShowForm(true)}>
-                    + Asociar supervisor al sistema
-                </button>
-            ) : (
-                <div className="ps-new-form">
-                    <div className="ps-new-title">Registrar supervisor</div>
-                    <div className="field">
-                        <label className="label">Nombre</label>
-                        <select value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)}>
-                            <option value="">-- Seleccionar --</option>
-                            {(data.supervisores || []).map(n => <option key={n}>{n}</option>)}
-                        </select>
-                    </div>
-                    <div className="field">
-                        <label className="label">Email (ID de login)</label>
-                        <input type="email" placeholder="fsupervisor@empresa.com" value={nuevoEmail} onChange={e => setNuevoEmail(e.target.value)} />
-                    </div>
-                    <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                        <button className="btn btn-primary" disabled={!nuevoEmail.includes("@") || !nuevoNombre.trim()} onClick={registrar}>Registrar</button>
-                        <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
@@ -409,12 +481,36 @@ function ListaSupervisores({ onEdit }) {
 export default function PlanSupervisorScreen() {
     const [supSel, setSupSel] = useState(null);
     const [toast,  setToast]  = useState("");
+    const [legajoMap,   setLegajoMap]   = useState({});
+    const [diagramas14, setDiagramas14] = useState([]);
+
+    const { empresaId } = useAppData();
+
+    useEffect(() => {
+        if (!empresaId) return;
+        // Load legajos
+        getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId)))
+            .then(snap => {
+                const map = {};
+                snap.docs.forEach(d => {
+                    const l = d.data();
+                    const key = `${l.apellido || ""} ${l.nombre || ""}`.trim().toUpperCase();
+                    map[key] = l;
+                });
+                setLegajoMap(map);
+            }).catch(() => {});
+        // Load diagramas14x14
+        getDocs(query(collection(db, "diagramas14x14"), where("empresaId", "==", empresaId)))
+            .then(snap => setDiagramas14(snap.docs.map(d => d.data())))
+            .catch(() => {});
+    }, [empresaId]);
+
     const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2000); };
     return (
         <div style={{ position: "relative" }}>
             {supSel
-                ? <EditorSupervisor sup={supSel} onBack={() => setSupSel(null)} onSaved={() => { setSupSel(null); showToast("✓ Plan guardado"); }} />
-                : <ListaSupervisores onEdit={setSupSel} />
+                ? <EditorSupervisor sup={supSel} onBack={() => setSupSel(null)} onSaved={() => { setSupSel(null); showToast("✓ Plan guardado"); }} legajoMap={legajoMap} diagramas14={diagramas14} />
+                : <ListaSupervisores onEdit={setSupSel} legajoMap={legajoMap} diagramas14={diagramas14} />
             }
             {toast && <div className="admin-toast">{toast}</div>}
         </div>
