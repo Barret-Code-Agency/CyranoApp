@@ -8,21 +8,14 @@ import { db, storage } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
 import "./GestionDatosAdminScreen.css";
 import { fmtObjetivo } from "../../utils/formatters";
+import { parseFecha } from "../../utils/dateUtils";
 import { SEED_VEHICULOS } from "../../data/seedVehiculos";
 
 // ── Helpers de fecha ─────────────────────────────────────────────────────────
 function fmtFechaExcel(valor) {
     if (!valor && valor !== 0) return <span style={{ color: "#aaa" }}>—</span>;
-    let d;
-    if (typeof valor === "number" || (!isNaN(Number(valor)) && Number(valor) > 20000 && Number(valor) < 60000)) {
-        d = new Date((Number(valor) - 25569) * 86400000);
-    } else if (typeof valor === "string" && valor.includes("/")) {
-        const [dd, mm, yyyy] = valor.split("/").map(Number);
-        d = new Date(yyyy, mm - 1, dd);
-    } else {
-        d = new Date(valor);
-    }
-    if (!d || isNaN(d.getTime())) return valor;
+    const d = parseFecha(valor);
+    if (!d) return valor;
     return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
 }
 
@@ -926,6 +919,7 @@ export default function GestionDatosAdminScreen({ onBack, coleccionInicial = 0, 
                                         value={form[c.key] || ""}
                                         onChange={e => setForm(f => ({ ...f, [c.key]: e.target.value }))}
                                     >
+                                        <option value="">— Sin dato —</option>
                                         {c.opts.map(o => (
                                             <option key={o.v} value={o.v}>{o.l}</option>
                                         ))}

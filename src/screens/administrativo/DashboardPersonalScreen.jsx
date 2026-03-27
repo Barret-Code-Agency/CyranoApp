@@ -3,47 +3,9 @@ import { useState, useEffect, useMemo } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
+import { useClientesData } from "../../hooks/useClientesData";
 import "./DashboardPersonalScreen.css";
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-// Parsea fechas en múltiples formatos: "DD/MM/YYYY", "YYYY-MM-DD", Firestore Timestamp, número serial Excel
-function parseFecha(fecha) {
-    if (!fecha) return null;
-    if (fecha?.toDate) return fecha.toDate();          // Firestore Timestamp
-    // Número serial de Excel (días desde 01/01/1900, con bug de año bisiesto 1900)
-    if (typeof fecha === "number") {
-        const ms = (fecha - 25569) * 86400000;         // 25569 = días entre 1900 y Unix epoch
-        const d = new Date(ms);
-        return isNaN(d.getTime()) ? null : d;
-    }
-    if (typeof fecha !== "string") return null;
-    // Si viene como string de número (Excel importado como texto)
-    const num = Number(fecha);
-    if (!isNaN(num) && num > 20000 && num < 60000) {
-        const ms = (num - 25569) * 86400000;
-        const d = new Date(ms);
-        return isNaN(d.getTime()) ? null : d;
-    }
-    if (fecha.includes("/")) {
-        const [d, m, y] = fecha.split("/").map(Number);
-        if (!y || y < 1900) return null;
-        return new Date(y, m - 1, d);
-    }
-    const d = new Date(fecha);                         // ISO u otro formato
-    return isNaN(d.getTime()) ? null : d;
-}
-function calcAntiguedad(fecha) {
-    const d = parseFecha(fecha);
-    if (!d) return null;
-    const diff = (Date.now() - d) / (1000 * 60 * 60 * 24 * 365.25);
-    return isNaN(diff) || diff < 0 ? null : diff;
-}
-function calcEdad(fecha) {
-    const d = parseFecha(fecha);
-    if (!d) return null;
-    const diff = (Date.now() - d) / (1000 * 60 * 60 * 24 * 365.25);
-    return isNaN(diff) || diff < 0 ? null : Math.floor(diff);
-}
+import { parseFecha, calcEdad, calcAntiguedad } from "../../utils/dateUtils";
 function normalizarTarea(t = "") {
     const v = (t ?? "").trim().toLowerCase();
     if (v.includes("conductor") || v.includes("conducor")) return "Conductor";
@@ -130,7 +92,7 @@ function antiguedadPorFuncion(legajos) {
         .sort((a, b) => b[1] - a[1]);
 }
 
-function buildStats(legajos) {
+function buildStats(legajos, proyectoMap = {}) {
     if (!legajos.length) return null;
     const masc  = legajos.filter(p => p.sexo === "M").length;
     const fem   = legajos.filter(p => p.sexo === "F").length;
@@ -144,7 +106,12 @@ function buildStats(legajos) {
     const conHijos   = legajos.filter(p => parseInt(p.hijos) > 0).length;
     const totalHijos = legajos.reduce((s, p) => s + (parseInt(p.hijos) || 0), 0);
     const tareas    = countBy(legajos, p => normalizarTarea(getRol(p)));
-    const proyectos = countBy(legajos, p => p.proyecto || "Sin proyecto");
+    const proyectos = countBy(legajos, p => {
+        const num = (p.proyecto || "").trim();
+        if (!num) return "Sin proyecto";
+        const nombre = proyectoMap[num] || "";
+        return nombre ? `${num} - ${nombre}` : num;
+    });
     const servicios = countBy(legajos, p => p.centroCosto || "Sin CC");
     const hijosDistr = countBy(legajos, p => {
         const h = parseInt(p.hijos);
@@ -193,7 +160,7 @@ function buildStats(legajos) {
         antiguedad:           rangosAntiguedad(legajos),
         edades:               rangosEdad(legajos),
         zonas:                countBy(legajos, p => p.zona       || "Sin zona"),
-        cargos:               countBy(legajos, p => p.cargo      || "Sin cargo"),
+        cargos:               countBy(legajos, p => (p.cargo || "").trim() || "Sin cargo"),
         centrosCosto:         countBy(legajos, p => p.centroCosto || "Sin CC"),
         regimenes:            countBy(legajos, p => p.regimen    || "Sin régimen"),
         ingresosPorAnio:      ingresosPorAnio(legajos),
@@ -298,8 +265,8 @@ function CalendarioCumpleanos({ legajos }) {
 }
 
 // ── Panel de estadísticas ──────────────────────────────────────────────────
-function StatsPanel({ legajos, zona }) {
-    const stats = useMemo(() => buildStats(legajos), [legajos]);
+function StatsPanel({ legajos, zona, proyectoMap }) {
+    const stats = useMemo(() => buildStats(legajos, proyectoMap), [legajos, proyectoMap]);
 
 
     if (!stats) return <div className="dp-empty">Sin datos para esta zona.</div>;
@@ -512,6 +479,12 @@ function StatsPanel({ legajos, zona }) {
 // ── Componente principal ───────────────────────────────────────────────────
 export default function DashboardPersonalScreen({ onBack, zonaFija, embedded }) {
     const { empresaNombre, empresaId } = useAppData();
+    const { objetivos } = useClientesData(empresaId);
+    const proyectoMap = useMemo(() => {
+        const m = {};
+        objetivos.forEach(o => { if (o.numProyecto) m[String(o.numProyecto).trim()] = o.nombreProyecto || ""; });
+        return m;
+    }, [objetivos]);
     const [todosLegajos, setTodosLegajos] = useState([]);
     const [loading, setLoading]           = useState(true);
     const [zonaActiva, setZonaActiva]     = useState(zonaFija ?? "todas");
@@ -598,7 +571,7 @@ export default function DashboardPersonalScreen({ onBack, zonaFija, embedded }) 
             )}
 
             {/* Stats del tab activo */}
-            <StatsPanel legajos={legajosFiltrados} zona={zonaActiva} />
+            <StatsPanel legajos={legajosFiltrados} zona={zonaActiva} proyectoMap={proyectoMap} />
         </div>
     );
 }

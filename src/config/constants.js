@@ -44,4 +44,26 @@ export const FILTRO_VIGILADOR_MIN_CHARS = 3;
 export const ANOMALIA_INFORME_MIN_CHARS = 10;
 
 // ── Tiempo ─────────────────────────────────────────────────────────────────────
-export const MS_POR_DIA = 86_400_000;
+export const MS_POR_DIA      = 86_400_000;
+export const EXCEL_EPOCH_DAYS = 25569;   // días entre 01/01/1900 y Unix epoch
+export const DAYS_PER_YEAR    = 365.25;  // promedio (incluye bisiestos)
+
+// ── localStorage keys ──────────────────────────────────────────────────────────
+export const LS = {
+    CONFIG:     "cyrano_config",
+    JORNADA:    "cyrano_jornada_activa",
+    ACTIVIDAD:  "cyrano_actividad_activa",
+    PENDIENTES: "cyrano_jornadas_pendientes",
+};
+
+// ── Colecciones Firestore ──────────────────────────────────────────────────────
+export const COL = {
+    PROGRAMACION: "programacionServicios",
+    LEGAJOS:      "legajos",
+    CLIENTES:     "clientes",
+    OBJETIVOS:    "objetivos",
+    VEHICULOS:    "vehiculos",
+    DIAGRAMAS:    "diagramas14x14",
+    CONTROL:      "controlActividades",
+    MANTENIMIENTO:"mantenimientoVehiculos",
+};

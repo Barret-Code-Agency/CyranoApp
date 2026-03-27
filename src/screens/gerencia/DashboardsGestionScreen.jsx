@@ -7,7 +7,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    LineChart, Line, ComposedChart, Cell,
+    LineChart, Line, ComposedChart, Cell, LabelList, ReferenceLine,
 } from "recharts";
 import "./DashboardsGestionScreen.css";
 import { getDias, fmtKey, horasDeValor, normalizarTurno } from "../../utils/periodoUtils";
@@ -99,13 +99,14 @@ function CustomTooltip({ active, payload, label, suffix = "hs" }) {
 export default function DashboardsGestionScreen({ onBack, embedded }) {
     const { empresaNombre, empresaId } = useAppData();
     const [loading,        setLoading]        = useState(true);
-    const [progDocs,       setProgDocs]       = useState([]);
-    const [legajos,        setLegajos]        = useState([]);
-    const [capacitaciones, setCapacitaciones] = useState([]);
-    const [objetivos,      setObjetivos]      = useState([]);
-    const [zonaActiva,     setZonaActiva]     = useState(null);
-    const [diagramas,      setDiagramas]      = useState([]);
-    const [activeTab,      setActiveTab]      = useState("mes");
+    const [progDocs,        setProgDocs]        = useState([]);
+    const [progDocProximo,  setProgDocProximo]  = useState([]);  // período siguiente (para facturación mes calendario)
+    const [legajos,         setLegajos]         = useState([]);
+    const [capacitaciones,  setCapacitaciones]  = useState([]);
+    const [objetivos,       setObjetivos]       = useState([]);
+    const [zonaActiva,      setZonaActiva]      = useState(null);
+    const [diagramas,       setDiagramas]       = useState([]);
+    const [activeTab,       setActiveTab]       = useState("mes");
 
     const meses = useMemo(() => ultimos6Meses(), []);
 
@@ -126,6 +127,18 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                         return { ...d, _mes: m };
                     });
                 setProgDocs(docs);
+
+                // Período siguiente: cubre días 24-31 del mes actual (para facturación mes calendario)
+                const hoy        = new Date();
+                const currMes    = hoy.getMonth() + 1;
+                const currAño    = hoy.getFullYear();
+                const proxMes    = currMes === 12 ? 1    : currMes + 1;
+                const proxAño    = currMes === 12 ? currAño + 1 : currAño;
+                setProgDocProximo(
+                    allProgSnap.docs
+                        .map(d => d.data())
+                        .filter(d => d.año === proxAño && d.mes === proxMes)
+                );
 
                 const legSnap = await getDocs(query(collection(db, "legajos"), where("empresaId", "==", empresaId)));
                 setLegajos(legSnap.docs.map(d => d.data()));
@@ -156,6 +169,15 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
             personal: (doc.personal ?? []).filter(p => legajosZonaSet.has(p.legajo)),
         })).filter(doc => doc.personal.length > 0);
     }, [progDocs, zonaActiva, legajosZonaSet]);
+
+    // Docs del período SIGUIENTE filtrados por zona (días 24-31 del mes actual, para facturación calendario)
+    const filteredDocsProximo = useMemo(() => {
+        if (!zonaActiva) return progDocProximo;
+        return progDocProximo.map(doc => ({
+            ...doc,
+            personal: (doc.personal ?? []).filter(p => legajosZonaSet.has(p.legajo)),
+        })).filter(doc => doc.personal.length > 0);
+    }, [progDocProximo, zonaActiva, legajosZonaSet]);
 
     // ── Helpers de régimen (para extras) ──────────────────────────────────────
     const { regimenMap, grupoMap, excluidos, francosMap } = useMemo(() => {
@@ -208,20 +230,29 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         const { año, mes } = mesActual;
         const dias = getDias(año, mes);
         const docsDelMes = filteredDocs.filter(d => d._mes?.año === año && d._mes?.mes === mes);
+        // Prefijo para filtrar claves del mes calendario (YYYY-MM-)
+        const calPrefix = `${año}-${String(mes).padStart(2, "0")}-`;
 
         // Paso 1: acumular datos por legajo (real data + cliente principal)
         const byLeg = {};
         docsDelMes.forEach(doc => {
-            const cli = doc.clienteNombre || doc.cliente || doc.contrato || "Sin cliente";
+            const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
             (doc.personal || []).forEach(p => {
                 const leg = String(p.legajo || "");
                 if (!byLeg[leg]) byLeg[leg] = { nombre: p.nombre || leg, cliHoras: {}, realData: {} };
                 const r = byLeg[leg];
-                // Cuántas horas programadas tiene este legajo en este cliente
-                Object.keys(p.programado || {}).forEach(fecha => {
-                    const v = p.programado[fecha];
-                    if (esTurno(v)) r.cliHoras[cli] = (r.cliHoras[cli] || 0) + parseHoras(v);
-                });
+                // Horas en este cliente: programado primero; si no hay, usar real (para extras sin planilla)
+                const progTurnos = Object.keys(p.programado || {}).filter(k => esTurno((p.programado||{})[k]));
+                if (progTurnos.length > 0) {
+                    progTurnos.forEach(fecha => {
+                        r.cliHoras[cli] = (r.cliHoras[cli] || 0) + parseHoras(p.programado[fecha]);
+                    });
+                } else {
+                    Object.keys(p.real || {}).forEach(fecha => {
+                        const v = p.real[fecha];
+                        if (esTurno(v)) r.cliHoras[cli] = (r.cliHoras[cli] || 0) + parseHoras(v);
+                    });
+                }
                 // Acumular real (puede aparecer en varios docs del mismo mes)
                 Object.entries(p.real || {}).forEach(([k, v]) => {
                     const hs = horasDeValor(normalizarTurno(v));
@@ -245,11 +276,11 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         // Paso 2: acumular métricas operativas por cliente (de los docs)
         const byCli = {};
         const init = cli => {
-            if (!byCli[cli]) byCli[cli] = { prog: 0, trab: 0, adicHoras: 0, ausDias: 0, ausHoras: 0, vacDias: 0, vacHoras: 0, ext50Hs: 0, ext50Cant: new Set(), ext100Hs: 0, ext100Cant: new Set() };
+            if (!byCli[cli]) byCli[cli] = { prog: 0, trab: 0, adicHoras: 0, factCalend: 0, ausDias: 0, ausHoras: 0, vacDias: 0, vacHoras: 0, ext50Hs: 0, ext50Cant: new Set(), ext100Hs: 0, ext100Cant: new Set() };
         };
 
         docsDelMes.forEach(doc => {
-            const cli = doc.clienteNombre || doc.cliente || doc.contrato || "Sin cliente";
+            const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
             init(cli);
             const c = byCli[cli];
             (doc.personal || []).forEach(p => {
@@ -264,24 +295,15 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                         const h = parseHoras(vP);
                         c.prog += h;
                         if (vR && esTurno(vR))               c.trab += parseHoras(vR);
-                        else if (esAusentismo(vR))             { c.ausDias++; c.ausHoras += 12; }
-                        else if (vR?.toLowerCase() === "vac")  { c.vacDias++; c.vacHoras += 12; }
-                        else if (!vR)                          c.trab += h;
+                        else if (esAusentismo(vR))             { c.ausDias++; c.ausHoras += h; }
+                        else if (vR?.toLowerCase() === "vac")  { c.vacDias++; c.vacHoras += h; }
+                        // !vR → sin dato real: la hora queda como no cubierta (prog - trab)
                     } else {
-                        // Sin programado: usamos real como fuente única
-                        if (esTurno(vP)) {
-                            const h = parseHoras(vP);
-                            c.prog += h;
-                            c.trab += h;
-                        } else if (esAusentismo(vP)) {
-                            c.prog += 12;
-                            c.ausDias++;
-                            c.ausHoras += 12;
-                        } else if (vP?.toLowerCase() === "vac") {
-                            c.prog += 12;
-                            c.vacDias++;
-                            c.vacHoras += 12;
-                        }
+                        // Sin turno programado: esta persona no estaba en la planilla → sus horas son adicionales.
+                        // No se suman a prog (no era obligación cubrirla) ni a trab.
+                        if (esTurno(vP))                        c.adicHoras += parseHoras(vP);
+                        else if (esAusentismo(vP))             { c.ausDias++; c.ausHoras += 12; }
+                        else if (vP?.toLowerCase() === "vac")  { c.vacDias++; c.vacHoras += 12; }
                     }
                 });
                 if (hasProg) {
@@ -297,6 +319,31 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
             });
         });
 
+        // Paso 2b: Hs Facturadas mes calendario (1 al último día del mes)
+        // El período de liquidación M cubre días 1-23 del mes M.
+        // El período siguiente (M+1) cubre días 24-31 del mes M.
+        // Se suman horas reales de ambos períodos filtrando por prefijo de fecha del mes calendario.
+        const acumFactCalend = (docs) => {
+            docs.forEach(doc => {
+                const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
+                init(cli);
+                (doc.personal || []).forEach(p => {
+                    Object.entries(p.real || {}).forEach(([fecha, vR]) => {
+                        if (!fecha.startsWith(calPrefix)) return;
+                        const h = horasDeValor(normalizarTurno(vR));
+                        if (h > 0) byCli[cli].factCalend += h;
+                    });
+                    Object.entries(p.capacitacion || {}).forEach(([fecha, v]) => {
+                        if (!fecha.startsWith(calPrefix)) return;
+                        const hc = Number(v) || 0;
+                        if (hc > 0) byCli[cli].factCalend += hc;
+                    });
+                });
+            });
+        };
+        acumFactCalend(docsDelMes);         // días 1-23 del mes M
+        acumFactCalend(filteredDocsProximo); // días 24-31 del mes M (período M+1)
+
         // Paso 3: calcular extras por legajo y atribuir al cliente principal
         Object.entries(byLeg).forEach(([leg, r]) => {
             if (excluidos.has(leg)) return;
@@ -309,14 +356,15 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         });
 
         // Totales globales
-        let totalProg = 0, totalFact = 0, totalAusDias = 0, totalVacDias = 0, totalExt50 = 0, totalExt100 = 0;
+        let totalProg = 0, totalFact = 0, totalAusDias = 0, totalAusHoras = 0, totalVacDias = 0, totalVacHoras = 0, totalExt50 = 0, totalExt100 = 0;
         const rows = Object.entries(byCli).map(([name, d]) => {
-            const fact = d.trab + d.adicHoras;
+            const fact = Math.round(d.factCalend); // horas reales del mes calendario (1-último día)
             const ext50Pct  = fact > 0 ? Math.round((d.ext50Hs  / fact) * 100 * 10) / 10 : 0;
             const ext100Pct = fact > 0 ? Math.round((d.ext100Hs / fact) * 100 * 10) / 10 : 0;
             const ausPct    = d.prog > 0 ? Math.round((d.ausHoras / d.prog) * 100 * 10) / 10 : 0;
-            totalProg    += d.prog;   totalFact   += fact;
-            totalAusDias += d.ausDias; totalVacDias += d.vacDias;
+            totalProg    += d.prog;      totalFact      += fact;
+            totalAusDias += d.ausDias;  totalAusHoras  += d.ausHoras;
+            totalVacDias += d.vacDias;  totalVacHoras  += d.vacHoras;
             totalExt50   += d.ext50Hs; totalExt100  += d.ext100Hs;
             return {
                 name,
@@ -337,139 +385,183 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
             };
         }).sort((a, b) => b.prog - a.prog);
 
-        return { rows, totalProg, totalFact, totalAusDias, totalVacDias, totalExt50, totalExt100 };
-    }, [filteredDocs, mesActual, excluidos, regimenMap, grupoMap, francosMap]);
+        return { rows, totalProg, totalFact, totalAusDias, totalAusHoras, totalVacDias, totalVacHoras, totalExt50, totalExt100 };
+    }, [filteredDocs, filteredDocsProximo, mesActual, excluidos, regimenMap, grupoMap, francosMap]);
 
     // ── Métricas 6 meses (para tab comparativo) ───────────────────────────────
     const metricas6m = useMemo(() => {
-        const porMes = meses.map(({ año, mes, label }) => {
+        // legajo → cargo para análisis de puestos
+        const legajoCargo = {};
+        legajos.forEach(l => { if (l.legajo) legajoCargo[String(l.legajo)] = l.cargo || l.tarea || "Sin puesto"; });
+
+        const porMes = [];
+        const cliKeys = new Set();
+        const puestoKeys = new Set();
+        const cliMes = {};   // { label: { cli: { prog,trab,fact,nocub,ausDias,ausHs,vacDias,ext50,ext100,adicionales,personal:Set } } }
+        const puestoMes = {}; // { label: { puesto: Set<legajo> } }
+
+        meses.forEach(({ año, mes, label }) => {
             const docs = filteredDocs.filter(d => d._mes?.año === año && d._mes?.mes === mes);
-            let prog = 0, trab = 0, ausInv = 0, adicionales = 0;
+            const dias = getDias(año, mes);
+
+            let prog = 0, trab = 0, adicionales = 0, ausDias = 0, ausHsAcum = 0, vacDias = 0;
+            const byLegReal = {}; // legajo → { realData, cli }
+            const cliData = {};
+            const personalTotalSet = new Set(); // legajos únicos del mes (para % ausentismo por días)
+            if (!puestoMes[label]) puestoMes[label] = {};
+
             docs.forEach(doc => {
+                const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
+                cliKeys.add(cli);
+                if (!cliData[cli]) cliData[cli] = { prog: 0, trab: 0, adicionales: 0, ausDias: 0, ausHs: 0, vacDias: 0, ext50: 0, ext100: 0, personal: new Set() };
+
                 (doc.personal ?? []).forEach(p => {
+                    const leg = String(p.legajo || "");
+                    const puesto = (leg && legajoCargo[leg]) || "Sin puesto";
+                    puestoKeys.add(puesto);
+
+                    if (leg) {
+                        cliData[cli].personal.add(leg);
+                        personalTotalSet.add(leg);
+                        if (!puestoMes[label][puesto]) puestoMes[label][puesto] = new Set();
+                        puestoMes[label][puesto].add(leg);
+                    }
+
+                    // realData + capacitación para calcExtras
+                    if (leg) {
+                        if (!byLegReal[leg]) byLegReal[leg] = { realData: {}, cli };
+                        Object.entries(p.real || {}).forEach(([k, v]) => { byLegReal[leg].realData[k] = v; });
+                        Object.entries(p.capacitacion || {}).forEach(([k, v]) => {
+                            const hc = Number(v) || 0;
+                            if (hc > 0) byLegReal[leg].realData[k] = typeof byLegReal[leg].realData[k] === "number" ? byLegReal[leg].realData[k] + hc : hc;
+                        });
+                    }
+
                     const rawProg = p.programado || {};
                     const hasProg = Object.keys(rawProg).some(k => esTurno(rawProg[k]));
                     const progSrc = hasProg ? rawProg : (p.real || {});
+
                     Object.keys(progSrc).forEach(fecha => {
-                        const vP = progSrc[fecha], vR = hasProg ? (p.real ?? {})[fecha] : vP;
-                        if (esTurno(vP)) {
-                            const h = parseHoras(vP); prog += h;
-                            if (hasProg) {
-                                if (vR && esTurno(vR))  trab += parseHoras(vR);
-                                else if (esAusentismo(vR)) ausInv += h;
-                                else if (!vR)           trab += h;
-                            } else {
-                                trab += h;
+                        const vP = progSrc[fecha];
+                        const vR = hasProg ? (p.real || {})[fecha] : vP;
+                        if (!esTurno(vP)) {
+                            // Sin programado: detectar ausentismo/vacaciones en real
+                            if (!hasProg) {
+                                // Ausentismo y vacaciones no suman a horas a cubrir
+                                if (esAusentismo(vP))                 { ausDias++; cliData[cli].ausDias++; cliData[cli].ausHs += 12; }
+                                else if (vP?.toLowerCase() === "vac") { vacDias++; cliData[cli].vacDias++; }
                             }
+                            return;
+                        }
+                        const h = parseHoras(vP);
+                        if (hasProg) {
+                            prog += h; cliData[cli].prog += h;
+                            if (vR && esTurno(vR))       { const hR = parseHoras(vR); trab += hR; cliData[cli].trab += hR; }
+                            else if (esAusentismo(vR))   { ausDias++; ausHsAcum += h; cliData[cli].ausDias++; cliData[cli].ausHs += h; }
+                            else if (vR?.toLowerCase() === "vac") { vacDias++; cliData[cli].vacDias++; }
+                            // !vR → sin dato real: queda como no cubierto (prog - trab)
+                        } else {
+                            // Sin turno programado: sus horas reales son adicionales (no inflan prog ni trab)
+                            adicionales += h; cliData[cli].adicionales += h;
                         }
                     });
+
                     if (hasProg) {
                         Object.keys(p.real ?? {}).forEach(fecha => {
                             const vR = p.real[fecha], vP = rawProg[fecha];
-                            if (esTurno(vR) && !esTurno(vP)) adicionales += parseHoras(vR);
+                            if (esTurno(vR) && !esTurno(vP)) { const h = parseHoras(vR); adicionales += h; cliData[cli].adicionales += h; }
+                            if (!vP) {
+                                if (esAusentismo(vR))              { ausDias++; cliData[cli].ausDias++; }
+                                else if (vR?.toLowerCase() === "vac") { vacDias++; cliData[cli].vacDias++; }
+                            }
                         });
                     }
                 });
             });
-            const ausPct = prog > 0 ? parseFloat(((ausInv / prog) * 100).toFixed(1)) : 0;
-            const capHoras = parseFloat((capacitaciones
-                .filter(c => { const f = c.fecha || ""; return f.startsWith(`${año}-${String(mes).padStart(2,"0")}`); })
-                .reduce((s, c) => s + (Number(c.duracion) || 0), 0) / 60).toFixed(1));
-            return { label, prog, trab, nocub: Math.max(0, prog - trab), ausInv, ausPct, adicionales, capHoras };
+
+            // Extras por legajo (incluyendo capacitaciones en realData)
+            let ext50 = 0, ext100 = 0;
+            Object.entries(byLegReal).forEach(([leg, { realData, cli }]) => {
+                const e = calcExtras(leg, realData, dias);
+                ext50 += e.ext50; ext100 += e.ext100;
+                if (cliData[cli]) { cliData[cli].ext50 += e.ext50; cliData[cli].ext100 += e.ext100; }
+            });
+            ext50 = Math.round(ext50 * 10) / 10;
+            ext100 = Math.round(ext100 * 10) / 10;
+
+            const ausHs = Math.round(ausHsAcum * 10) / 10;
+            const fact = trab + adicionales;
+            const nocub = Math.max(0, prog - trab);
+            const totalExt = Math.round((ext50 + ext100) * 10) / 10;
+            const ausPct = prog > 0 ? parseFloat(((ausHs / prog) * 100).toFixed(1)) : 0;
+            const pctExt = trab > 0 ? parseFloat(((totalExt / trab) * 100).toFixed(1)) : 0;
+            // Índice de ausentismo en días: días perdidos / (personal × días del período)
+            const ausPctDias = personalTotalSet.size > 0 && dias.length > 0
+                ? parseFloat(((ausDias / (personalTotalSet.size * dias.length)) * 100).toFixed(1))
+                : 0;
+
+            porMes.push({ label, prog, trab, fact, nocub, ausDias, ausHs, ausPct, ausPctDias, vacDias, ext50, ext100, totalExt, pctExt, adicionales });
+
+            cliMes[label] = {};
+            Object.entries(cliData).forEach(([cli, d]) => {
+                const cFact = d.trab + d.adicionales;
+                const cNocub = Math.max(0, d.prog - d.trab);
+                const cExt50 = Math.round(d.ext50 * 10) / 10;
+                const cExt100 = Math.round(d.ext100 * 10) / 10;
+                const cTotalExt = Math.round((cExt50 + cExt100) * 10) / 10;
+                const cPctExt = d.trab > 0 ? parseFloat(((cTotalExt / d.trab) * 100).toFixed(1)) : 0;
+                const cCobPct = d.prog > 0 ? parseFloat(((d.trab / d.prog) * 100).toFixed(1)) : 0;
+                const cAusPct = d.prog > 0 ? parseFloat(((d.ausHs / d.prog) * 100).toFixed(1)) : 0;
+                cliMes[label][cli] = {
+                    prog: d.prog, trab: d.trab, fact: cFact, nocub: cNocub,
+                    ausDias: d.ausDias, ausHs: d.ausHs, ausPct: cAusPct,
+                    vacDias: d.vacDias, ext50: cExt50, ext100: cExt100,
+                    totalExt: cTotalExt, pctExt: cPctExt,
+                    adicionales: d.adicionales, cobPct: cCobPct,
+                    personal: d.personal.size,
+                };
+            });
         });
 
-        // Evolución 6 meses por cliente
-        const cliKeys = new Set();
-        const porMesCliente = meses.map(({ año, mes, label }) => {
-            const docs = filteredDocs.filter(d => d._mes?.año === año && d._mes?.mes === mes);
+        const cliKeysArr = [...cliKeys];
+        const puestoKeysArr = [...puestoKeys];
+
+        const buildCliArray = metric => meses.map(({ label }) => {
             const entry = { label };
-            docs.forEach(doc => {
-                const cli = doc.clienteNombre || doc.cliente || doc.contrato || "Sin cliente";
-                cliKeys.add(cli);
-                let prog = 0;
-                (doc.personal || []).forEach(p => {
-                    const rawProg = p.programado || {};
-                    const hasProg = Object.keys(rawProg).some(k => esTurno(rawProg[k]));
-                    const src = hasProg ? rawProg : (p.real || {});
-                    Object.values(src).forEach(v => { if (esTurno(v)) prog += parseHoras(v); });
-                });
-                entry[cli] = (entry[cli] || 0) + prog;
-            });
+            cliKeysArr.forEach(cli => { entry[cli] = cliMes[label]?.[cli]?.[metric] ?? 0; });
             return entry;
         });
 
-        const totProg  = porMes.reduce((s, m) => s + m.prog, 0);
-        const totTrab  = porMes.reduce((s, m) => s + m.trab, 0);
+        const totProg = porMes.reduce((s, m) => s + m.prog, 0);
+        const totTrab = porMes.reduce((s, m) => s + m.trab, 0);
         const totNoCub = porMes.reduce((s, m) => s + m.nocub, 0);
-        const pctCub   = totProg > 0 ? Math.round((totTrab / totProg) * 100) : 0;
+        const pctCub = totProg > 0 ? Math.round((totTrab / totProg) * 100) : 0;
 
-        // Horas no cubiertas por objetivo (6m)
-        const nocubPorObj = {};
-        filteredDocs.forEach(doc => {
-            const obj = doc.objetivo || "Sin objetivo";
-            (doc.personal ?? []).forEach(p => {
-                Object.keys(p.programado ?? {}).forEach(fecha => {
-                    const vP = p.programado[fecha], vR = (p.real ?? {})[fecha];
-                    if (esTurno(vP) && esAusenteCode(vR))
-                        nocubPorObj[obj] = (nocubPorObj[obj] || 0) + parseHoras(vP);
-                });
-            });
+        const porMesPuesto = meses.map(({ label }) => {
+            const entry = { label };
+            puestoKeysArr.forEach(p => { entry[p] = puestoMes[label]?.[p]?.size ?? 0; });
+            return entry;
         });
-        const nocubObjData = Object.entries(nocubPorObj).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
-        // Horas adicionales por objetivo (6m)
-        const adicPorObj = {};
-        filteredDocs.forEach(doc => {
-            const obj = doc.objetivo || "Sin objetivo";
-            (doc.personal ?? []).forEach(p => {
-                Object.keys(p.real ?? {}).forEach(fecha => {
-                    const vR = p.real[fecha], vP = (p.programado ?? {})[fecha];
-                    if (esTurno(vR) && !esTurno(vP)) adicPorObj[obj] = (adicPorObj[obj] || 0) + parseHoras(vR);
-                });
-            });
-        });
-        const adicObjData = Object.entries(adicPorObj).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-
-        // Cobertura por cliente (6m)
-        const cobCliente = {};
-        filteredDocs.forEach(doc => {
-            const cli = doc.clienteNombre || doc.cliente || doc.contrato || "Sin cliente";
-            if (!cobCliente[cli]) cobCliente[cli] = { prog: 0, trab: 0 };
-            (doc.personal ?? []).forEach(p => {
-                const rawProg = p.programado || {};
-                const hasProg = Object.keys(rawProg).some(k => esTurno(rawProg[k]));
-                const progSrc = hasProg ? rawProg : (p.real || {});
-                Object.keys(progSrc).forEach(fecha => {
-                    const vP = progSrc[fecha], vR = hasProg ? (p.real ?? {})[fecha] : vP;
-                    if (esTurno(vP)) {
-                        const h = parseHoras(vP);
-                        cobCliente[cli].prog += h;
-                        if (hasProg) {
-                            if (vR && esTurno(vR)) cobCliente[cli].trab += parseHoras(vR);
-                            else if (!vR)          cobCliente[cli].trab += h;
-                        } else {
-                            cobCliente[cli].trab += h;
-                        }
-                    }
-                });
-            });
-        });
-        const cobClienteData = Object.entries(cobCliente)
-            .map(([name, { prog, trab }]) => ({ name, prog, trab, value: prog > 0 ? parseFloat(((trab / prog) * 100).toFixed(1)) : 0 }))
-            .sort((a, b) => a.value - b.value);
-
-        // Personal por régimen
-        const porRegimen = {};
-        legajosEnZona.forEach(l => { const r = l.regimen || "Sin régimen"; porRegimen[r] = (porRegimen[r] || 0) + 1; });
-        const regimenData = Object.entries(porRegimen).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-
-        // Capacitaciones por categoría
-        const capPorCat = {};
-        capacitaciones.forEach(c => { const cat = c.categoria || "Sin categoría"; capPorCat[cat] = (capPorCat[cat] || 0) + 1; });
-        const capData = Object.entries(capPorCat).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
-
-        return { porMes, porMesCliente, cliKeys: [...cliKeys], totProg, totTrab, totNoCub, pctCub, nocubObjData, adicObjData, cobClienteData, regimenData, capData };
-    }, [filteredDocs, meses, legajosEnZona, capacitaciones]);
+        return {
+            porMes, cliKeys: cliKeysArr, puestoKeys: puestoKeysArr,
+            totProg, totTrab, totNoCub, pctCub,
+            porMesCliProg:     buildCliArray("prog"),
+            porMesCliFact:     buildCliArray("fact"),
+            porMesCliNocub:    buildCliArray("nocub"),
+            porMesCliAusHs:    buildCliArray("ausHs"),
+            porMesCliAusPct:   buildCliArray("ausPct"),
+            porMesCliVacDias:  buildCliArray("vacDias"),
+            porMesCliExt50:    buildCliArray("ext50"),
+            porMesCliExt100:   buildCliArray("ext100"),
+            porMesCliTotalExt: buildCliArray("totalExt"),
+            porMesCliPctExt:   buildCliArray("pctExt"),
+            porMesCliPersonal: buildCliArray("personal"),
+            porMesCliAdic:     buildCliArray("adicionales"),
+            porMesCliCobPct:   buildCliArray("cobPct"),
+            porMesPuesto,
+        };
+    }, [filteredDocs, meses, legajos, diagramas]);
 
     // ── Extras del mes actual por persona (top lists) ─────────────────────────
     const extrasDelMes = useMemo(() => {
@@ -524,7 +616,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         </div>
     );
 
-    const { rows, totalProg, totalFact, totalAusDias, totalVacDias, totalExt50, totalExt100 } = clienteMetricasMes;
+    const { rows, totalProg, totalFact, totalAusDias, totalAusHoras, totalVacDias, totalVacHoras, totalExt50, totalExt100 } = clienteMetricasMes;
 
     return (
         <div className="dg-root">
@@ -558,16 +650,17 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
             {/* ══════════════════════════════════════
                 SECCIÓN 1 — MES EN CURSO
             ══════════════════════════════════════ */}
-            <>
+            {activeTab === "mes" && <>
                     {/* KPI strip */}
                     <div className="dg-kpi-grid">
                         <KpiCard icon="👷" label="Personal activo"    value={legajosEnZona.length}          sub={`${objetivos.length} objetivos`}        color="#2563eb" />
                         <KpiCard icon="✅" label="Hs a cubrir"        value={totalProg.toLocaleString()}     sub="horas programadas del mes"              color="#7c3aed" />
                         <KpiCard icon="💼" label="Hs facturadas"      value={totalFact.toLocaleString()}     sub="cubiertas + adicionales"                color="#16a34a" />
-                        <KpiCard icon="🤒" label="Ausentismo"         value={`${totalAusDias} días`}         sub={`${totalAusDias * 12} hs · ${totalProg > 0 ? Math.round(totalAusDias * 12 / totalProg * 100) : 0}% del prog.`} color="#dc2626" />
+                        <KpiCard icon="🤒" label="Ausentismo"         value={`${totalAusDias} días`}         sub={`${Math.round(totalAusHoras)} hs · ${totalProg > 0 ? Math.round(totalAusHoras / totalProg * 100 * 10) / 10 : 0}% del prog.`} color="#dc2626" />
                         <KpiCard icon="🔶" label="Extras 50%"         value={`${totalExt50} hs`}             sub={`${totalFact > 0 ? Math.round(totalExt50 / totalFact * 100 * 10)/10 : 0}% de facturadas`} color="#f59e0b" />
                         <KpiCard icon="🔴" label="Extras 100%"        value={`${totalExt100} hs`}            sub={`${totalFact > 0 ? Math.round(totalExt100 / totalFact * 100 * 10)/10 : 0}% de facturadas`} color="#ef4444" />
                     </div>
+
 
                     {/* Tabla por cliente */}
                     {rows.length === 0 ? (
@@ -642,14 +735,14 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                                 </span>
                                             </td>
                                             <td className="dg-td-num">{totalAusDias}</td>
-                                            <td className="dg-td-num">{totalAusDias * 12}</td>
+                                            <td className="dg-td-num">{Math.round(totalAusHoras)}</td>
                                             <td className="dg-td-num">
                                                 <span className="dg-badge dg-badge--warn">
-                                                    {totalProg > 0 ? Math.round(totalAusDias * 12 / totalProg * 100 * 10) / 10 : 0}%
+                                                    {totalProg > 0 ? Math.round(totalAusHoras / totalProg * 100 * 10) / 10 : 0}%
                                                 </span>
                                             </td>
                                             <td className="dg-td-num">{totalVacDias}</td>
-                                            <td className="dg-td-num">{totalVacDias * 12}</td>
+                                            <td className="dg-td-num">{Math.round(totalVacHoras)}</td>
                                             <td className="dg-td-num">—</td>
                                             <td className="dg-td-num">{Math.round(totalExt50 * 10) / 10}</td>
                                             <td className="dg-td-num">
@@ -772,204 +865,366 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                             )}
                         </ChartCard>
                     </div>
-            </>
+            </>}
 
             {/* ══════════════════════════════════════
                 SECCIÓN 2 — COMPARATIVO 6 MESES
             ══════════════════════════════════════ */}
-            <>
+            {activeTab === "comparativo" && <>
+                    {/* KPIs resumen */}
                     <div className="dg-kpi-grid">
-                        <KpiCard icon="👷" label="Personal activo"    value={legajosEnZona.length}                    sub={`${objetivos.length} objetivos`}          color="#2563eb" />
-                        <KpiCard icon="✅" label="Cobertura 6m"       value={`${metricas6m.pctCub}%`}                 sub="horas cubiertas vs programadas"           color="#16a34a" />
-                        <KpiCard icon="⏱️" label="Hs programadas 6m"  value={metricas6m.totProg.toLocaleString()}     sub="últimos 6 meses"                          color="#7c3aed" />
-                        <KpiCard icon="❌" label="Hs no cubiertas 6m" value={metricas6m.totNoCub.toLocaleString()}    sub="ausencias no reemplazadas"                color="#dc2626" />
-                        <KpiCard icon="🎓" label="Capacitaciones"     value={capacitaciones.length}                   sub={`${new Set(capacitaciones.map(c=>c.categoria)).size} categorías`} color="#0891b2" />
-                        <KpiCard icon="📍" label="Objetivos"          value={objetivos.length}                        sub={`${metricas6m.cliKeys.length} clientes`}  color="#f59e0b" />
+                        <KpiCard icon="👷" label="Personal activo"    value={legajosEnZona.length}                 sub={`${metricas6m.puestoKeys.length} puestos`}     color={COLOR_PROG} />
+                        <KpiCard icon="✅" label="Cobertura 6m"       value={`${metricas6m.pctCub}%`}             sub="horas cubiertas vs programadas"                color={COLOR_TRAB} />
+                        <KpiCard icon="⏱️" label="Hs programadas 6m"  value={metricas6m.totProg.toLocaleString()} sub="últimos 6 meses"                               color={COLORS[4]} />
+                        <KpiCard icon="❌" label="Hs no cubiertas 6m" value={metricas6m.totNoCub.toLocaleString()} sub="ausencias no reemplazadas"                   color={COLOR_AUS} />
+                        <KpiCard icon="📍" label="Clientes"           value={metricas6m.cliKeys.length}           sub={`${objetivos.length} objetivos`}               color={COLORS[3]} />
+                        <KpiCard icon="📊" label="Período"            value={meses.length}                        sub={`${meses[0].label} — ${meses[meses.length-1].label}`} color={COLORS[5]} />
                     </div>
 
-                    {/* Horas programadas vs cubiertas */}
+                    {/* ── Sección A: Métricas generales ── */}
+                    <div className="dg-section-title">📊 Métricas generales — evolución mensual</div>
                     <div className="dg-charts-row dg-charts-row--3">
-                        <ChartCard titulo="📊 Horas programadas vs cubiertas">
+                        <ChartCard titulo="⏱️ Horas a cubrir">
                             <ResponsiveContainer width="100%" height={220}>
-                                <BarChart data={metricas6m.porMes} margin={{ top: 28, right: 10, left: -10, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <BarChart data={metricas6m.porMes} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                                     <YAxis tick={{ fontSize: 10 }} />
-                                    <Tooltip content={<CustomTooltip suffix="hs" />} />
-                                    <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                    <Bar dataKey="prog" name="Programadas" fill={COLOR_PROG} radius={[4,4,0,0]} />
-                                    <Bar dataKey="trab" name="Cubiertas"   fill={COLOR_TRAB} radius={[4,4,0,0]} />
+                                    <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                    <Bar dataKey="prog" name="Hs a cubrir" fill={COLOR_PROG} radius={[4,4,0,0]}>
+                                        <LabelList dataKey="prog" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} formatter={v => v > 0 ? v : ""} />
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </ChartCard>
 
-                        <ChartCard titulo="🚫 Horas no cubiertas por mes">
+                        <ChartCard titulo="💰 Horas facturadas">
                             <ResponsiveContainer width="100%" height={220}>
-                                <BarChart data={metricas6m.porMes} margin={{ top: 28, right: 10, left: -10, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <BarChart data={metricas6m.porMes} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                                     <YAxis tick={{ fontSize: 10 }} />
-                                    <Tooltip content={<CustomTooltip suffix="hs" />} />
-                                    <Bar dataKey="nocub" name="No cubiertas" fill={COLOR_AUS} radius={[4,4,0,0]} />
+                                    <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                    <Bar dataKey="fact" name="Hs facturadas" fill={COLOR_TRAB} radius={[4,4,0,0]}>
+                                        <LabelList dataKey="fact" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} formatter={v => v > 0 ? v : ""} />
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </ChartCard>
 
-                        <ChartCard titulo="📉 Ausentismo % por mes">
+                        <ChartCard titulo="🚫 Horas no cubiertas">
                             <ResponsiveContainer width="100%" height={220}>
-                                <LineChart data={metricas6m.porMes} margin={{ top: 28, right: 20, left: -10, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <BarChart data={metricas6m.porMes} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                    <YAxis tick={{ fontSize: 10 }} />
+                                    <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                    <Bar dataKey="nocub" name="No cubiertas" fill={COLOR_AUS} radius={[4,4,0,0]}>
+                                        <LabelList dataKey="nocub" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} formatter={v => v > 0 ? v : ""} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartCard>
+
+                        <ChartCard titulo="📉 Ausentismo (días)">
+                            <ResponsiveContainer width="100%" height={220}>
+                                <BarChart data={metricas6m.porMes} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                    <YAxis tick={{ fontSize: 10 }} />
+                                    <Tooltip content={<CustomTooltip suffix=" días" />} />
+                                    <Bar dataKey="ausDias" name="Ausentismo" fill={COLOR_AUS} radius={[4,4,0,0]}>
+                                        <LabelList dataKey="ausDias" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} formatter={v => v > 0 ? v : ""} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartCard>
+
+                        <ChartCard titulo="📉 Ausentismo % (días perdidos / días posibles)">
+                            {(() => {
+                                const vals = metricas6m.porMes.map(m => m.ausPctDias).filter(v => v > 0);
+                                const prom = vals.length > 0
+                                    ? parseFloat((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1))
+                                    : 0;
+                                return (
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <LineChart data={metricas6m.porMes} margin={{ top: 22, right: 48, left: -10, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                            <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, "auto"]} />
+                                            <Tooltip formatter={v => [`${v}%`, "% Ausentismo"]} />
+                                            {prom > 0 && (
+                                                <ReferenceLine y={prom} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="5 3"
+                                                    label={{ value: `Prom ${prom}%`, position: "right", fontSize: 10, fontWeight: 700, fill: "#b45309" }} />
+                                            )}
+                                            <Line type="monotone" dataKey="ausPctDias" name="% Ausentismo" stroke={COLOR_AUS} strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }}
+                                                label={{ position: "top", fontSize: 11, fontWeight: 700, fill: COLOR_AUS, formatter: v => v > 0 ? `${v}%` : "" }} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                );
+                            })()}
+                        </ChartCard>
+
+                        <ChartCard titulo="🌴 Vacaciones (días)">
+                            <ResponsiveContainer width="100%" height={220}>
+                                <BarChart data={metricas6m.porMes} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                    <YAxis tick={{ fontSize: 10 }} />
+                                    <Tooltip content={<CustomTooltip suffix=" días" />} />
+                                    <Bar dataKey="vacDias" name="Vacaciones" fill={COLORS[5]} radius={[4,4,0,0]}>
+                                        <LabelList dataKey="vacDias" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} formatter={v => v > 0 ? v : ""} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartCard>
+
+                        <ChartCard titulo="⚡ Extras 50% (hs)">
+                            <ResponsiveContainer width="100%" height={220}>
+                                <BarChart data={metricas6m.porMes} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                    <YAxis tick={{ fontSize: 10 }} />
+                                    <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                    <Bar dataKey="ext50" name="Ext 50%" fill={COLORS[3]} radius={[4,4,0,0]}>
+                                        <LabelList dataKey="ext50" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} formatter={v => v > 0 ? v : ""} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartCard>
+
+                        <ChartCard titulo="🔥 Extras 100% (hs)">
+                            <ResponsiveContainer width="100%" height={220}>
+                                <BarChart data={metricas6m.porMes} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                    <YAxis tick={{ fontSize: 10 }} />
+                                    <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                    <Bar dataKey="ext100" name="Ext 100%" fill={COLOR_AUS} radius={[4,4,0,0]}>
+                                        <LabelList dataKey="ext100" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} formatter={v => v > 0 ? v : ""} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartCard>
+
+                        <ChartCard titulo="➕ Total extras (hs)">
+                            <ResponsiveContainer width="100%" height={220}>
+                                <BarChart data={metricas6m.porMes} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                    <YAxis tick={{ fontSize: 10 }} />
+                                    <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                    <Bar dataKey="totalExt" name="Total extras" fill={COLORS[4]} radius={[4,4,0,0]}>
+                                        <LabelList dataKey="totalExt" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} formatter={v => v > 0 ? v : ""} />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartCard>
+
+                        <ChartCard titulo="📈 % Extras vs hs trabajadas">
+                            <ResponsiveContainer width="100%" height={220}>
+                                <LineChart data={metricas6m.porMes} margin={{ top: 22, right: 20, left: -10, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                                     <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, "auto"]} />
-                                    <Tooltip formatter={v => [`${v}%`, "Ausentismo"]} />
-                                    <Line type="monotone" dataKey="ausPct" name="Ausentismo" stroke={COLOR_AUS} strokeWidth={2.5} dot={{ r: 4, fill: COLOR_AUS }} activeDot={{ r: 6 }} />
+                                    <Tooltip formatter={v => [`${v}%`, "% Extras"]} />
+                                    <Line type="monotone" dataKey="pctExt" name="% Extras" stroke={COLORS[4]} strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} label={{ position: "top", fontSize: 11, fontWeight: 700, fill: "var(--color-text)" }} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </ChartCard>
                     </div>
 
-                    {/* Evolución hs a cubrir por cliente (6 meses) */}
-                    {metricas6m.cliKeys.length > 0 && (
-                        <ChartCard titulo="🏢 Evolución hs a cubrir por cliente (6 meses)">
-                            <ResponsiveContainer width="100%" height={280}>
-                                <ComposedChart data={metricas6m.porMesCliente} margin={{ top: 28, right: 20, left: -10, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                                    <YAxis tick={{ fontSize: 10 }} />
-                                    <Tooltip />
-                                    <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                    {metricas6m.cliKeys.map((cli, i) => (
-                                        <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} radius={[4,4,0,0]} stackId="a" />
-                                    ))}
-                                </ComposedChart>
-                            </ResponsiveContainer>
-                        </ChartCard>
-                    )}
+                    {/* ── Sección B: Por cliente ── */}
+                    {metricas6m.cliKeys.length > 0 && (<>
+                        <div className="dg-section-title">🏢 Por cliente — evolución mensual</div>
 
-                    {/* Horas no cubiertas y adicionales por objetivo */}
-                    <div className="dg-charts-row dg-charts-row--3">
-                        <ChartCard titulo="⚠️ Hs no cubiertas por objetivo">
-                            {metricas6m.nocubObjData.length === 0 ? <div className="dg-empty">Sin datos</div> : (
-                                <ResponsiveContainer width="100%" height={220}>
-                                    <BarChart data={metricas6m.nocubObjData} layout="vertical" margin={{ top: 16, right: 30, left: 10, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                        <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={165} tickFormatter={v => v.length > 22 ? v.slice(0,22)+"…" : v} />
-                                        <Tooltip content={<CustomTooltip suffix="hs" />} />
-                                        <Bar dataKey="value" name="No cubiertas" fill={COLOR_AUS} radius={[0,4,4,0]} />
+                        <div className="dg-charts-row">
+                            <ChartCard titulo="📉 Ausentismo por cliente (hs)">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesCliAusHs} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        ))}
                                     </BarChart>
                                 </ResponsiveContainer>
-                            )}
-                        </ChartCard>
-                        <ChartCard titulo="➕ Hs adicionales por objetivo">
-                            {metricas6m.adicObjData.length === 0 ? <div className="dg-empty">Sin adicionales</div> : (
-                                <ResponsiveContainer width="100%" height={220}>
-                                    <BarChart data={metricas6m.adicObjData} layout="vertical" margin={{ top: 16, right: 30, left: 10, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                        <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={165} tickFormatter={v => v.length > 22 ? v.slice(0,22)+"…" : v} />
-                                        <Tooltip content={<CustomTooltip suffix="hs" />} />
-                                        <Bar dataKey="value" name="Adicionales" fill="#f59e0b" radius={[0,4,4,0]} />
-                                    </BarChart>
+                            </ChartCard>
+                            <ChartCard titulo="📉 Ausentismo por cliente (%)">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <LineChart data={metricas6m.porMesCliAusPct} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                                        <Tooltip formatter={v => [`${v}%`]} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Line key={cli} type="monotone" dataKey={cli} name={cli} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
+                                        ))}
+                                    </LineChart>
                                 </ResponsiveContainer>
-                            )}
-                        </ChartCard>
-                        <ChartCard titulo="🎯 % Cobertura por cliente (6m)">
-                            {metricas6m.cobClienteData.length === 0 ? <div className="dg-empty">Sin datos</div> : (
-                                <ResponsiveContainer width="100%" height={220}>
-                                    <BarChart data={metricas6m.cobClienteData} layout="vertical" margin={{ top: 6, right: 50, left: 10, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={165} tickFormatter={v => v.length > 22 ? v.slice(0,22)+"…" : v} />
-                                        <Tooltip formatter={(v, n, props) => [`${v}% (${props.payload.trab?.toLocaleString?.()} / ${props.payload.prog?.toLocaleString?.()} hs)`, "Cobertura"]} />
-                                        <Bar dataKey="value" name="Cobertura" radius={[0,4,4,0]}>
-                                            {metricas6m.cobClienteData.map((r, i) => <Cell key={i} fill={r.value >= 95 ? COLOR_TRAB : r.value >= 80 ? "#f59e0b" : COLOR_AUS} />)}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            )}
-                        </ChartCard>
-                    </div>
+                            </ChartCard>
+                        </div>
 
-                    {/* Personal por régimen + Capacitaciones */}
-                    <div className="dg-charts-row">
-                        <ChartCard titulo="👷 Personal por régimen">
-                            {metricas6m.regimenData.length === 0 ? <div className="dg-empty">Sin datos</div> : (
-                                <ResponsiveContainer width="100%" height={220}>
-                                    <BarChart data={metricas6m.regimenData} layout="vertical" margin={{ top: 16, right: 30, left: 10, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                        <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                                        <YAxis type="category" dataKey="name" width={140} tick={<YTickLeft axisWidth={140} maxChars={20} />} />
+                        <div className="dg-charts-row">
+                            <ChartCard titulo="⚡ Extras 50% por cliente (hs)">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesCliExt50} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                            <ChartCard titulo="🔥 Extras 100% por cliente (hs)">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesCliExt100} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                        </div>
+
+                        <div className="dg-charts-row">
+                            <ChartCard titulo="➕ Total extras por cliente (hs)">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesCliTotalExt} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                            <ChartCard titulo="📈 % Extras por cliente">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <LineChart data={metricas6m.porMesCliPctExt} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                                        <Tooltip formatter={v => [`${v}%`]} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Line key={cli} type="monotone" dataKey={cli} name={cli} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
+                                        ))}
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                        </div>
+
+                        <div className="dg-charts-row">
+                            <ChartCard titulo="👷 Personal por cliente">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesCliPersonal} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                                         <Tooltip content={<CustomTooltip suffix=" pers." />} />
-                                        <Bar dataKey="value" name="Personal" radius={[0,4,4,0]}>
-                                            {metricas6m.regimenData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                                        </Bar>
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} radius={[4,4,0,0]} />
+                                        ))}
                                     </BarChart>
                                 </ResponsiveContainer>
-                            )}
-                        </ChartCard>
-                        <ChartCard titulo="🎓 Capacitaciones por categoría">
-                            {metricas6m.capData.length === 0 ? <div className="dg-empty">Sin capacitaciones</div> : (
-                                <ResponsiveContainer width="100%" height={220}>
-                                    <BarChart data={metricas6m.capData} layout="vertical" margin={{ top: 16, right: 30, left: 10, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                        <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={165} tickFormatter={v => v.length > 22 ? v.slice(0,22)+"…" : v} />
-                                        <Tooltip content={<CustomTooltip suffix="" />} />
-                                        <Bar dataKey="value" name="Cantidad" fill="#0891b2" radius={[0,4,4,0]} />
+                            </ChartCard>
+                            <ChartCard titulo="🎯 Personal por puesto">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesPuesto} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                                        <Tooltip content={<CustomTooltip suffix=" pers." />} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.puestoKeys.map((p, i) => (
+                                            <Bar key={p} dataKey={p} name={p} fill={COLORS[i % COLORS.length]} radius={[4,4,0,0]} />
+                                        ))}
                                     </BarChart>
                                 </ResponsiveContainer>
-                            )}
-                        </ChartCard>
-                    </div>
+                            </ChartCard>
+                        </div>
 
-                    {/* Hs cubiertas vs facturadas + capacitación */}
-                    <ChartCard titulo="🔵 Hs cubiertas vs facturadas + capacitación">
-                        <ResponsiveContainer width="100%" height={220}>
-                            <BarChart data={metricas6m.porMes} margin={{ top: 28, right: 10, left: -10, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                                <YAxis tick={{ fontSize: 10 }} />
-                                <Tooltip formatter={(v, name) => [`${v} hs`, name]} />
-                                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                <Bar dataKey="trab" name="Hs cubiertas" fill={COLOR_TRAB} radius={[4,4,0,0]} />
-                                <Bar dataKey="prog"     name="Hs facturadas"    fill={COLOR_PROG}  stackId="fc" radius={[0,0,0,0]} />
-                                <Bar dataKey="capHoras" name="Hs capacitación"  fill="#0891b2"     stackId="fc" radius={[4,4,0,0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </ChartCard>
+                        <div className="dg-charts-row">
+                            <ChartCard titulo="🚫 Hs no cubiertas por cliente">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesCliNocub} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                            <ChartCard titulo="💰 Facturación por cliente (hs)">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesCliFact} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                        </div>
 
-                    {/* Horas adicionales por mes */}
-                    <div className="dg-charts-row">
-                        <ChartCard titulo="📅 Horas adicionales por mes">
-                            <ResponsiveContainer width="100%" height={220}>
-                                <BarChart data={metricas6m.porMes} margin={{ top: 28, right: 10, left: -10, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                                    <YAxis tick={{ fontSize: 10 }} />
-                                    <Tooltip content={<CustomTooltip suffix="hs" />} />
-                                    <Bar dataKey="adicionales" name="Hs adicionales" fill="#f59e0b" radius={[4,4,0,0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </ChartCard>
-
-                        <ChartCard titulo="📋 Horas cubiertas vs facturadas con eficiencia">
-                            <ResponsiveContainer width="100%" height={220}>
-                                <ComposedChart data={metricas6m.porMes} margin={{ top: 28, right: 20, left: -10, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                                    <YAxis yAxisId="hs" tick={{ fontSize: 10 }} />
-                                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
-                                    <Tooltip formatter={(v, name) => name === "Eficiencia" ? [`${v}%`, name] : [`${v} hs`, name]} />
-                                    <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                    <Bar yAxisId="hs" dataKey="prog" name="Facturadas" fill={COLOR_PROG} radius={[4,4,0,0]} />
-                                    <Bar yAxisId="hs" dataKey="trab" name="Cubiertas"  fill={COLOR_TRAB} radius={[4,4,0,0]} />
-                                    <Line yAxisId="pct" type="monotone" dataKey={d => d.prog > 0 ? Math.round(d.trab / d.prog * 100) : 0} name="Eficiencia" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 2" />
-                                </ComposedChart>
-                            </ResponsiveContainer>
-                        </ChartCard>
-                    </div>
-            </>
+                        <div className="dg-charts-row">
+                            <ChartCard titulo="➕ Hs adicionales por cliente">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <BarChart data={metricas6m.porMesCliAdic} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} />
+                                        <Tooltip content={<CustomTooltip suffix=" hs" />} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                            <ChartCard titulo="✅ % Cobertura por cliente">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <LineChart data={metricas6m.porMesCliCobPct} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                                        <Tooltip formatter={v => [`${v}%`]} />
+                                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Line key={cli} type="monotone" dataKey={cli} name={cli} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
+                                        ))}
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </ChartCard>
+                        </div>
+                    </>)}
+            </>}
 
         </div>
     );

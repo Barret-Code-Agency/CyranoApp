@@ -1,7 +1,7 @@
 // src/screens/ProgramacionServiciosScreen.jsx
 // Planilla de programación de servicios — Programado vs Real
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { useAppData }       from "../../context/AppDataContext";
@@ -17,8 +17,11 @@ import { FERIADOS_ARG } from "../../utils/feriados";
 import { fmtObjetivo } from "../../utils/formatters";
 
 // ── Colecciones Firestore ────────────────────────────────────────────────────────
-const COL_PROG   = "programacionServicios";
+const COL_PROG    = "programacionServicios";
 const COL_LEGAJOS = "legajos";
+
+// ── Constantes ──────────────────────────────────────────────────────────────────
+const POPUP_MARGIN_PX = 8;  // margen mínimo desde el borde del viewport para el popup de celda
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 // AUS_CODES, HORAS_KEYS, esLaboral, horasDeValor, normalizarTurno, getDias, fmtKey importados desde periodoUtils
@@ -60,9 +63,9 @@ function CeldaPopup({ top, left, valorActual, onSelect, onClose }) {
         const vh = window.innerHeight;
         let adjLeft = left;
         let adjTop  = top;
-        if (left + r.width  > vw - 8) adjLeft = vw - r.width  - 8;
-        if (top  + r.height > vh - 8) adjTop  = top - r.height - 8;
-        if (adjLeft < 8) adjLeft = 8;
+        if (left + r.width  > vw - POPUP_MARGIN_PX) adjLeft = vw - r.width  - POPUP_MARGIN_PX;
+        if (top  + r.height > vh - POPUP_MARGIN_PX) adjTop  = top - r.height - POPUP_MARGIN_PX;
+        if (adjLeft < POPUP_MARGIN_PX) adjLeft = POPUP_MARGIN_PX;
         setPos({ top: adjTop, left: adjLeft });
     }, [top, left]);
 
@@ -1147,7 +1150,7 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
 
     const horasFila = (p) => {
         const data = p[modo] || {};
-        return Math.round(dias.reduce((s, d) => s + horasDeValor(data[fmtKey(d)] || ""), 0) * 10) / 10;
+        return Math.round(dias.reduce((s, d) => s + horasDeValor(normalizarTurno(data[fmtKey(d)] || "")), 0) * 10) / 10;
     };
 
     const horasDiaDoc = (dia) => {
@@ -1323,6 +1326,19 @@ function ObjetivoEditableCard({ docInicial, dias, modo = "programado", objetivos
                                         {Math.round(dias.reduce((s, d) => s + (horasDiaDoc(d) ?? 0), 0) * 10) / 10} hs
                                     </td>
                                 </tr>
+                                {modo === "real" && (
+                                    <tr className="ps-tfoot ps-tfoot--real">
+                                        <td colSpan={3} className="ps-tfoot-label">Hs. reales totales</td>
+                                        {dias.map(dia => {
+                                            const key = fmtKey(dia);
+                                            const v = Math.round(personal.reduce((s, p) => s + horasDeValor(normalizarTurno((p.real || {})[key] || "")), 0) * 10) / 10;
+                                            return <td key={key} className="ps-tfoot-cel">{v || "—"}</td>;
+                                        })}
+                                        <td className="ps-tfoot-total">
+                                            {Math.round(personal.reduce((s, p) => s + horasFila(p), 0) * 10) / 10} hs
+                                        </td>
+                                    </tr>
+                                )}
                             </tfoot>
                         </table>
                         {popup && (

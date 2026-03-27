@@ -11,7 +11,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import { db } from "../firebase";
 import { otorgarTokens, tokensParaCapacitacion } from "../utils/tokenService";
-import { EMPRESA_ID_FALLBACK } from "../config/constants";
+import { EMPRESA_ID_FALLBACK, LS } from "../config/constants";
 
 // ── localStorage helpers (solo para config y sesión activa) ──────────────────
 const load = (key, fallback) => {
@@ -53,9 +53,9 @@ const AppDataContext = createContext(null);
 export function AppDataProvider({ children, uid }) {
 
     // ── Estado LOCAL (config + sesión activa — no necesita sync) ────────────
-    const [config,          setConfig]          = useState(() => load("cyrano_config", DEFAULT_CONFIG));
-    const [jornadaActiva,   setJornadaActiva]   = useState(() => load("cyrano_jornada_activa", null));
-    const [actividadActiva, setActividadActiva] = useState(() => load("cyrano_actividad_activa", null));
+    const [config,          setConfig]          = useState(() => load(LS.CONFIG,    DEFAULT_CONFIG));
+    const [jornadaActiva,   setJornadaActiva]   = useState(() => load(LS.JORNADA,  null));
+    const [actividadActiva, setActividadActiva] = useState(() => load(LS.ACTIVIDAD, null));
 
     // ── Estado FIRESTORE (tiempo real, persiste en la nube) ──────────────────
     const [jornadas,      setJornadas]      = useState([]);
@@ -84,9 +84,9 @@ export function AppDataProvider({ children, uid }) {
     const empresaIdRef = useRef(EMPRESA_ID_FALLBACK);
 
     // ── Persist local ────────────────────────────────────────────────────────
-    useEffect(() => { save("cyrano_config",           config);          }, [config]);
-    useEffect(() => { save("cyrano_jornada_activa",   jornadaActiva);   }, [jornadaActiva]);
-    useEffect(() => { save("cyrano_actividad_activa", actividadActiva); }, [actividadActiva]);
+    useEffect(() => { save(LS.CONFIG,    config);         }, [config]);
+    useEffect(() => { save(LS.JORNADA,  jornadaActiva);  }, [jornadaActiva]);
+    useEffect(() => { save(LS.ACTIVIDAD, actividadActiva); }, [actividadActiva]);
 
     // ── Suscripciones Firestore — arrancan cuando Firebase confirma sesión ────
     useEffect(() => {
@@ -431,12 +431,6 @@ export function AppDataProvider({ children, uid }) {
             if (found) return found[1];
         }
 
-        // DEBUG — quitar en producción
-        if (Object.keys(planesSuper).length > 0) {
-            console.warn("[getPlanSupervisor] No match para:", emailOrNombre,
-                "| Claves disponibles:", Object.keys(planesSuper));
-        }
-
         return null;
     };
 
@@ -529,8 +523,8 @@ export function AppDataProvider({ children, uid }) {
         } catch (err) {
             console.error("[Firestore] cerrarJornada:", err);
             // Fallback: guardar local y encolar para subir después
-            const locales = load("cyrano_jornadas_pendientes", []);
-            save("cyrano_jornadas_pendientes", [cerrada, ...locales]);
+            const locales = load(LS.PENDIENTES, []);
+            save(LS.PENDIENTES, [cerrada, ...locales]);
             setJornadas(p => [cerrada, ...p]);
         }
         setJornadaActiva(null);
@@ -541,14 +535,14 @@ export function AppDataProvider({ children, uid }) {
     // Subir jornadas pendientes cuando vuelve la conexión
     useEffect(() => {
         if (!dbReady) return;
-        const pendientes = load("cyrano_jornadas_pendientes", []);
+        const pendientes = load(LS.PENDIENTES, []);
         if (!pendientes.length) return;
         (async () => {
             try {
                 for (const j of pendientes) {
                     await addDoc(collection(db, "jornadas"), { ...j, empresaId: empresaIdRef.current });
                 }
-                save("cyrano_jornadas_pendientes", []);
+                save(LS.PENDIENTES, []);
             } catch (err) {
                 console.warn("[Sync] No se pudieron subir pendientes:", err);
             }

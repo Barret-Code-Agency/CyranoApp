@@ -6,12 +6,11 @@ import { useState, useEffect, useMemo } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
-import { getDias, fmtKey, DIAS_ES, MESES_ES, MESES_CORTO } from "../../utils/periodoUtils";
+import { getDias, fmtKey, DIAS_ES, MESES_ES, MESES_CORTO, REAL_AUS_CODES } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 import "../../styles/AusentismoScreen.css";
 
-// Códigos que generan ausentismo (sin Fco, Com, FER, Vac)
-const AUS_CODES = ["Enf", "Art", "Asa", "Aca", "Sus", "Lic"];
+// REAL_AUS_CODES con significado real (Enf, Art, Asa, Aca, Sus, Lic) importados desde periodoUtils
 const AUS_META  = {
     Enf: { label: "Enf",  desc: "Enfermedad",         bg: "#fbbf24", fg: "#000" },
     Art: { label: "ART",  desc: "Accidente trabajo",   bg: "#0369a1", fg: "#fff" },
@@ -44,7 +43,7 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                         .filter(d => d.año === añoSel && d.mes === mesSel)
                 );
             })
-            .catch(console.error)
+            .catch(e => console.error("[AusentismoScreen] Error cargando programación:", e))
             .finally(() => setCargando(false));
     }, [empresaId, añoSel, mesSel]);
 
@@ -74,7 +73,7 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                 }
                 const data = p.real || p.programado || {};
                 Object.entries(data).forEach(([key, val]) => {
-                    if (AUS_CODES.includes(val)) {
+                    if (REAL_AUS_CODES.includes(val)) {
                         byLeg[leg].dias[key] = val;
                     }
                 });
@@ -121,7 +120,7 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
 
     // ── Estadísticas globales ─────────────────────────────────────────────────
     const stats = useMemo(() => {
-        const porcod = Object.fromEntries(AUS_CODES.map(c => [c, 0]));
+        const porcod = Object.fromEntries(REAL_AUS_CODES.map(c => [c, 0]));
         let total = 0;
         filasRaw.forEach(f => {
             Object.values(f.dias).forEach(v => {
@@ -190,7 +189,7 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                             <div className="aus-indice-chip-val" style={{ color: "#f1f5f9" }}>{stats.diasLab}</div>
                             <div className="aus-indice-chip-sub">{MESES_ES[mesSel-1]} {añoSel}</div>
                         </div>
-                        {AUS_CODES.filter(c => stats.porcod[c] > 0).map(c => (
+                        {REAL_AUS_CODES.filter(c => stats.porcod[c] > 0).map(c => (
                             <div key={c} className="aus-indice-chip">
                                 <div className="aus-indice-chip-label">{AUS_META[c].desc}</div>
                                 <div className="aus-indice-chip-val" style={{ color: AUS_META[c].bg }}>
@@ -231,7 +230,7 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                                                 </th>
                                             );
                                         })}
-                                        {AUS_CODES.map(c => (
+                                        {REAL_AUS_CODES.map(c => (
                                             <th key={c} className="aus-th-sum"
                                                 style={{ background: AUS_META[c].bg, color: AUS_META[c].fg }}>
                                                 {AUS_META[c].label}
@@ -242,7 +241,7 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                                 </thead>
                                 <tbody>
                                     {filas.map(f => {
-                                        const cnt = Object.fromEntries(AUS_CODES.map(c => [c, 0]));
+                                        const cnt = Object.fromEntries(REAL_AUS_CODES.map(c => [c, 0]));
                                         let tot = 0;
                                         dias.forEach(d => {
                                             const v = f.dias[fmtKey(d)];
@@ -265,7 +264,7 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                                                         </td>
                                                     );
                                                 })}
-                                                {AUS_CODES.map(c => (
+                                                {REAL_AUS_CODES.map(c => (
                                                     <td key={c} className="aus-td-sum">{cnt[c] || ""}</td>
                                                 ))}
                                                 <td className="aus-td-sum aus-td-total">{tot}</td>
@@ -278,12 +277,12 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                                         <td colSpan={2} className="aus-tfoot-label">Totales por día</td>
                                         {dias.map(d => {
                                             const key = fmtKey(d);
-                                            const cnt = filas.filter(f => AUS_CODES.includes(f.dias[key])).length;
+                                            const cnt = filas.filter(f => REAL_AUS_CODES.includes(f.dias[key])).length;
                                             return (
                                                 <td key={key} className="aus-tfoot-cel">{cnt || ""}</td>
                                             );
                                         })}
-                                        {AUS_CODES.map(c => (
+                                        {REAL_AUS_CODES.map(c => (
                                             <td key={c} className="aus-tfoot-sum"
                                                 style={{ background: AUS_META[c].bg, color: AUS_META[c].fg }}>
                                                 {stats.porcod[c] || ""}
@@ -302,7 +301,7 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                             <div className="aus-stats-titulo">Detalle por motivo — {MESES_ES[mesSel-1]} {añoSel}</div>
                         </div>
                         <div className="aus-stats-grid">
-                            {AUS_CODES.map(c => (
+                            {REAL_AUS_CODES.map(c => (
                                 <div key={c} className="aus-stat-card"
                                     style={{ borderLeft: `4px solid ${AUS_META[c].bg}` }}>
                                     <div className="aus-stat-label">{AUS_META[c].label}</div>

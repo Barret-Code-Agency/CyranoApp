@@ -34,7 +34,10 @@ export function fmtKey(d) {
 
 // ── Códigos de ausentismo / no-laboral ───────────────────────────────────────
 // Vac: vacaciones  |  Enf: enfermedad  |  Art: accidente  |  Asa/Aca/Sus/Lic: licencias
-export const AUS_CODES = ["Vac","Enf","Art","Asa","Aca","Sus","Lic"];
+export const AUS_CODES      = ["Vac","Enf","Art","Asa","Aca","Sus","Lic"];
+// Ausentismo REAL (excluye vacaciones y francos que no son ausentismo disciplinario)
+export const REAL_AUS_CODES = ["Enf","Art","Asa","Aca","Sus","Lic"];
+
 
 // Días no-laborales (franco, compuesto, feriado, licencia) — no generan horas
 const NO_LABORAL_CODES = ["Fco","Com","FER","Lic"];

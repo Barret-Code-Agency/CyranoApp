@@ -4,8 +4,9 @@
 import { useState, useEffect } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
-import { MESES_CORTO as MESES_ES } from "../../utils/periodoUtils";
+import { MESES_CORTO as MESES_ES, DIAS_ES, MESES_ES as MESES_LARGO } from "../../utils/periodoUtils";
 import { useWhatsApp } from "../../hooks/useWhatsApp";
+import { excelDateToJS } from "../../utils/dateUtils";
 import { useActividadesSemana } from "../../hooks/useActividadesSemana";
 import { buildResumenDiario } from "../../utils/whatsapp";
 import { useAuth }              from "../../context/AuthContext";
@@ -35,9 +36,7 @@ import "../../styles/ConsolidadoScreen.css";
 import "../../styles/SupervisorHome.css";
 
 // ── Calendario semanal ─────────────────────────────────────────────────────
-const DIAS_ES   = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MESES_LARGO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-                     "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+// DIAS_ES y MESES_LARGO importados desde periodoUtils
 
 function PeriodoCard({ icono, titulo, onVer }) {
     const hoy = new Date();
@@ -88,7 +87,7 @@ function CalendarioSemanal({ actividades = {}, legajos = [] }) {
         let dd, mm;
         const n = Number(p.nacimiento);
         if (typeof p.nacimiento === "number" || (n > 20000 && n < 60000 && !isNaN(n))) {
-            const dt = new Date((n - 25569) * 86400000);
+            const dt = excelDateToJS(n);
             dd = dt.getUTCDate(); mm = dt.getUTCMonth() + 1;
         } else {
             const s = String(p.nacimiento);

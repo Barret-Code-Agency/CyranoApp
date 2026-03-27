@@ -10,14 +10,14 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import "./ProgramacionServiciosScreen.css";
 import "./ControlClienteScreen.css";
-import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES, AUS_CODES, HORAS_KEYS, horasDeValor, normalizarTurno, r1 } from "../../utils/periodoUtils";
+import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES, REAL_AUS_CODES, HORAS_KEYS, horasDeValor, normalizarTurno, r1 } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 
-// ── Colecciones Firestore ─────────────────────────────────────────────────────
-const COL_PROG = "programacionServicios";
-
 // ── Constantes ───────────────────────────────────────────────────────────────────
-// DIAS_ES, MESES_ES, OPCIONES, AUS_CODES, HORAS_KEYS, horasDeValor, r1, getDias, fmtKey importados desde periodoUtils
+const COL_PROG        = "programacionServicios";
+const JPEG_QUALITY    = 0.95;   // calidad de imagen para PDF
+const DOWNLOAD_DELAY  = 300;    // ms entre descargas consecutivas (evita colisiones)
+// DIAS_ES, MESES_ES, OPCIONES, REAL_AUS_CODES, HORAS_KEYS, horasDeValor, r1, getDias, fmtKey importados desde periodoUtils
 
 function CeldaContenido({ val, op }) {
     if (!val) return <span className="ps-celda-vacio">—</span>;
@@ -92,12 +92,12 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
             if (fmt === "jpg") {
                 const a = document.createElement("a");
                 a.download = `${nombre}.jpg`;
-                a.href = canvas.toDataURL("image/jpeg", 0.95);
+                a.href = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
                 a.click();
             } else {
                 const w = canvas.width, h = canvas.height;
                 const pdf = new jsPDF({ orientation: w > h ? "l" : "p", unit: "px", format: [w, h] });
-                pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, w, h);
+                pdf.addImage(canvas.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, w, h);
                 pdf.save(`${nombre}.pdf`);
             }
         } finally { setDescargando(false); }
@@ -114,9 +114,9 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                     const canvas = conMargenes(raw);
                     const a = document.createElement("a");
                     a.download = `${nombreArchivo(d)}.jpg`;
-                    a.href = canvas.toDataURL("image/jpeg", 0.95);
+                    a.href = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
                     a.click();
-                    await new Promise(r => setTimeout(r, 300));
+                    await new Promise(r => setTimeout(r, DOWNLOAD_DELAY));
                 }
             } else {
                 let pdf = null;
@@ -131,7 +131,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                     } else {
                         pdf.addPage([w, h], ori);
                     }
-                    pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, w, h);
+                    pdf.addImage(canvas.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, w, h);
                 }
                 if (pdf) pdf.save(`ControlCliente ${MESES_ES[mes - 1]} ${año}.pdf`);
             }
@@ -155,7 +155,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
 
     const ausentismoDia = (personal, dia) => {
         const key = fmtKey(dia);
-        return personal.filter(p => AUS_CODES.includes((p.real || p.programado || {})[key] || "")).length;
+        return personal.filter(p => REAL_AUS_CODES.includes((p.real || p.programado || {})[key] || "")).length;
     };
 
     const hsCapacitacionDia = (personal, dia) => {
@@ -195,8 +195,16 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
 
                     const totalReales     = r1(dias.reduce((s, dia) => s + hsRealesDia(personal, dia), 0));
                     const totalACubrir    = r1(dias.reduce((s, dia) => s + (horasDiaDoc(dia, hc, diasEsp) ?? 0), 0));
-                    const totalNoCubier   = r1(Math.max(0, totalACubrir - totalReales));
-                    const totalAdicional  = r1(Math.max(0, totalReales - totalACubrir));
+                    const totalNoCubier   = r1(dias.reduce((s, dia) => {
+                        const real   = hsRealesDia(personal, dia);
+                        const cubrir = horasDiaDoc(dia, hc, diasEsp) ?? 0;
+                        return s + Math.max(0, cubrir - real);
+                    }, 0));
+                    const totalAdicional  = r1(dias.reduce((s, dia) => {
+                        const real   = hsRealesDia(personal, dia);
+                        const cubrir = horasDiaDoc(dia, hc, diasEsp) ?? 0;
+                        return s + Math.max(0, real - cubrir);
+                    }, 0));
                     const totalFacturar       = r1(totalACubrir - totalNoCubier + totalAdicional);
                     const totalCapacitacion   = r1(dias.reduce((s, dia) => s + hsCapacitacionDia(personal, dia), 0));
                     const totalAusentismo     = dias.reduce((s, dia) => s + ausentismoDia(personal, dia), 0);

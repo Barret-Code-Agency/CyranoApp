@@ -1,6 +1,6 @@
 // src/screens/Diagramas14x14Screen.jsx
 import { useState, useEffect, useMemo } from "react";
-import { collection, getDocs, doc, setDoc, updateDoc, query, where } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAppData } from "../../context/AppDataContext";
 import { seedDiagramas14x14, seedAsignarGrupos } from "../../utils/seedFirestoreDiagramas";
@@ -14,7 +14,13 @@ function normNombre(s) {
         .replace(/\s+/g, " ").trim();
 }
 
-const DIAS_ES  = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];  // 2 letras — específico de este componente
+const DIAS_ES  = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];  // 2 letras — intencional, distinto a periodoUtils (3 letras)
+
+// ── Constantes del período ────────────────────────────────────────────────────
+const AÑO_MIN           = 2025;  // primer año disponible en el selector
+const AÑO_MAX           = 2035;  // último año disponible (10 años hacia adelante)
+const DIA_INICIO_PERIODO = 24;   // los turnos arrancan el día 24 del mes anterior
+const DIA_FIN_PERIODO    = 23;   // y terminan el 23 del mes actual
 
 function fmtDate(iso) {
     const [y, m, d] = iso.split("-");
@@ -35,6 +41,12 @@ export default function Diagramas14x14Screen({ onBack }) {
     const [importRes, setImportRes] = useState(null);
     const [grupoSel,  setGrupoSel]  = useState(null); // grupo activo
     const [vistaTab,  setVistaTab]  = useState("personas"); // "personas" | "francos"
+    const [vistaMain, setVistaMain] = useState("grupos");   // "grupos" | "asignaciones_mes"
+    // Asignaciones mensuales
+    const [mesSel,        setMesSel]        = useState(() => { const h=new Date(); return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}`; });
+    const [asigMes,       setAsigMes]       = useState({}); // legajo → "A"|"B"|""
+    const [guardandoAsig, setGuardandoAsig] = useState(false);
+    const [asigGuardado,  setAsigGuardado]  = useState(false);
     const [mesVista,  setMesVista]  = useState(() => {
         const h = new Date();
         return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,"0")}`;
@@ -58,13 +70,13 @@ export default function Diagramas14x14Screen({ onBack }) {
         })();
     }, [empresaId]);
 
-    // ── Seed inicial ─────────────────────────────────────────────────────────
+    // ── Seed / actualizar diagramas ───────────────────────────────────────────
     const handleSeed = async () => {
-        if (!window.confirm("¿Cargar los diagramas 14x14 en Firestore? Solo hacer una vez.")) return;
+        if (!window.confirm("¿Actualizar los diagramas 14x14 en Firestore? Esto sobreescribe los grupos A y B con los datos del archivo.")) return;
         setSeeding(true);
         await seedDiagramas14x14(empresaId);
         // recargar
-        const snap = await getDocs(collection(db, "diagramas14x14"));
+        const snap = await getDocs(query(collection(db, "diagramas14x14"), where("empresaId", "==", empresaId)));
         setGrupos(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
         setSeeding(false);
     };
@@ -111,6 +123,55 @@ export default function Diagramas14x14Screen({ onBack }) {
         ));
     };
 
+    // ── Asignaciones mensuales ────────────────────────────────────────────────
+    const cargarAsigMes = async (mes) => {
+        try {
+            const snap = await getDoc(doc(db, "grupoAsignaciones14x14", `${empresaId}_${mes}`));
+            if (snap.exists()) {
+                setAsigMes(snap.data().asignaciones || {});
+            } else {
+                // Precarga con los grupos actuales de los legajos como base
+                const base = {};
+                legajos.forEach(l => {
+                    if (l.grupoTurno14) base[String(l.legajo)] = l.grupoTurno14;
+                });
+                setAsigMes(base);
+            }
+        } catch (_) { setAsigMes({}); }
+        setAsigGuardado(false);
+    };
+
+    const handleMesSelChange = async (mes) => {
+        setMesSel(mes);
+        await cargarAsigMes(mes);
+    };
+
+    const handleAbrirAsigMes = async () => {
+        setVistaMain("asignaciones_mes");
+        await cargarAsigMes(mesSel);
+    };
+
+    const toggleAsigLegajo = (legajo, grupo) => {
+        setAsigMes(prev => ({
+            ...prev,
+            [String(legajo)]: prev[String(legajo)] === grupo ? "" : grupo,
+        }));
+        setAsigGuardado(false);
+    };
+
+    const guardarAsigMes = async () => {
+        setGuardandoAsig(true);
+        const [y, m] = mesSel.split("-").map(Number);
+        await setDoc(doc(db, "grupoAsignaciones14x14", `${empresaId}_${mesSel}`), {
+            empresaId,
+            año: y,
+            mes: m,
+            asignaciones: asigMes,
+        });
+        setGuardandoAsig(false);
+        setAsigGuardado(true);
+    };
+
     // ── Personas del grupo seleccionado ───────────────────────────────────────
     const personasGrupo = useMemo(() => {
         if (!grupoSel) return [];
@@ -147,7 +208,7 @@ export default function Diagramas14x14Screen({ onBack }) {
     // ── Años disponibles ──────────────────────────────────────────────────────
     const mesesDisp = useMemo(() => {
         const meses = [];
-        for (let y = 2025; y <= 2028; y++) {
+        for (let y = AÑO_MIN; y <= AÑO_MAX; y++) {
             for (let m = 1; m <= 12; m++) {
                 meses.push(`${y}-${String(m).padStart(2,"0")}`);
             }
@@ -162,13 +223,17 @@ export default function Diagramas14x14Screen({ onBack }) {
         <div className="d14-root">
             {/* Header */}
             <header className="d14-header">
-                {grupos.length === 0 && (
-                    <button className="d14-btn-seed" onClick={handleSeed} disabled={seeding}>
-                        {seeding ? "Cargando..." : "⬆ Cargar datos iniciales"}
-                    </button>
-                )}
+                <button className="d14-btn-seed" onClick={handleSeed} disabled={seeding}>
+                    {seeding ? "Actualizando..." : "⬆ Actualizar diagramas"}
+                </button>
                 <button className="d14-btn-import" onClick={handleImportarGrupos} disabled={importing}>
                     {importing ? "Importando..." : "⬇ Importar grupos del diagrama"}
+                </button>
+                <button
+                    className={`d14-btn-import ${vistaMain === "asignaciones_mes" ? "d14-btn--active" : ""}`}
+                    onClick={() => vistaMain === "asignaciones_mes" ? setVistaMain("grupos") : handleAbrirAsigMes()}
+                >
+                    📅 Asignaciones por mes
                 </button>
                 {importRes && (
                     <span className="d14-import-res">
@@ -178,7 +243,65 @@ export default function Diagramas14x14Screen({ onBack }) {
                 )}
             </header>
 
-            <div className="d14-body">
+            {/* ── Panel: Asignaciones por mes ─────────────────────────────── */}
+            {vistaMain === "asignaciones_mes" && (
+                <div className="d14-asig-panel">
+                    <div className="d14-asig-toolbar">
+                        <label className="d14-asig-label">Mes:</label>
+                        <select className="d14-asig-sel" value={mesSel}
+                            onChange={e => handleMesSelChange(e.target.value)}>
+                            {mesesDisp.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <button className="d14-btn-seed" onClick={guardarAsigMes} disabled={guardandoAsig}>
+                            {guardandoAsig ? "Guardando..." : "💾 Guardar"}
+                        </button>
+                        {asigGuardado && <span className="d14-import-res">✓ Guardado</span>}
+                    </div>
+                    <div className="d14-asig-tabla-wrap">
+                        <table className="d14-asig-tabla">
+                            <thead>
+                                <tr>
+                                    <th>Legajo</th>
+                                    <th>Nombre</th>
+                                    <th>Régimen</th>
+                                    {grupos.sort((a,b)=>a.grupo.localeCompare(b.grupo)).map(g =>
+                                        <th key={g.grupo}>Grupo {g.grupo}</th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {legajos
+                                    .filter(l => l.regimen === "14 x 14 x 8" || l.regimen === "14 x 14 x 12")
+                                    .sort((a,b) => (Number(a.legajo)||0) - (Number(b.legajo)||0))
+                                    .map(l => {
+                                        const leg = String(l.legajo);
+                                        const grupoActual = asigMes[leg] || "";
+                                        return (
+                                            <tr key={l.docId}>
+                                                <td className="d14-asig-td-leg">{l.legajo}</td>
+                                                <td className="d14-asig-td-nom">{l.nombre}</td>
+                                                <td className="d14-asig-td-reg">{l.regimen}</td>
+                                                {grupos.sort((a,b)=>a.grupo.localeCompare(b.grupo)).map(g => (
+                                                    <td key={g.grupo} className="d14-asig-td-btn">
+                                                        <button
+                                                            className={`d14-asig-grupo-btn ${grupoActual === g.grupo ? "d14-asig-grupo-btn--on" : ""}`}
+                                                            onClick={() => toggleAsigLegajo(leg, g.grupo)}
+                                                        >
+                                                            {g.grupo}
+                                                        </button>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        );
+                                    })
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            <div className="d14-body" style={vistaMain === "asignaciones_mes" ? {display:"none"} : {}}>
                 {/* Panel izquierdo — grupos */}
                 <aside className="d14-sidebar">
                     <div className="d14-sidebar-title">Grupos</div>
