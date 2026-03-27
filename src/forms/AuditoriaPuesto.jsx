@@ -5,6 +5,7 @@ import { useState, useMemo } from "react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAppData } from "../context/AppDataContext";
+import { useAuth } from "../context/AuthContext";
 import "./AuditoriaPuesto.css";
 
 // ── Items de auditoría agrupados ─────────────────────────────────────────────
@@ -100,15 +101,21 @@ function labelScore(pct) {
 }
 
 // ── Componente ───────────────────────────────────────────────────────────────
-export default function AuditoriaPuesto({ onSave }) {
-    const { empresaNombre } = useAppData();
+export default function AuditoriaPuesto({ onSave, initialData }) {
+    const { data, empresaNombre, empresaId } = useAppData();
+    const { user } = useAuth();
+    const fromControl = !!initialData; // true = viene de un control en curso
 
-    // Encabezado
+    // Encabezado — pre-rellena desde initialData si viene de un control en curso
+    // Si viene de un control, cliente se deriva automáticamente del objetivo (nombreProyecto)
+    const clienteInicialDeObjetivo = initialData?.objetivo
+        ? (data.clienteDeObjetivo?.[initialData.objetivo] || "")
+        : "";
     const [cabecera, setCabecera] = useState({
-        objetivo:  "",
-        puesto:    "",
-        vigilador: "",
-        auditor:   "",
+        cliente:   initialData?.cliente || clienteInicialDeObjetivo,
+        objetivo:  initialData?.objetivo  || "",
+        vigilador: initialData?.vigilador || "",
+        auditor:   initialData?.auditor   || user?.name || user?.email || "",
         fecha:     new Date().toISOString().slice(0, 10),
     });
 
@@ -147,6 +154,7 @@ export default function AuditoriaPuesto({ onSave }) {
         setResultado(null);
         try {
             const payload = {
+                empresaId:      empresaId || "",
                 empresa:        empresaNombre || "",
                 ...cabecera,
                 puntosObtenidos: totalObtenido,
@@ -164,7 +172,7 @@ export default function AuditoriaPuesto({ onSave }) {
             // Reset
             setRespuestas({});
             setObservaciones("");
-            setCabecera(c => ({ ...c, objetivo: "", puesto: "", vigilador: "", auditor: "" }));
+            setCabecera(c => ({ ...c, cliente: "", objetivo: "", vigilador: "" }));
         } catch (err) {
             setResultado({ ok: false, msg: "❌ Error al guardar: " + err.message });
         } finally {
@@ -207,24 +215,71 @@ export default function AuditoriaPuesto({ onSave }) {
                         <span className="ap-seccion-title">Datos de la auditoría</span>
                     </div>
                     <div className="ap-cabecera-grid">
-                        {[
-                            { k: "objetivo",  l: "Objetivo / Servicio" },
-                            { k: "puesto",    l: "Puesto auditado"     },
-                            { k: "vigilador", l: "Nombre del vigilador"},
-                            { k: "auditor",   l: "Nombre del auditor"  },
-                            { k: "fecha",     l: "Fecha",              t: "date" },
-                        ].map(({ k, l, t = "text" }) => (
-                            <div key={k} className="ap-cab-field">
-                                <label className="ap-cab-label">{l}</label>
-                                <input
-                                    className="ap-cab-input"
-                                    type={t}
-                                    value={cabecera[k]}
-                                    onChange={e => setCabecera(c => ({ ...c, [k]: e.target.value }))}
-                                    required
-                                />
-                            </div>
-                        ))}
+                        {/* Cliente — readonly si viene del control (auto-derivado del objetivo) */}
+                        <div className="ap-cab-field">
+                            <label className="ap-cab-label">Cliente</label>
+                            <input
+                                className="ap-cab-input"
+                                type="text"
+                                value={cabecera.cliente}
+                                onChange={e => !fromControl && setCabecera(c => ({ ...c, cliente: e.target.value }))}
+                                readOnly={fromControl}
+                                style={fromControl ? { background: "var(--color-bg)", fontWeight: 600 } : {}}
+                                placeholder="Nombre del cliente..."
+                                required
+                            />
+                        </div>
+
+                        {/* Objetivo — dropdown si viene del menú, readonly si viene del control */}
+                        <div className="ap-cab-field">
+                            <label className="ap-cab-label">Objetivo</label>
+                            {fromControl ? (
+                                <input className="ap-cab-input" type="text" value={cabecera.objetivo} readOnly
+                                    style={{ background: "var(--color-bg)", fontWeight: 600 }} required />
+                            ) : (
+                                <select className="ap-cab-input" value={cabecera.objetivo}
+                                    onChange={e => {
+                                        const lbl = e.target.value;
+                                        setCabecera(c => ({
+                                            ...c,
+                                            objetivo: lbl,
+                                            cliente: data.clienteDeObjetivo?.[lbl] || c.cliente,
+                                        }));
+                                    }} required>
+                                    <option value="">— Seleccionar —</option>
+                                    {data.objetivos.map(o => <option key={o}>{o}</option>)}
+                                </select>
+                            )}
+                        </div>
+
+                        {/* Vigilador — dropdown si viene del menú, readonly si viene del control */}
+                        <div className="ap-cab-field">
+                            <label className="ap-cab-label">Nombre del vigilador</label>
+                            {fromControl ? (
+                                <input className="ap-cab-input" type="text" value={cabecera.vigilador} readOnly
+                                    style={{ background: "var(--color-bg)", fontWeight: 600 }} required />
+                            ) : (
+                                <select className="ap-cab-input" value={cabecera.vigilador}
+                                    onChange={e => setCabecera(c => ({ ...c, vigilador: e.target.value }))} required>
+                                    <option value="">— Seleccionar —</option>
+                                    {data.vigiladores.map(v => <option key={v}>{v}</option>)}
+                                </select>
+                            )}
+                        </div>
+
+                        {/* Auditor — siempre auto-relleno, readonly */}
+                        <div className="ap-cab-field">
+                            <label className="ap-cab-label">Nombre del auditor</label>
+                            <input className="ap-cab-input" type="text" value={cabecera.auditor} readOnly
+                                style={{ background: "var(--color-bg)", fontWeight: 600 }} required />
+                        </div>
+
+                        {/* Fecha — siempre readonly */}
+                        <div className="ap-cab-field">
+                            <label className="ap-cab-label">Fecha</label>
+                            <input className="ap-cab-input" type="date" value={cabecera.fecha} readOnly
+                                style={{ background: "var(--color-bg)", fontWeight: 600 }} required />
+                        </div>
                     </div>
                 </section>
 

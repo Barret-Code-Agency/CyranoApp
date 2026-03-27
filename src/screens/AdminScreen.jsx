@@ -21,7 +21,7 @@ const ADMIN_TABS = [
 ];
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export default function AdminScreen({ onExit }) {
+export default function AdminScreen({ onExit, onPlanObjetivo }) {
     // ✅ CORREGIDO: todos los datos necesarios extraídos de useAppData
     const {
         data, updateConfig,
@@ -57,6 +57,20 @@ export default function AdminScreen({ onExit }) {
                         <span>{t.icon}</span>{t.label}
                     </button>
                 ))}
+                {onPlanObjetivo && (
+                    <button onClick={onPlanObjetivo} style={{
+                        border: "1.5px solid var(--color-border)",
+                        borderRadius: 8,
+                        background: "#f8f9fc",
+                        padding:"7px 12px", fontSize:12, fontWeight:700,
+                        cursor:"pointer", whiteSpace:"nowrap",
+                        display:"flex", alignItems:"center", gap:5,
+                        color: "var(--color-muted)",
+                        transition:"all 0.12s ease",
+                    }}>
+                        <span>📍</span>Plan por objetivo
+                    </button>
+                )}
             </div>
 
             {activeTab === "dashboard" && (

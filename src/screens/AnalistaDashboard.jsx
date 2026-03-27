@@ -2,6 +2,7 @@
 // Vista de analista: dashboard filtrado por zona/objetivos asignados. Solo lectura.
 import { useState, useMemo } from "react";
 import { useAppData } from "../context/AppDataContext";
+import { isAnomaliaPositiva } from "../config/constants";
 
 const toMin = (t) => { if (!t) return 0; const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
 const diffMin = (a, b) => { if (!a || !b) return 0; let d = toMin(b) - toMin(a); if (d < 0) d += 1440; return Math.max(d, 0); };
@@ -86,7 +87,7 @@ export default function AnalistaDashboard({ user }) {
     // Stats
     const totalKm = jornadasFiltradas.reduce((s, j) => s + parseKm(j), 0);
     const totalJornadas = jornadasFiltradas.length;
-    const anomalias = controlesFiltrados.filter(c => c.anomalia === "Sí").length;
+    const anomalias = controlesFiltrados.filter(c => isAnomaliaPositiva(c.anomalia)).length;
 
     // Supervisores que operan en esta zona (tienen jornadas en período)
     const supervisores = useMemo(() => {

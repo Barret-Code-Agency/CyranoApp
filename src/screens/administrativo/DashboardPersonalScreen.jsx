@@ -132,8 +132,9 @@ function antiguedadPorFuncion(legajos) {
 
 function buildStats(legajos) {
     if (!legajos.length) return null;
-    const masc = legajos.filter(p => p.sexo === "M").length;
-    const fem  = legajos.filter(p => p.sexo === "F").length;
+    const masc  = legajos.filter(p => p.sexo === "M").length;
+    const fem   = legajos.filter(p => p.sexo === "F").length;
+    const oSexo = legajos.length - masc - fem;
     const antiguedades = legajos.map(p => calcAntiguedad(p.fechaIngreso)).filter(Boolean);
     const promAntig = antiguedades.length
         ? (antiguedades.reduce((s, a) => s + a, 0) / antiguedades.length).toFixed(1) : "—";
@@ -176,16 +177,16 @@ function buildStats(legajos) {
     // Generaciones
     const genMap = {};
     legajos.forEach(p => {
-        const g = getGeneracion(p.nacimiento);
-        if (!g) return;
+        const g = getGeneracion(p.nacimiento) || "Sin dato";
         genMap[g] = (genMap[g] || 0) + 1;
     });
-    const generaciones = ORDEN_GEN
-        .filter(g => genMap[g] !== undefined)
-        .map(g => [g, genMap[g]]);
+    const generaciones = [
+        ...ORDEN_GEN.filter(g => genMap[g] !== undefined).map(g => [g, genMap[g]]),
+        ...(genMap["Sin dato"] ? [["Sin dato", genMap["Sin dato"]]] : []),
+    ];
 
     return {
-        total: legajos.length, masc, fem, promAntig, promEdad,
+        total: legajos.length, masc, fem, oSexo, promAntig, promEdad,
         conHijos, totalHijos, tareas, proyectos, servicios, hijosDistr,
         activos, bajas, suspendidos, efectivos, prueba,
         generaciones,
@@ -220,7 +221,7 @@ function BarChart({ data, color = "var(--color-primary)", total, suffix = "" }) 
 }
 
 // ── Donut sexo ─────────────────────────────────────────────────────────────
-function DonutSexo({ masc, fem }) {
+function DonutSexo({ masc, fem, otro = 0 }) {
     const total = masc + fem;
     const deg = total ? Math.round((fem / total) * 360) : 0;
     const pctM = total ? Math.round((masc / total) * 100) : 0;
@@ -241,6 +242,12 @@ function DonutSexo({ masc, fem }) {
                     <span className="dp-donut-dot dp-donut-dot--fem" />
                     Femenino <strong>{fem}</strong>
                 </div>
+                {otro > 0 && (
+                    <div className="dp-donut-leg-item" style={{ color: "#94a3b8" }}>
+                        <span className="dp-donut-dot" style={{ background: "#cbd5e1" }} />
+                        Sin dato <strong>{otro}</strong>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -359,7 +366,7 @@ function StatsPanel({ legajos, zona }) {
                 {/* Género — compacto */}
                 <div className="dp-card dp-rrhh-small">
                     <div className="dp-card-title">Género</div>
-                    <DonutSexo masc={stats.masc} fem={stats.fem} />
+                    <DonutSexo masc={stats.masc} fem={stats.fem} otro={stats.oSexo} />
                 </div>
 
                 {/* Generaciones — compacto */}
@@ -435,20 +442,22 @@ function StatsPanel({ legajos, zona }) {
                 </div>
             </div>
 
-            {/* Hijos + Ingresos */}
-            <div className="dp-row2">
-                <div className="dp-card">
-                    <div className="dp-card-title">Hijos</div>
-                    <BarChart data={stats.hijosDistr} color="#ec4899" total={stats.total} />
+            {/* Hijos + Ingresos | Personal próximo a jubilación */}
+            <div className="dp-row-jubilacion">
+                {/* Columna izquierda: gráficos */}
+                <div className="dp-col-graficos">
+                    <div className="dp-card">
+                        <div className="dp-card-title">Hijos</div>
+                        <BarChart data={stats.hijosDistr} color="#ec4899" total={stats.total} />
+                    </div>
+                    <div className="dp-card">
+                        <div className="dp-card-title">Ingresos por año</div>
+                        <BarChart data={stats.ingresosPorAnio} color="#d97706" />
+                    </div>
                 </div>
-                <div className="dp-card">
-                    <div className="dp-card-title">Ingresos por año</div>
-                    <BarChart data={stats.ingresosPorAnio} color="#d97706" />
-                </div>
-            </div>
 
-            {/* Personal próximo a jubilación */}
-            <div className="dp-card dp-card--full">
+                {/* Columna derecha: tabla jubilación */}
+                <div className="dp-card dp-col-jubilacion">
                 <div className="dp-card-title">
                     Personal próximo a jubilación (≥ 60 años)
                     {stats.proximosJubilacion.length > 0 && (
@@ -462,12 +471,12 @@ function StatsPanel({ legajos, zona }) {
                         <table className="dp-tabla">
                             <thead>
                                 <tr>
-                                    <th>Legajo</th>
+                                    <th className="dp-th-center">Legajo</th>
                                     <th>Nombre</th>
-                                    <th>Edad</th>
-                                    <th>Antigüedad</th>
-                                    <th>Función</th>
-                                    <th>Servicio</th>
+                                    <th className="dp-th-center">Edad</th>
+                                    <th className="dp-th-center">Antigüedad</th>
+                                    <th className="dp-th-center">Función</th>
+                                    <th className="dp-th-center">Servicio</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -476,16 +485,16 @@ function StatsPanel({ legajos, zona }) {
                                     const antig = calcAntiguedad(p.fechaIngreso);
                                     return (
                                         <tr key={p.legajo || i}>
-                                            <td className="dp-td-legajo">{p.legajo}</td>
+                                            <td className="dp-td-legajo dp-td-center">{p.legajo}</td>
                                             <td className="dp-td-nombre">{p.nombre}</td>
-                                            <td className="dp-td-num dp-td-alert">{edad} a.</td>
-                                            <td className="dp-td-num">{antig !== null ? `${antig.toFixed(1)} a.` : "—"}</td>
-                                            <td>
+                                            <td className="dp-td-center dp-td-alert">{edad} a.</td>
+                                            <td className="dp-td-center">{antig !== null ? `${antig.toFixed(1)} a.` : "—"}</td>
+                                            <td className="dp-td-center">
                                                 <span className={`dp-tag dp-tag--${normalizarTarea(getRol(p)).toLowerCase()}`}>
                                                     {normalizarTarea(getRol(p))}
                                                 </span>
                                             </td>
-                                            <td>{p.servicio || "—"}</td>
+                                            <td className="dp-td-center">{p.servicio || "—"}</td>
                                         </tr>
                                     );
                                 })}
@@ -493,14 +502,15 @@ function StatsPanel({ legajos, zona }) {
                         </table>
                     </div>
                 )}
-            </div>
+                </div>{/* fin dp-col-jubilacion */}
+            </div>{/* fin dp-row-jubilacion */}
 
         </>
     );
 }
 
 // ── Componente principal ───────────────────────────────────────────────────
-export default function DashboardPersonalScreen({ onBack, zonaFija }) {
+export default function DashboardPersonalScreen({ onBack, zonaFija, embedded }) {
     const { empresaNombre, empresaId } = useAppData();
     const [todosLegajos, setTodosLegajos] = useState([]);
     const [loading, setLoading]           = useState(true);
@@ -558,14 +568,16 @@ export default function DashboardPersonalScreen({ onBack, zonaFija }) {
     return (
         <div className="dp-root">
             {/* Header */}
+            {!embedded && (
             <div className="dp-header">
                 <button className="dp-back-btn" onClick={onBack}>← Volver al panel</button>
                 <div className="dp-header-title">👥 Dashboard de Personal</div>
                 <div className="dp-header-sub">{empresaNombre} · {todosLegajos.length} personas en total</div>
             </div>
+            )}
 
-            {/* Tabs de zona — ocultos si hay zonaFija */}
-            {!zonaFija && (
+            {/* Tabs de zona — ocultos si hay zonaFija o embedded */}
+            {!zonaFija && !embedded && (
                 <div className="dp-zona-tabs">
                     {ZONAS.map(z => (
                         <button

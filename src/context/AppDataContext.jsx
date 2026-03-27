@@ -11,6 +11,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import { db } from "../firebase";
 import { otorgarTokens, tokensParaCapacitacion } from "../utils/tokenService";
+import { EMPRESA_ID_FALLBACK } from "../config/constants";
 
 // ── localStorage helpers (solo para config y sesión activa) ──────────────────
 const load = (key, fallback) => {
@@ -46,8 +47,6 @@ const DEFAULT_CONFIG = {
 
 const DEFAULT_PLAN = [];
 
-// ── Fallback de empresa para usuarios sin empresaId asignado ─────────────────
-const EMPRESA_ID_FALLBACK = "default";
 
 const AppDataContext = createContext(null);
 
@@ -68,9 +67,11 @@ export function AppDataProvider({ children, uid }) {
 
     // Datos vivos desde colecciones maestras (override config_global para esos campos)
     const [liveData, setLiveData] = useState({
-        vehiculos:   null,
-        objetivos:   null,
-        vigiladores: null,
+        vehiculos:    null,
+        objetivos:    null,
+        objetivosRaw: null, // [{ label, zona }]
+        vigiladores:  null,
+        legajosRaw:   null, // [{ nombre, zona }]
         supervisores: null,
     });
     const [empresaLogos,   setEmpresaLogos]   = useState({ splash: null, panel: null });
@@ -122,7 +123,7 @@ export function AppDataProvider({ children, uid }) {
                 suscripcionIniciada = true;
 
         // Reset live data on empresa change
-        setLiveData({ vehiculos: null, objetivos: null, vigiladores: null, supervisores: null });
+        setLiveData({ vehiculos: null, objetivos: null, objetivosRaw: null, vigiladores: null, legajosRaw: null, supervisores: null });
 
         const unsubs = [];
         let ready = 0;
@@ -260,16 +261,17 @@ export function AppDataProvider({ children, uid }) {
             unsubs.push(onSnapshot(
                 query(collection(db, "objetivos"), where("empresaId", "==", empresaId)),
                 (snap) => {
-                    const obs = snap.docs
+                    const rawObs = snap.docs
                         .map(d => {
                             const o = d.data();
                             const codigo = [o.cCosto, o.numProyecto, o.numObjetivo].filter(Boolean).join("-");
                             const label  = [codigo, o.nombreProyecto, o.nombre].filter(Boolean).join(" ");
-                            return label;
+                            return label ? { label, zona: o.zona || null, cliente: o.nombreProyecto || "" } : null;
                         })
                         .filter(Boolean)
-                        .sort();
-                    setLiveData(p => ({ ...p, objetivos: obs }));
+                        .sort((a, b) => a.label.localeCompare(b.label));
+                    const obs = rawObs.map(o => o.label);
+                    setLiveData(p => ({ ...p, objetivos: obs, objetivosRaw: rawObs }));
                 },
                 (err) => { console.warn("[AppData] objetivos:", err.code); }
             ));
@@ -284,17 +286,19 @@ export function AppDataProvider({ children, uid }) {
                     const nombre = (d) =>
                         `${d.apellido || ""} ${d.nombre || ""}`.trim() ||
                         `${d.nombre || ""} ${d.apellido || ""}`.trim();
-                    const vig = docs
-                        .filter(d => /vigilad/i.test(d.rol || d.cargo || ""))
-                        .map(nombre)
-                        .filter(Boolean)
-                        .sort();
+                    const esSuper = (d) => d.esSupervisor === true || /supervis/i.test(d.rol || d.cargo || "");
+                    // Raw con zona para filtrado posterior
+                    const legajosRaw = docs
+                        .filter(d => !esSuper(d))
+                        .map(d => ({ nombre: nombre(d), zona: d.zona || null }))
+                        .filter(d => d.nombre);
+                    const vig = legajosRaw.map(d => d.nombre).sort();
                     const sup = docs
-                        .filter(d => d.esSupervisor === true || /supervis/i.test(d.rol || d.cargo || ""))
+                        .filter(esSuper)
                         .map(nombre)
                         .filter(Boolean)
                         .sort();
-                    setLiveData(p => ({ ...p, vigiladores: vig, supervisores: sup }));
+                    setLiveData(p => ({ ...p, vigiladores: vig, legajosRaw, supervisores: sup }));
                 },
                 (err) => { console.warn("[AppData] legajos:", err.code); }
             ));
@@ -366,12 +370,74 @@ export function AppDataProvider({ children, uid }) {
 
     const getPlanSupervisor = (emailOrNombre) => {
         if (!emailOrNombre) return null;
+
+        // 1. Exacto por clave
         if (planesSuper[emailOrNombre]) return planesSuper[emailOrNombre];
-        const norm = normNombre(emailOrNombre);
-        const found = Object.entries(planesSuper).find(([k, v]) =>
-            normNombre(k) === norm || normNombre(v.nombre || "") === norm
+
+        const src = emailOrNombre.trim().toLowerCase();
+
+        // 2. Case-insensitive: clave o v.nombre igual al buscado
+        let found = Object.entries(planesSuper).find(([k, v]) =>
+            k.trim().toLowerCase() === src ||
+            (v.nombre || "").trim().toLowerCase() === src
         );
-        return found ? found[1] : null;
+        if (found) return found[1];
+
+        // 3. Primer+último token (normalizado, case-insensitive)
+        const tokens = src.split(/\s+/);
+        const normSrc = tokens.length >= 2 ? `${tokens[0]} ${tokens[tokens.length - 1]}` : src;
+        found = Object.entries(planesSuper).find(([k, v]) => {
+            const kT = k.trim().toLowerCase().split(/\s+/);
+            const vT = (v.nombre || "").trim().toLowerCase().split(/\s+/);
+            const normK = kT.length >= 2 ? `${kT[0]} ${kT[kT.length - 1]}` : kT[0] || "";
+            const normV = vT.length >= 2 ? `${vT[0]} ${vT[vT.length - 1]}` : vT[0] || "";
+            return normK === normSrc || normV === normSrc;
+        });
+        if (found) return found[1];
+
+        // 4. Apellido solo (último token ≥ 3 chars, sin @)
+        const apellido = tokens[tokens.length - 1] || "";
+        if (apellido.length >= 3 && !apellido.includes("@")) {
+            found = Object.entries(planesSuper).find(([k, v]) => {
+                const kAp = (k.trim().toLowerCase().split(/\s+/).pop() || "");
+                const vAp = ((v.nombre || "").trim().toLowerCase().split(/\s+/).pop() || "");
+                return kAp === apellido || vAp === apellido;
+            });
+            if (found) return found[1];
+        }
+
+        // 5. Email-prefix: parte antes del @ (cubre "girelli@" vs clave "girelli")
+        if (src.includes("@")) {
+            const prefix = src.split("@")[0];
+            if (prefix.length >= 3) {
+                found = Object.entries(planesSuper).find(([k, v]) => {
+                    const kL = k.trim().toLowerCase();
+                    const vL = (v.nombre || "").trim().toLowerCase();
+                    return kL === prefix || vL === prefix ||
+                           kL.startsWith(prefix) || prefix.startsWith(kL);
+                });
+                if (found) return found[1];
+            }
+        }
+
+        // 6. Token compartido: algún token ≥4 chars del buscado aparece en la clave o viceversa
+        const srcTokens = src.split(/[\s.@_-]+/).filter(t => t.length >= 4 && !/^\d+$/.test(t));
+        if (srcTokens.length > 0) {
+            found = Object.entries(planesSuper).find(([k, v]) => {
+                const kToks = k.toLowerCase().split(/[\s.@_-]+/);
+                const vToks = (v.nombre || "").toLowerCase().split(/[\s.@_-]+/);
+                return srcTokens.some(t => kToks.includes(t) || vToks.includes(t));
+            });
+            if (found) return found[1];
+        }
+
+        // DEBUG — quitar en producción
+        if (Object.keys(planesSuper).length > 0) {
+            console.warn("[getPlanSupervisor] No match para:", emailOrNombre,
+                "| Claves disponibles:", Object.keys(planesSuper));
+        }
+
+        return null;
     };
 
     const getObjetivosSemana = (email, semana) => {
@@ -498,12 +564,23 @@ export function AppDataProvider({ children, uid }) {
     };
 
     // Mezcla: las colecciones maestras tienen prioridad sobre config_global para esos campos
+    // Filtro por zona: si el usuario tiene zona asignada, solo ve items de su zona (o sin zona)
+    const zonaFiltrar = (items, rawItems) => {
+        if (!userZona || !rawItems) return items;
+        return rawItems.filter(i => !i.zona || i.zona === userZona).map(i => i.label ?? i.nombre);
+    };
+    // Mapa label → cliente (nombreProyecto) para auto-rellenar en auditorías
+    const clienteDeObjetivo = {};
+    if (liveData.objetivosRaw) {
+        liveData.objetivosRaw.forEach(o => { if (o.label && o.cliente) clienteDeObjetivo[o.label] = o.cliente; });
+    }
     const mergedData = {
         ...config,
-        vehiculos:   liveData.vehiculos   ?? config.vehiculos,
-        objetivos:   liveData.objetivos   ?? config.objetivos,
-        vigiladores: liveData.vigiladores ?? config.vigiladores,
-        supervisores: liveData.supervisores ?? config.supervisores,
+        vehiculos:         liveData.vehiculos   ?? config.vehiculos,
+        objetivos:         zonaFiltrar(liveData.objetivos, liveData.objetivosRaw) ?? liveData.objetivos ?? config.objetivos,
+        vigiladores:       zonaFiltrar(liveData.vigiladores, liveData.legajosRaw) ?? liveData.vigiladores ?? config.vigiladores,
+        supervisores:      liveData.supervisores ?? config.supervisores,
+        clienteDeObjetivo,
     };
 
     return (

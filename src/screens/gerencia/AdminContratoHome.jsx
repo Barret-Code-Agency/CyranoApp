@@ -23,6 +23,8 @@ import DashboardPersonalScreen  from "../administrativo/DashboardPersonalScreen"
 import GestionDatosAdminScreen    from "../administrativo/GestionDatosAdminScreen";
 import DashboardsGestionScreen    from "./DashboardsGestionScreen";
 import PlanCapacitacionScreen          from "../shared/PlanCapacitacionScreen";
+import PlanObjetivoScreen             from "./PlanObjetivoScreen";
+import InformeGestionScreen           from "./InformeGestionScreen";
 import { VistaTurnos, ProgramacionTodos } from "../shared/ProgramacionServiciosScreen";
 import ImportarRealesPanel           from "../shared/ImportarRealesPanel";
 import ConsolidadoScreen             from "../shared/ConsolidadoScreen";
@@ -55,12 +57,25 @@ function CalendarioSemanal({ actividades = {}, legajos = [] }) {
 
     const cumplesPorKey = {};
     legajos.forEach(p => {
-        if (!p.nacimiento) return;
-        const [dd, mm] = p.nacimiento.split("/").map(Number);
+        if (!p.nacimiento && p.nacimiento !== 0) return;
+        let dd, mm;
+        const n = Number(p.nacimiento);
+        if (typeof p.nacimiento === "number" || (n > 20000 && n < 60000 && !isNaN(n))) {
+            // Excel serial date
+            const dt = new Date((n - 25569) * 86400000);
+            dd = dt.getUTCDate(); mm = dt.getUTCMonth() + 1;
+        } else {
+            const s = String(p.nacimiento);
+            const sep = s.includes("/") ? "/" : "-";
+            const parts = s.split(sep).map(Number);
+            if (parts.length < 2 || parts.some(isNaN)) return;
+            dd = parts[0] > 31 ? parts[2] : parts[0];
+            mm = parts[1];
+        }
         dias.forEach(d => {
             if (d.getDate() === dd && d.getMonth() + 1 === mm) {
                 const key = fmtKey(d);
-                const ap = (p.nombre || "").trim().split(" ")[0];
+                const ap = ((p.apellido || "") + " " + (p.nombre || "")).trim().split(/\s+/).slice(0, 2).join(" ") || p.nombre || "—";
                 cumplesPorKey[key] = [...(cumplesPorKey[key] || []), ap];
             }
         });
@@ -187,11 +202,12 @@ const MODULOS = {
     "gestion_premios":             { icon: "🎁", titulo: "Premios y Tokens",             desc: "Catálogo y aprobación de canjes del personal",              color: "pink"    },
     "felicitaciones_sanciones":    { icon: "📋", titulo: "Felicitaciones/Sanciones",     desc: "Registrá felicitaciones o sanciones del personal",           color: "amber"   },
     "control_actividades_vigilador":{ icon: "👁️", titulo: "Control de Actividades",      desc: "Rondas, planillas, actas, vehículos e informes",            color: "cyan"    },
+    "informe_gestion":             { icon: "📈", titulo: "Informe de gestión",            desc: "Supervisión, personal, gestión y comparativos en un reporte", color: "slate"  },
 };
 
 const GRUPOS_MENU = [
     { label: "Operaciones",   ids: ["supervision", "rondas_monitor", "muro_comunicacion", "control_actividades_vigilador"] },
-    { label: "Gestión",       ids: ["gestion_datos", "turnos", "dashboard_personal", "dashboards_gestion", "felicitaciones_sanciones"] },
+    { label: "Gestión",       ids: ["gestion_datos", "turnos", "dashboard_personal", "dashboards_gestion", "informe_gestion", "felicitaciones_sanciones"] },
     { label: "Formación",     ids: ["plan_capacitacion", "capacitacion", "muro_procedimientos"] },
     { label: "Otros",         ids: ["plan_seguridad", "analisis_riesgos", "gestion_premios"] },
 ];
@@ -397,19 +413,27 @@ export default function AdminContratoHome({ onExit }) {
 
 
 
-    // Supervisión → AdminScreen completo
+    // Plan por objetivo (solo gerencia)
+    if (seccion === "supervision" && subSeccion === "plan_objetivo") {
+        return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <PlanObjetivoScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+    }
+
+    // Supervisión → sub-menú: plan por supervisor vs por objetivo
     if (seccion === "supervision") {
         return (
-            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
-                <div style={{ maxWidth: "50%", margin: "0 auto", boxShadow: "var(--shadow-xl)", border: "2px solid var(--color-border2)", minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
-                    {renderHeader()}
-                    <div className="vh-subpanel">
-                        <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
-                        <div className="vh-subpanel-title">🔍 Supervisión — Plan, cumplimiento y carga</div>
-                    </div>
-                    <div style={{ padding: "0 var(--space-5, 1.5rem)", flex: 1 }}>
-                        <AdminScreen onExit={() => setSeccion(null)} />
-                    </div>
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <div className="vh-subpanel" style={{ paddingBottom: 15 }}>
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">🔍 Supervisión — Plan, cumplimiento y carga</div>
+                </div>
+                <div style={{ padding: "0 var(--space-4, 1rem)", flex: 1 }}>
+                    <AdminScreen onExit={() => setSeccion(null)} onPlanObjetivo={() => setSubSeccion("plan_objetivo")} />
                 </div>
             </div>
         );
@@ -478,6 +502,19 @@ export default function AdminContratoHome({ onExit }) {
                 <div className="sh-admin-content">
                     <DashboardsGestionScreen onBack={() => setSeccion(null)} />
                 </div>
+            </div>
+        );
+    }
+
+    if (seccion === "informe_gestion") {
+        return (
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                {renderHeader()}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setSeccion(null)}>← Volver al panel</button>
+                    <div className="vh-subpanel-title">📈 Informe de Gestión</div>
+                </div>
+                <InformeGestionScreen />
             </div>
         );
     }
@@ -655,8 +692,9 @@ export default function AdminContratoHome({ onExit }) {
             return (
                 <div className="sh-supervision-wrapper sh-fullscreen">
                     {renderHeader()}
-                    <div style={{ padding: "12px 16px" }}>
+                    <div className="vh-subpanel">
                         <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
+                        <div className="vh-subpanel-title">📉 Ausentismo</div>
                     </div>
                     <AusentismoScreen />
                 </div>

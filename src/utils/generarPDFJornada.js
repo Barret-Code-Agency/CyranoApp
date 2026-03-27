@@ -3,6 +3,7 @@
 // Tabla cronológica unificada con todos los tipos de actividad
 
 import { jsPDF } from "jspdf";
+import { isAnomaliaPositiva, getCalifLabel } from "../config/constants";
 
 // ── Paleta ─────────────────────────────────────────────────────────────────────
 const AZUL    = [0,   45,  114];
@@ -90,17 +91,6 @@ const CRITERIOS_ABBR = {
     "Conocimiento de consignas":        "Con",
 };
 
-function califLabel(ratings) {
-    if (!ratings) return null;
-    const vals = Object.values(ratings).filter(v => v > 0);
-    if (!vals.length) return null;
-    const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
-    if (avg >= 9)  return "Excelente";
-    if (avg >= 7)  return "Muy bien";
-    if (avg >= 5)  return "Aceptable";
-    if (avg >= 3)  return "Regular";
-    return "Insuficiente";
-}
 
 function califScores(ratings) {
     if (!ratings) return "";
@@ -301,11 +291,25 @@ export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null
     const km   = Math.max(0, Number(j.kmFinal || 0) - Number(j.kmInicial || 0));
 
     // ── Calcular tiempos por categoría ────────────────────────────────────────
-    const minCtrl     = acts.filter(a => a.tipo === "ctrl")     .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin), 0);
-    const minTraslado = acts.filter(a => a.tipo === "traslado") .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin) + Number(a.duracionMin || 0), 0);
-    const minAdmin    = acts.filter(a => a.tipo === "admin")    .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin) + Number(a.duracionMin || 0), 0);
-    const minCap      = acts.filter(a => a.tipo === "cap")      .reduce((s, a) => s + Number(a.duracion || 0) + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin), 0);
-    const minTotal    = diffMin(j.horaInicio, j.horaFin);
+    // Ctrl: suma de (horaFin - horaInicio) de cada supervision
+    const minCtrl  = acts.filter(a => a.tipo === "ctrl")
+        .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin), 0);
+    // Cap/Admin: solo diffMin (sin duracionMin para evitar doble conteo)
+    const minAdmin = acts.filter(a => a.tipo === "admin")
+        .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin), 0);
+    const minCap   = acts.filter(a => a.tipo === "cap")
+        .reduce((s, a) => s + diffMin(a.horaInicio || a.inicio, a.horaFin || a.fin), 0);
+    const minTotal = diffMin(j.horaInicio, j.horaFin);
+
+    // Traslados = diferencia entre horaFin de cada ctrl y horaInicio del siguiente ctrl
+    const ctrlSorted = acts
+        .filter(a => a.tipo === "ctrl")
+        .sort((a, b) => parseTimeMin(a.horaInicio || a.inicio || "") - parseTimeMin(b.horaInicio || b.inicio || ""));
+    const minTraslado = ctrlSorted.slice(0, -1).reduce((s, a, i) => {
+        const fin      = parseTimeMin(a.horaFin || a.fin || "");
+        const nextInicio = parseTimeMin(ctrlSorted[i + 1].horaInicio || ctrlSorted[i + 1].inicio || "");
+        return (fin >= 0 && nextInicio > fin) ? s + (nextInicio - fin) : s;
+    }, 0);
 
     // ── Contadores ────────────────────────────────────────────────────────────
     const noCtrls    = acts.filter(a => a.tipo === "ctrl").length;
@@ -313,7 +317,7 @@ export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null
     const noOtras    = acts.filter(a => a.tipo !== "ctrl" && a.tipo !== "cap").length;
     const noNocturno = acts.filter(a => a.tipo === "ctrl" && (a.turno === "nocturno" || a.esNocturno)).length;
     const noFdS      = acts.filter(a => a.tipo === "ctrl" && (a.esFinDeSemana || a.esFds)).length;
-    const noAnom     = acts.filter(a => a.tipo === "ctrl" && (a.anomalia === "Si" || a.anomalia === "Sí" || a.anomalia === true)).length;
+    const noAnom     = acts.filter(a => a.tipo === "ctrl" && isAnomaliaPositiva(a.anomalia)).length;
 
     // ── Construir filas de la tabla ───────────────────────────────────────────
     // Fila sintética de inicio
@@ -333,16 +337,18 @@ export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null
         });
     }
 
-    // Actividades ordenadas cronológicamente
-    const actsOrdenadas = [...acts].sort((a, b) => {
-        const ta = parseTimeMin(a.horaInicio || a.inicio || "");
-        const tb = parseTimeMin(b.horaInicio || b.inicio || "");
-        return (ta === -1 ? 9999 : ta) - (tb === -1 ? 9999 : tb);
-    });
+    // Actividades ordenadas cronológicamente (sin traslados explícitos — se generan sintéticamente)
+    const actsOrdenadas = [...acts]
+        .filter(a => a.tipo !== "traslado")
+        .sort((a, b) => {
+            const ta = parseTimeMin(a.horaInicio || a.inicio || "");
+            const tb = parseTimeMin(b.horaInicio || b.inicio || "");
+            return (ta === -1 ? 9999 : ta) - (tb === -1 ? 9999 : tb);
+        });
 
-    actsOrdenadas.forEach(a => {
+    actsOrdenadas.forEach((a, idx) => {
         if (a.tipo === "ctrl") {
-            const label = califLabel(a.ratings);
+            const label = getCalifLabel(a.ratings);
             const scores = califScores(a.ratings);
             const infoAnomalia = a.informeAnomalia || a.novedad || "";
             const obsText = [scores, infoAnomalia].filter(Boolean).join("  |  ");
@@ -353,11 +359,32 @@ export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null
                 salida:       c(a.horaFin   || a.fin    || ""),
                 vigilador:    c(a.vigilador  || ""),
                 pag:          c(a.paginaLibro || ""),
-                anomalia:     (a.anomalia === "Si" || a.anomalia === "Sí" || a.anomalia === true) ? "SI" : "",
+                anomalia:     isAnomaliaPositiva(a.anomalia) ? "SI" : "",
                 calificacion: label ? c(label) : "",
                 obs:          c(obsText || a.observacion || ""),
                 rowH:         (scores || label) ? 9 : 7,
             });
+            // ── Traslado sintético: gap hasta próxima actividad ──
+            const nextAct = actsOrdenadas[idx + 1];
+            if (nextAct) {
+                const fin      = parseTimeMin(a.horaFin || a.fin || "");
+                const nextIni  = parseTimeMin(nextAct.horaInicio || nextAct.inicio || "");
+                if (fin >= 0 && nextIni > fin + 1) {
+                    const gapMin = nextIni - fin;
+                    rows.push({
+                        tipo:         "traslado",
+                        objetivo:     "—",
+                        entrada:      c(a.horaFin || a.fin || ""),
+                        salida:       c(nextAct.horaInicio || nextAct.inicio || ""),
+                        vigilador:    "—",
+                        pag:          "",
+                        anomalia:     "",
+                        calificacion: "",
+                        obs:          `Traslado  ${fmtHHMM(gapMin)} hs`,
+                        rowH:         7,
+                    });
+                }
+            }
         } else if (a.tipo === "cap") {
             const obs = [
                 a.tema || a.descripcion || "",
@@ -374,19 +401,6 @@ export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null
                 anomalia:     "",
                 calificacion: "",
                 obs:          c(obs || a.tema || ""),
-                rowH:         7,
-            });
-        } else if (a.tipo === "traslado") {
-            rows.push({
-                tipo:         "traslado",
-                objetivo:     "—",
-                entrada:      c(a.horaInicio || a.inicio || ""),
-                salida:       c(a.horaFin   || a.fin    || ""),
-                vigilador:    "—",
-                pag:          "",
-                anomalia:     "",
-                calificacion: "",
-                obs:          c(a.descripcion || a.detalle || a.actividad || ""),
                 rowH:         7,
             });
         } else {
@@ -426,25 +440,28 @@ export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null
     drawPageHeader(doc, empresaNombre, logoBase64, j.fecha);
     let y = 32;
 
-    // ── Fila 1: Supervisor | Fecha | Vehículo | Km Inicio | Km Final | Total Km ──
-    const cw6 = CW / 6;
-    infoCell(doc, PAD,             y, cw6 * 2, 13, "Supervisor",  j.nombre    || j.email || "--", true);
-    infoCell(doc, PAD + cw6 * 2,   y, cw6,     13, "Fecha",       j.fecha     || "--");
-    infoCell(doc, PAD + cw6 * 3,   y, cw6,     13, "Vehiculo",    j.vehiculo  || "--");
-    infoCell(doc, PAD + cw6 * 4,   y, cw6 / 2, 13, "Km Inicio",  j.kmInicial || "--");
-    infoCell(doc, PAD + cw6 * 4 + cw6/2, y, cw6 / 2, 13, "Km Final", j.kmFinal || "--");
+    // ── Fila 1: Colaborador(×2) | Fecha | Vehículo | Km Inicio | Km Final | Total Km ──
+    // 7 unidades de CW/7 → todas las celdas uniformes
+    const u7 = CW / 7;
+    infoCell(doc, PAD,              y, u7 * 2, 13, "Colaborador",  j.nombre    || j.email || "--", true);
+    infoCell(doc, PAD + u7 * 2,    y, u7,     13, "Fecha",        j.fecha     || "--");
+    infoCell(doc, PAD + u7 * 3,    y, u7,     13, "Vehiculo",     j.vehiculo  || "--");
+    infoCell(doc, PAD + u7 * 4,    y, u7,     13, "Km Inicio",    j.kmInicial || "--");
+    infoCell(doc, PAD + u7 * 5,    y, u7,     13, "Km Final",     j.kmFinal   || "--");
+    infoCell(doc, PAD + u7 * 6,    y, u7,     13, "Total Km",     km > 0 ? km + " km" : "--");
     y += 13;
 
-    // ── Fila 2: Hora ini | Hora fin | Total Hs | Hs Trasl. | Hs Sup. | Hs Cap. | Hs Admin. | Total Km ──
-    const cw7 = CW / 8;
-    infoCell(doc, PAD,             y, cw7,    13, "Hora inicio",  j.horaInicio || "--");
-    infoCell(doc, PAD + cw7,       y, cw7,    13, "Hora fin",     j.horaFin    || "--");
-    infoCell(doc, PAD + cw7 * 2,   y, cw7,    13, "Total Horas",  fmtHHMM(minTotal) + " Hs");
-    infoCell(doc, PAD + cw7 * 3,   y, cw7,    13, "Hs Traslados", fmtHHMM(minTraslado) + " Hs");
-    infoCell(doc, PAD + cw7 * 4,   y, cw7,    13, "Hs Supervision", fmtHHMM(minCtrl) + " Hs");
-    infoCell(doc, PAD + cw7 * 5,   y, cw7,    13, "Hs Apoyo/Cap.", fmtHHMM(minCap) + " Hs");
-    infoCell(doc, PAD + cw7 * 6,   y, cw7,    13, "Hs Admin.",    fmtHHMM(minAdmin) + " Hs");
-    infoCell(doc, PAD + cw7 * 7,   y, cw7,    13, "Total Km",     km > 0 ? km + " km" : "--");
+    // ── Fila 2: Hora ini | Hora fin | Total Hs | Hs Trasl. | Hs Sup. | Hs Apoyo | Hs Admin. | Email ──
+    // 8 unidades de CW/8 → todas iguales
+    const u8 = CW / 8;
+    infoCell(doc, PAD,              y, u8, 13, "Hora inicio",    j.horaInicio || "--");
+    infoCell(doc, PAD + u8,         y, u8, 13, "Hora fin",       j.horaFin    || "--");
+    infoCell(doc, PAD + u8 * 2,     y, u8, 13, "Total Horas",    fmtHHMM(minTotal));
+    infoCell(doc, PAD + u8 * 3,     y, u8, 13, "Hs Traslados",   fmtHHMM(minTraslado));
+    infoCell(doc, PAD + u8 * 4,     y, u8, 13, "Hs Supervision", fmtHHMM(minCtrl));
+    infoCell(doc, PAD + u8 * 5,     y, u8, 13, "Hs Apoyo/Cap.",  fmtHHMM(minCap));
+    infoCell(doc, PAD + u8 * 6,     y, u8, 13, "Hs Admin.",      fmtHHMM(minAdmin));
+    infoCell(doc, PAD + u8 * 7,     y, u8, 13, "Email",          j.email || "--");
     y += 15;
 
     // ── Tabla de actividades ──────────────────────────────────────────────────
@@ -466,7 +483,7 @@ export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null
     y += 4;
 
     // ── Anomalías destacadas ──────────────────────────────────────────────────
-    const anomalias = acts.filter(a => a.tipo === "ctrl" && (a.anomalia === "Si" || a.anomalia === "Sí" || a.anomalia === true));
+    const anomalias = acts.filter(a => a.tipo === "ctrl" && isAnomaliaPositiva(a.anomalia));
     if (anomalias.length > 0) {
         if (y + 30 > 260) { doc.addPage(); drawPageHeader(doc, empresaNombre, logoBase64, j.fecha); y = 32; }
         y = sectionTitle(doc, y, `Anomalias detectadas (${anomalias.length})`, [190, 25, 25]);
@@ -507,6 +524,89 @@ export function generarPDFJornada(j, empresaNombre = "Brinks", logoBase64 = null
         doc.setTextColor(...TEXTO);
         doc.text(c(novedades), PAD + 3, y + 7, { maxWidth: CW - 6 });
         y += 22;
+    }
+
+    // ── Auditorías de puesto ──────────────────────────────────────────────────
+    const AUD_CATS = [
+        { id: "presencia",     label: "Presencia"      },
+        { id: "registros",     label: "Registros"      },
+        { id: "consignas",     label: "Consignas"      },
+        { id: "instalaciones", label: "Instalaciones"  },
+        { id: "operatividad",  label: "Operatividad"   },
+    ];
+    const auditorias = acts.filter(a => a.tipo === "ctrl" && a.auditoria);
+    if (auditorias.length > 0) {
+        if (y + 30 > 260) { doc.addPage(); drawPageHeader(doc, empresaNombre, logoBase64, j.fecha); y = 32; }
+        y = sectionTitle(doc, y, `Auditorias de Puesto (${auditorias.length})`, [80, 40, 140]);
+        auditorias.forEach((a) => {
+            const aud = a.auditoria;
+            // porcentaje: campo real del payload
+            const pct    = aud.porcentaje ?? aud.pctGlobal ?? aud.pct ?? 0;
+            const pctClr = pct >= 80 ? [0, 150, 80] : pct >= 50 ? [200, 120, 0] : [200, 30, 30];
+            const catRows = AUD_CATS.filter(cat => aud.puntajePorCategoria?.[cat.id] != null);
+            const neededH = 22 + Math.ceil(catRows.length / 3) * 6 + (aud.observaciones ? 7 : 0);
+            if (y + neededH > 270) { doc.addPage(); drawPageHeader(doc, empresaNombre, logoBase64, j.fecha); y = 32; }
+
+            // Fondo
+            doc.setFillColor(245, 242, 255);
+            doc.rect(PAD, y, CW, neededH, "F");
+            doc.setDrawColor(160, 120, 220);
+            doc.rect(PAD, y, CW, neededH, "S");
+            doc.setFillColor(120, 60, 180);
+            doc.rect(PAD, y, 3, neededH, "F");
+
+            // Cabecera: cliente + objetivo + puntaje
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.5);
+            doc.setTextColor(80, 40, 140);
+            const clienteStr = c(aud.cliente || "");
+            const objetivoStr = c(aud.objetivo || a.objetivo || "--");
+            doc.text(clienteStr ? `${clienteStr}  —  ${objetivoStr}` : objetivoStr, PAD + 6, y + 6, { maxWidth: CW * 0.65 });
+            // Vigilador
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(6.5);
+            doc.setTextColor(...MUTED);
+            if (aud.vigilador) doc.text(`Vigilador: ${c(aud.vigilador)}`, PAD + 6, y + 12);
+            if (aud.auditor)   doc.text(`Auditor: ${c(aud.auditor)}`, PAD + 6 + CW * 0.3, y + 12);
+            // Puntaje
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(11);
+            doc.setTextColor(...pctClr);
+            doc.text(`${pct.toFixed(1)}%`, PAD + CW - 5, y + 7, { align: "right" });
+            doc.setFontSize(7);
+            doc.setTextColor(...MUTED);
+            doc.text(c(aud.calificacion || ""), PAD + CW - 5, y + 13, { align: "right" });
+
+            // Categorías en fila horizontal (3 por línea)
+            doc.setTextColor(...TEXTO);
+            let cy = y + 18;
+            catRows.forEach((cat, ci) => {
+                const cx  = PAD + 6 + (ci % 3) * (CW / 3);
+                const val = Math.round(aud.puntajePorCategoria[cat.id]);
+                const clr = val >= 80 ? [0, 140, 60] : val >= 50 ? [180, 100, 0] : [200, 30, 30];
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(6.5);
+                doc.setTextColor(...TEXTO);
+                doc.text(c(cat.label) + ":", cx, cy);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(...clr);
+                doc.text(`${val}%`, cx + 22, cy);
+                if (ci % 3 === 2) cy += 6;
+            });
+            if (catRows.length % 3 !== 0) cy += 6;
+
+            // Observaciones
+            if (aud.observaciones) {
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(6.5);
+                doc.setTextColor(...MUTED);
+                doc.text(c(aud.observaciones), PAD + 6, cy, { maxWidth: CW - 14 });
+            }
+
+            doc.setTextColor(...TEXTO);
+            y += neededH + 3;
+        });
+        y += 2;
     }
 
     // ── Resumen de jornada ────────────────────────────────────────────────────

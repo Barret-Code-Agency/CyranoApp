@@ -607,7 +607,7 @@
     white-space: nowrap;
 }
 
-thead th {
+.ps-table thead th {
     background: var(--table-header-bg);
     color: var(--color-white);
     padding: 4px 2px;

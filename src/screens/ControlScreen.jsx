@@ -4,7 +4,15 @@
 import { useState, useEffect, useRef } from "react";
 import { nowTime } from "../utils/helpers";
 import { useAppData } from "../context/AppDataContext";
+import { useAuth } from "../context/AuthContext";
+import AuditoriaPuesto from "../forms/AuditoriaPuesto";
 import "./ControlScreen.css";
+
+// ── Persistencia del borrador de control en curso ──────────────────────────
+const DRAFT_KEY = "cyrano_ctrl_draft";
+const saveDraft  = (d) => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} };
+const clearDraft = ()  => { try { localStorage.removeItem(DRAFT_KEY); } catch {} };
+const getDraft   = ()  => { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null") || {}; } catch { return {}; } };
 
 const CRITERIOS = [
     "Presencia",
@@ -17,29 +25,36 @@ const CRITERIOS = [
 
 export default function ControlScreen({ geo, onBack }) {
     const { data, iniciarActividad, finalizarActividad, actividadActiva, cancelarActividad } = useAppData();
+    const { user } = useAuth();
     const enCurso = actividadActiva?.tipo === "ctrl";
     const fileRef = useRef();
+
+    // ── Auditoría opcional ──
+    const [auditoriaDatos, setAuditoriaDatos] = useState(null);
 
     // ── Estado GPS (solo paso 1) ──
     const [gps,        setGps]        = useState("");
     const [loadingGeo, setLoadingGeo] = useState(!enCurso);
 
-    // ── Estado paso 2 — identificación ──
-    const [objetivo,    setObjetivo]    = useState("");
-    const [vigilador,   setVigilador]   = useState("");
-    const [vigFiltro,   setVigFiltro]   = useState("");
-    const [paginaLibro, setPaginaLibro] = useState("");
-
-    // ── Estado paso 2 — evaluación ──
-    const [evalStep, setEvalStep] = useState(1); // 1=identificacion, 2=evaluacion, 3=anomalias
-    const [ratings, setRatings]   = useState(
-        Object.fromEntries(CRITERIOS.map((c) => [c, 0]))
+    // ── Estado del formulario — inicializado desde draft si hay control en curso ──
+    const d = enCurso ? getDraft() : {};
+    const [objetivo,        setObjetivo]        = useState(d.objetivo        || "");
+    const [vigilador,       setVigilador]       = useState(d.vigilador       || "");
+    const [vigFiltro,       setVigFiltro]       = useState("");
+    const [paginaLibro,     setPaginaLibro]     = useState(d.paginaLibro     || "");
+    const [evalStep,        setEvalStep]        = useState(d.evalStep        || 1);
+    const [ratings,         setRatings]         = useState(
+        d.ratings || Object.fromEntries(CRITERIOS.map((c) => [c, 0]))
     );
-
-    // ── Estado paso 2 — anomalías ──
-    const [anomalia,        setAnomalia]        = useState("");
-    const [informeAnomalia, setInformeAnomalia] = useState("");
+    const [anomalia,        setAnomalia]        = useState(d.anomalia        || "");
+    const [informeAnomalia, setInformeAnomalia] = useState(d.informeAnomalia || "");
     const [fotos,           setFotos]           = useState([]);
+
+    // ── Persistir borrador cada vez que cambia un campo ──
+    useEffect(() => {
+        if (!enCurso) return;
+        saveDraft({ objetivo, vigilador, paginaLibro, evalStep, ratings, anomalia, informeAnomalia });
+    }, [objetivo, vigilador, paginaLibro, evalStep, ratings, anomalia, informeAnomalia]); // eslint-disable-line
 
     useEffect(() => {
         if (!enCurso) {
@@ -84,10 +99,12 @@ export default function ControlScreen({ geo, onBack }) {
 
     // ── PASO 2 final: guarda todos los datos de identificación + evaluación ──
     const handleFinalizar = () => {
+        clearDraft();
         finalizarActividad({
             objetivo, vigilador, paginaLibro,
             ratings, anomalia, informeAnomalia, fotos,
             horaFin: nowTime(),
+            ...(auditoriaDatos ? { auditoria: auditoriaDatos } : {}),
         });
         onBack();
     };
@@ -153,6 +170,8 @@ export default function ControlScreen({ geo, onBack }) {
                 Paso 2 —{" "}
                 {evalStep === 1 ? "Identificación del puesto"
                     : evalStep === 2 ? "Evaluación del vigilador"
+                    : evalStep === 3 ? "Auditoría del objetivo"
+                    : evalStep === 4 ? "Auditoría del objetivo"
                     : "Registro de anomalías"}
             </div>
 
@@ -166,7 +185,7 @@ export default function ControlScreen({ geo, onBack }) {
             {/* Sub-progreso */}
             <div className="progress-wrap">
                 <div className="progress-steps">
-                    {[1, 2, 3].map((i) => (
+                    {[1, 2, 3, 4, 5].map((i) => (
                         <div key={i} className={`progress-step ${i < evalStep ? "done" : i === evalStep ? "active" : ""}`} />
                     ))}
                 </div>
@@ -281,14 +300,52 @@ export default function ControlScreen({ geo, onBack }) {
                         )}
                     </div>
                     <button className="btn btn-primary" disabled={!allRated} onClick={() => setEvalStep(3)}>
-                        Continuar → Anomalías
+                        Continuar →
                     </button>
                     <button className="btn btn-secondary" onClick={() => setEvalStep(1)}>← Atrás</button>
                 </>
             )}
 
-            {/* ── Sub-paso 3: Anomalías ── */}
+            {/* ── Sub-paso 3: ¿Auditoría? ── */}
             {evalStep === 3 && (
+                <>
+                    <div className="card" style={{ textAlign: "center", padding: "32px 20px" }}>
+                        <div className="step-header" style={{ justifyContent: "center", marginBottom: 16 }}>
+                            <div className="step-num">3</div>
+                            <div className="step-title">Auditoría del Objetivo</div>
+                        </div>
+                        <div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div>
+                        <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+                            ¿Desea realizar una auditoría del objetivo?
+                        </p>
+                        <p style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 24 }}>
+                            La auditoría evalúa presencia, registros, consignas, equipamiento e instalaciones del puesto.
+                        </p>
+                        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                            <button className="btn btn-primary" style={{ flex: 1, maxWidth: 160 }}
+                                onClick={() => setEvalStep(4)}>
+                                ✅ Sí, realizar
+                            </button>
+                            <button className="btn btn-secondary" style={{ flex: 1, maxWidth: 160 }}
+                                onClick={() => setEvalStep(5)}>
+                                No, continuar →
+                            </button>
+                        </div>
+                    </div>
+                    <button className="btn btn-secondary" onClick={() => setEvalStep(2)}>← Atrás</button>
+                </>
+            )}
+
+            {/* ── Sub-paso 4: AuditoriaPuesto ── */}
+            {evalStep === 4 && (
+                <AuditoriaPuesto
+                    initialData={{ objetivo, vigilador, auditor: user?.name || user?.email || "" }}
+                    onSave={(auditData) => { setAuditoriaDatos(auditData); setEvalStep(5); }}
+                />
+            )}
+
+            {/* ── Sub-paso 5: Anomalías ── */}
+            {evalStep === 5 && (
                 <>
                     <div className="card">
                         <div className="step-header">
@@ -343,7 +400,7 @@ export default function ControlScreen({ geo, onBack }) {
                         onClick={handleFinalizar}>
                         ✓ Guardar y Finalizar Control
                     </button>
-                    <button className="btn btn-secondary" onClick={() => setEvalStep(2)}>← Atrás</button>
+                    <button className="btn btn-secondary" onClick={() => setEvalStep(3)}>← Atrás</button>
                 </>
             )}
         </>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import ShieldLogo from "../components/ShieldLogo";
 import { generarHojaSupervision } from "../utils/generarPDF";
+import { isAnomaliaPositiva } from "../config/constants";
 import "./SendModal.css";
 
 // ── EmailJS config ─────────────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ const buildResumen = (session) => {
         ctrl.forEach((c, i) => {
             t += `  ${i + 1}. ${c.objetivo || "—"}  (${c.horaInicio}–${c.horaFin})`;
             t += `  Vigilador: ${c.vigilador || "—"}`;
-            if (c.anomalia === "Sí") t += `  ⚠️ ANOMALÍA`;
+            if (isAnomaliaPositiva(c.anomalia)) t += `  ⚠️ ANOMALÍA`;
             t += "\n";
         });
     }

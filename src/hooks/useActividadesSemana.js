@@ -5,14 +5,34 @@ import { db } from "../firebase";
 function fmtKey(d) { return d.toISOString().slice(0, 10); }
 
 /**
+ * Parsea fechas en cualquier formato → { dd, mm } o null.
+ * Soporta: número Excel serial, "DD/MM/AAAA", "DD-MM-AAAA", "AAAA-MM-DD".
+ */
+function parseDDMM(valor) {
+    if (valor == null) return null;
+    const n = Number(valor);
+    if (typeof valor === "number" || (n > 20000 && n < 60000 && !isNaN(n))) {
+        const dt = new Date((n - 25569) * 86400000);
+        return { dd: dt.getUTCDate(), mm: dt.getUTCMonth() + 1 };
+    }
+    const s = String(valor);
+    if (!s) return null;
+    const sep = s.includes("/") ? "/" : "-";
+    const parts = s.split(sep).map(Number);
+    if (parts.length < 2 || parts.some(isNaN)) return null;
+    if (parts[0] > 31) return { dd: parts[2], mm: parts[1] };
+    return { dd: parts[0], mm: parts[1] };
+}
+
+/**
  * Builds the `actividades` object for CalendarioSemanal.
  * Shows:
+ *   - Cumpleaños del personal (tipo: "cumple") — desde legajos.nacimiento
  *   - Aniversarios de ingreso del personal (tipo: "aniversario")
- *   - Altas de gobierno con vencimiento esta semana (colección "altas", tipo: "alta")
+ *   - Altas de gobierno con vencimiento próximo (colección "altas", tipo: "alta")
  *   - Jornadas activas = supervisión del día (tipo: "supervision")
  *   - Actividades inconclusas en jornadas (tipo: "inconclusa")
- *   - Vencimiento de service de vehículos (tipo: "vtv")
- * Cumpleaños son manejados dentro de CalendarioSemanal desde legajos.nacimiento.
+ *   - Vencimiento de service / VTV / seguro de vehículos (tipo: "vtv")
  */
 export function useActividadesSemana(empresaId, legajos = []) {
     const [actividades, setActividades] = useState({});
@@ -21,13 +41,17 @@ export function useActividadesSemana(empresaId, legajos = []) {
         if (!empresaId) return;
 
         const hoy = new Date();
-        const dias = Array.from({ length: 7 }, (_, i) => {
-            const d = new Date(hoy);
-            d.setDate(hoy.getDate() + i);
-            return d;
+        // 7 días para eventos de jornadas/supervisión
+        const dias7 = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(hoy); d.setDate(hoy.getDate() + i); return d;
         });
-        const semanaStart = fmtKey(dias[0]);
-        const semanaEnd   = fmtKey(dias[6]);
+        // 30 días para vencimientos (aviso anticipado)
+        const dias30 = Array.from({ length: 30 }, (_, i) => {
+            const d = new Date(hoy); d.setDate(hoy.getDate() + i); return d;
+        });
+        const semanaStart = fmtKey(dias7[0]);
+        const semanaEnd7  = fmtKey(dias7[6]);
+        const semanaEnd30 = fmtKey(dias30[29]);
 
         const acts = {};
         const addAct = (key, item) => {
@@ -37,23 +61,9 @@ export function useActividadesSemana(empresaId, legajos = []) {
 
         async function build() {
 
-            // 1. Aniversarios de ingreso del personal esta semana
-            legajos.forEach(p => {
-                if (!p.fechaIngreso) return;
-                const parts = p.fechaIngreso.split("/").map(Number);
-                if (parts.length < 2) return;
-                const [dd, mm] = parts;
-                dias.forEach(d => {
-                    if (d.getDate() === dd && d.getMonth() + 1 === mm) {
-                        const key    = fmtKey(d);
-                        const nombre = ((p.apellido || "") + " " + (p.nombre || "")).trim().split(" ")[0];
-                        addAct(key, { label: `Aniversario: ${nombre}`, tipo: "aniversario" });
-                    }
-                });
-            });
+            // (Cumpleaños se manejan dentro de CalendarioSemanal desde legajos.nacimiento)
 
-            // 2. Altas de gobierno — permisos/habilitaciones que vencen esta semana
-            //    Colección: "altas" → { empresaId, nombre, tipo, fechaVencimiento (YYYY-MM-DD) }
+            // 2. Altas de gobierno — permisos/habilitaciones que vencen (próximos 30 días)
             try {
                 const aSnap = await getDocs(
                     query(collection(db, "altas"), where("empresaId", "==", empresaId))
@@ -61,13 +71,12 @@ export function useActividadesSemana(empresaId, legajos = []) {
                 aSnap.docs.forEach(doc => {
                     const a   = doc.data();
                     const key = (a.fechaVencimiento || "").slice(0, 10);
-                    if (!key || key < semanaStart || key > semanaEnd) return;
-                    const label = a.nombre || a.tipo || "Alta";
-                    addAct(key, { label: `Alta: ${label}`, tipo: "alta" });
+                    if (!key || key < semanaStart || key > semanaEnd30) return;
+                    addAct(key, { label: `📋 Alta: ${a.nombre || a.tipo || "permiso"}`, tipo: "alta" });
                 });
             } catch (e) { console.warn("[actividadesSemana] altas:", e); }
 
-            // 3. Jornadas activas / actividades inconclusas
+            // 3. Jornadas activas / actividades inconclusas (sólo esta semana)
             try {
                 const jSnap = await getDocs(
                     query(collection(db, "jornadas"), where("empresaId", "==", empresaId))
@@ -75,30 +84,39 @@ export function useActividadesSemana(empresaId, legajos = []) {
                 jSnap.docs.forEach(doc => {
                     const j   = doc.data();
                     const key = (j.fecha || "").slice(0, 10);
-                    if (!key || key < semanaStart || key > semanaEnd) return;
-
+                    if (!key || key < semanaStart || key > semanaEnd7) return;
                     if (j.estado === "activa") {
-                        addAct(key, { label: "Supervisión activa", tipo: "supervision" });
+                        addAct(key, { label: "🔍 Supervisión activa", tipo: "supervision" });
                     }
                     (j.actividades || []).forEach(a => {
                         if (a.estado === "en_curso") {
-                            addAct(key, { label: `Inconclusa: ${a.tipo || "actividad"}`, tipo: "inconclusa" });
+                            addAct(key, { label: `⚠️ Inconclusa: ${a.tipo || "actividad"}`, tipo: "inconclusa" });
                         }
                     });
                 });
             } catch (e) { console.warn("[actividadesSemana] jornadas:", e); }
 
-            // 4. Vencimientos de service de vehículos
+            // 4. Vencimientos de vehículos: service, VTV y seguro (próximos 30 días)
             try {
                 const vSnap = await getDocs(
                     query(collection(db, "vehiculos"), where("empresaId", "==", empresaId))
                 );
                 vSnap.docs.forEach(doc => {
-                    const v   = doc.data();
-                    const key = (v.proximoService?.fecha || "").slice(0, 10);
-                    if (!key || key < semanaStart || key > semanaEnd) return;
+                    const v     = doc.data();
                     const label = v.patente || v.modelo || "Vehículo";
-                    addAct(key, { label: `Service: ${label}`, tipo: "vtv" });
+
+                    const serviceKey = (v.proximoService?.fecha || "").slice(0, 10);
+                    if (serviceKey && serviceKey >= semanaStart && serviceKey <= semanaEnd30) {
+                        addAct(serviceKey, { label: `🔧 Service: ${label}`, tipo: "vtv" });
+                    }
+                    const vtvKey = (v.vtv || "").slice(0, 10).replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$2-$1");
+                    if (vtvKey && vtvKey >= semanaStart && vtvKey <= semanaEnd30) {
+                        addAct(vtvKey, { label: `🚗 VTV vto.: ${label}`, tipo: "vtv" });
+                    }
+                    const segKey = (v.seguro || "").slice(0, 10).replace(/(\d{2})\/(\d{2})\/(\d{4})/, "$3-$2-$1");
+                    if (segKey && segKey >= semanaStart && segKey <= semanaEnd30) {
+                        addAct(segKey, { label: `🛡️ Seguro vto.: ${label}`, tipo: "vtv" });
+                    }
                 });
             } catch (e) { console.warn("[actividadesSemana] vehiculos:", e); }
 

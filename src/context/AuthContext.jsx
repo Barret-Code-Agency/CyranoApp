@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { resolverPermisos, ROLES_CREABLES_POR } from "../config/roles";
+import { SUPER_ADMIN_EMAIL } from "../config/constants";
 
 const AuthContext = createContext(null);
 
@@ -58,7 +59,7 @@ export function AuthProvider({ children }) {
             if (firebaseUser) {
                 let data = await fetchUserData(firebaseUser.uid);
                 // Bootstrap super_admin sin doc en Firestore
-                if (!data && firebaseUser.email === "supervision.brinks@gmail.com") {
+                if (!data && firebaseUser.email === SUPER_ADMIN_EMAIL) {
                     data = { nombre: "Super Admin", email: firebaseUser.email, rol: "super_admin", activo: true };
                     await setDoc(getUserDoc(firebaseUser.uid), { ...data, creadoEn: serverTimestamp(), ultimoAcceso: null });
                 }
@@ -82,7 +83,7 @@ export function AuthProvider({ children }) {
         let data = await fetchUserData(cred.user.uid);
 
         // Bootstrap super_admin: si no tiene doc en usuarios, lo crea automáticamente
-        if (!data && cred.user.email === "supervision.brinks@gmail.com") {
+        if (!data && cred.user.email === SUPER_ADMIN_EMAIL) {
             data = {
                 nombre:       "Super Admin",
                 email:        cred.user.email,

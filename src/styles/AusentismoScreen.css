@@ -1,99 +1,181 @@
-/* ── AusentismoScreen ──────────────────────────────────────────────── */
+/* ── AusentismoScreen — estilo consolidado ───────────────────────────────── */
 .aus-root {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 12px 16px;
+    gap: 0;
     min-height: 0;
+    background: var(--color-bg, #f8fafc);
+    font-family: var(--font-sans, system-ui, sans-serif);
 }
 
-/* Header */
-.aus-header {
+/* ── Toolbar (solo controles a la derecha) ── */
+.aus-toolbar {
     display: flex;
     align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-.aus-title {
-    font-weight: 700;
-    font-size: 16px;
-    color: #1e293b;
-    flex-shrink: 0;
-}
-.aus-controles {
-    display: flex;
+    justify-content: flex-end;
     gap: 8px;
+    padding: 8px 16px;
+    background: #1e293b;
+    flex-shrink: 0;
     flex-wrap: wrap;
+}
+.aus-toolbar-controls {
+    display: flex;
     align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
 }
 .aus-sel {
-    border: 1px solid #cbd5e1;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
     border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 13px;
-    background: #fff;
+    color: #f1f5f9;
+    padding: 5px 10px;
+    font-size: 12px;
     cursor: pointer;
 }
+.aus-sel option { background: #1e293b; color: #f1f5f9; }
+.aus-sel:focus { outline: none; border-color: #3b82f6; }
 .aus-busq {
-    border: 1px solid #cbd5e1;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
     border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 13px;
-    width: 180px;
+    color: #f1f5f9;
+    padding: 5px 12px;
+    font-size: 12px;
+    width: 160px;
 }
-.aus-loading,
-.aus-empty {
-    text-align: center;
+.aus-busq::placeholder { color: #94a3b8; }
+.aus-busq:focus { outline: none; border-color: #3b82f6; }
+
+/* ── KPI banner — índice de ausentismo ── */
+.aus-indice-banner {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: #0f172a;
+    border-bottom: 2px solid #1e3a5f;
+    padding: 12px 20px;
+    flex-wrap: wrap;
+}
+.aus-indice-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 160px;
+    border-right: 1px solid #334155;
+    padding-right: 24px;
+    margin-right: 24px;
+}
+.aus-indice-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: #93c5fd;
+}
+.aus-indice-val {
+    font-size: 32px;
+    font-weight: 900;
+    line-height: 1;
+}
+.aus-indice-formula {
+    font-size: 10px;
     color: #64748b;
-    padding: 32px;
-    font-size: 14px;
+    margin-top: 3px;
+}
+.aus-indice-chips {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+.aus-indice-chip {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.aus-indice-chip-label {
+    font-size: 10px;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.aus-indice-chip-val {
+    font-size: 18px;
+    font-weight: 800;
+    color: #f1f5f9;
+    line-height: 1;
+}
+.aus-indice-chip-sub {
+    font-size: 10px;
+    color: #475569;
 }
 
-/* Tabla */
+/* ── Tabla ── */
+.aus-loading, .aus-empty {
+    text-align: center;
+    color: #64748b;
+    padding: 40px;
+    font-size: 14px;
+}
 .aus-tabla-wrap {
     overflow-x: auto;
     overflow-y: auto;
-    max-height: 60vh;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    max-height: 50vh;
+    flex: 1;
+    padding: 12px 16px 0;
 }
 .aus-table {
     border-collapse: collapse;
     table-layout: fixed;
     font-size: 9px;
     white-space: nowrap;
+    width: 100%;
 }
 
-/* Sticky columns */
+/* Sticky */
 .aus-th-sticky,
 .aus-td-sticky {
     position: sticky;
-    background: #f8fafc;
+    background: #fff;
     z-index: 2;
 }
-.aus-th-sticky { top: 0; z-index: 3; }
-.aus-th-leg, .aus-td-leg { left: 0; width: 44px; min-width: 44px; }
-.aus-th-nom, .aus-td-nom { left: 44px; min-width: 140px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.aus-th-sticky {
+    top: 0;
+    z-index: 3;
+    background: #1e3a5f;
+    color: #e2e8f0;
+    font-weight: 700;
+    font-size: 9px;
+    text-transform: uppercase;
+    padding: 4px 6px;
+    border: 1px solid #243b55;
+}
+.aus-th-leg, .aus-td-leg { left: 0; width: 48px; min-width: 48px; }
+.aus-th-nom, .aus-td-nom { left: 48px; min-width: 200px; width: 200px; overflow: hidden; text-overflow: ellipsis; }
 
 /* Header días */
 .aus-th-dia {
     position: sticky;
     top: 0;
-    background: #f1f5f9;
+    background: #1e3a5f;
+    color: #bfdbfe;
     text-align: center;
-    width: 28px;
-    min-width: 28px;
+    width: 34px;
+    min-width: 34px;
     padding: 2px 1px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #243b55;
     z-index: 1;
+    font-weight: 600;
 }
-.aus-th-fin { background: #dbeafe; }
-.aus-th-fer { background: #fef2f2; color: #991b1b; }
-.aus-th-mes { font-size: 7px; color: #94a3b8; }
-.aus-th-num { font-weight: 700; font-size: 10px; }
-.aus-th-dow { font-size: 7px; color: #94a3b8; }
+.aus-th-fin { background: #1e3a5f; color: #93c5fd; }
+.aus-th-fer { background: #7f1d1d; color: #fca5a5; }
+.aus-th-mes { font-size: 7px; opacity: .8; text-transform: uppercase; }
+.aus-th-num { font-weight: 800; font-size: 10px; }
+.aus-th-dow { font-size: 7px; text-transform: uppercase; }
 
-/* Header resumen */
+/* Resumen headers */
 .aus-th-sum {
     position: sticky;
     top: 0;
@@ -101,37 +183,45 @@
     width: 36px;
     min-width: 36px;
     padding: 4px 2px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #243b55;
     font-size: 9px;
     font-weight: 700;
     z-index: 1;
+    color: #fff;
 }
-.aus-th-total { background: #1e293b; color: #fff; }
+.aus-th-total { background: #0f172a; color: #93c5fd; }
 
 /* Body */
-.aus-row { border-bottom: 1px solid #f1f5f9; }
-.aus-row:hover { background: #f8fafc; }
+.aus-row { background: #fff; border-bottom: 1px solid #f1f5f9; }
+.aus-row:nth-child(even) { background: #f8fafc; }
+.aus-row:hover { background: #eff6ff; }
 .aus-td-leg {
     text-align: center;
     padding: 3px;
     font-size: 9px;
     font-weight: 700;
+    color: #1e40af;
     border-right: 1px solid #e2e8f0;
 }
 .aus-td-nom {
     padding: 3px 6px;
     font-size: 10px;
+    font-weight: 600;
     border-right: 1px solid #e2e8f0;
+    color: #1e293b;
 }
+.aus-td-sticky { background: inherit; }
+.aus-row:nth-child(even) .aus-td-sticky { background: #f8fafc; }
+.aus-row:hover .aus-td-sticky { background: #eff6ff; }
 
 /* Celdas de días */
 .aus-celda {
     text-align: center;
-    width: 28px;
-    min-width: 28px;
-    padding: 2px 1px;
+    width: 34px;
+    min-width: 34px;
+    padding: 3px 2px;
     border: 1px solid #e2e8f0;
-    font-size: 8px;
+    font-size: 9px;
     font-weight: 700;
 }
 .aus-celda--fin { background: #f0f9ff; }
@@ -143,79 +233,91 @@
     border: 1px solid #e2e8f0;
     font-size: 10px;
     font-weight: 700;
-    color: #475569;
+    color: #374151;
 }
-.aus-td-total { background: #1e293b; color: #fff; }
+.aus-td-total { background: #0f172a; color: #93c5fd; }
 
 /* Tfoot */
-.aus-tfoot-row { background: #f1f5f9; }
+.aus-tfoot-row { background: #1e293b; }
 .aus-tfoot-label {
     padding: 4px 8px;
     font-size: 9px;
     font-weight: 700;
-    color: #64748b;
+    color: #93c5fd;
     text-align: right;
-    border-right: 1px solid #e2e8f0;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border-right: 1px solid #334155;
 }
 .aus-tfoot-cel {
     text-align: center;
     padding: 2px 1px;
     font-size: 9px;
     font-weight: 700;
-    color: #475569;
-    border: 1px solid #e2e8f0;
+    color: #93c5fd;
+    border: 1px solid #334155;
+    background: #1e293b;
 }
 .aus-tfoot-sum {
     text-align: center;
     padding: 3px 4px;
     font-size: 10px;
     font-weight: 700;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #334155;
+    color: #fff;
 }
-.aus-tfoot-total { background: #1e293b; color: #fff; }
+.aus-tfoot-total { background: #0f172a; color: #93c5fd; }
 
 /* ── Estadísticas ── */
 .aus-stats {
-    padding: 16px;
+    flex-shrink: 0;
     background: #f8fafc;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    border-top: 2px solid #e2e8f0;
+    padding: 12px 16px;
+}
+.aus-stats-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 10px;
 }
 .aus-stats-titulo {
+    font-size: 11px;
     font-weight: 700;
-    font-size: 14px;
-    color: #1e293b;
-    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #64748b;
 }
 .aus-stats-grid {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 10px;
 }
 .aus-stat-card {
     background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 12px 16px;
-    min-width: 110px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 14px;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    transition: box-shadow 0.15s;
 }
+.aus-stat-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
 .aus-stat-label {
-    font-weight: 700;
-    font-size: 13px;
+    font-weight: 800;
+    font-size: 12px;
     color: #1e293b;
 }
 .aus-stat-desc {
     font-size: 10px;
     color: #64748b;
+    line-height: 1.3;
 }
 .aus-stat-val {
     font-size: 28px;
-    font-weight: 700;
-    color: #0f172a;
-    line-height: 1.2;
+    font-weight: 900;
+    line-height: 1.15;
     margin-top: 4px;
 }
 .aus-stat-sub {

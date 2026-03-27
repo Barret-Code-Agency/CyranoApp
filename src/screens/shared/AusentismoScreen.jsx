@@ -22,7 +22,7 @@ const AUS_META  = {
 };
 
 export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
-    const { empresaId } = useAppData();
+    const { empresaId, empresaNombre } = useAppData();
     const hoy = new Date();
     const [añoSel,  setAñoSel]  = useState(añoProp  ?? hoy.getFullYear());
     const [mesSel,  setMesSel]  = useState(mesProp  ?? hoy.getMonth() + 1);
@@ -47,6 +47,15 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
             .catch(console.error)
             .finally(() => setCargando(false));
     }, [empresaId, añoSel, mesSel]);
+
+    // ── Nómina total (todos los empleados del período, con o sin ausencias) ──
+    const nominaTotal = useMemo(() => {
+        const legs = new Set();
+        docs.forEach(doc => (doc.personal || []).forEach(p => {
+            if (p.legajo) legs.add(String(p.legajo));
+        }));
+        return legs.size || 1;
+    }, [docs]);
 
     // ── Construir filas: un objeto por legajo, mergeando todos los docs ───────
     const filasRaw = useMemo(() => {
@@ -95,6 +104,21 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
         return base;
     }, [filasRaw, busq, zonaFiltro]);
 
+    // ── Total días realmente asignados (denominador correcto) ────────────────
+    const totalDiasAsignados = useMemo(() => {
+        const byLeg = {};
+        docs.forEach(doc => {
+            (doc.personal || []).forEach(p => {
+                const leg = String(p.legajo || "");
+                if (!leg) return;
+                const data = p.real || p.programado || {};
+                const count = Object.values(data).filter(v => v && v !== "").length;
+                byLeg[leg] = (byLeg[leg] || 0) + count;
+            });
+        });
+        return Object.values(byLeg).reduce((s, n) => s + n, 0) || 1;
+    }, [docs]);
+
     // ── Estadísticas globales ─────────────────────────────────────────────────
     const stats = useMemo(() => {
         const porcod = Object.fromEntries(AUS_CODES.map(c => [c, 0]));
@@ -104,20 +128,19 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                 if (porcod[v] !== undefined) { porcod[v]++; total++; }
             });
         });
-        // Días laborables del período × empleados totales
         const diasLab = dias.filter(d => d.getDay() !== 0 && d.getDay() !== 6).length;
-        const totalPosible = filasRaw.length * diasLab || 1;
-        return { porcod, total, pct: (total / totalPosible) * 100 };
-    }, [filasRaw, dias]);
+        const indice = (total / totalDiasAsignados) * 100;
+        return { porcod, total, indice, diasLab, nominaTotal };
+    }, [filasRaw, dias, nominaTotal, totalDiasAsignados]);
 
     const años = Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - 2 + i);
+    const colIndice = stats.indice < 3 ? "#10b981" : stats.indice < 6 ? "#f59e0b" : "#ef4444";
 
     return (
         <div className="aus-root">
-            {/* ── Header ── */}
-            <div className="aus-header">
-                <span className="aus-title">📉 Ausentismo</span>
-                <div className="aus-controles">
+            {/* ── Toolbar (solo controles) ── */}
+            <div className="aus-toolbar">
+                <div className="aus-toolbar-controls">
                     <select className="aus-sel" value={mesSel} onChange={e => setMesSel(Number(e.target.value))}>
                         {MESES_ES.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
                     </select>
@@ -138,6 +161,47 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                     />
                 </div>
             </div>
+
+            {/* ── Banner: Índice de ausentismo (fórmula RRHH) ── */}
+            {!cargando && (
+                <div className="aus-indice-banner">
+                    <div className="aus-indice-main">
+                        <div className="aus-indice-label">Índice de Ausentismo</div>
+                        <div className="aus-indice-val" style={{ color: colIndice }}>
+                            {stats.indice.toFixed(2)}%
+                        </div>
+                        <div className="aus-indice-formula">
+                            {stats.total} días / {totalDiasAsignados} días asignados
+                        </div>
+                    </div>
+                    <div className="aus-indice-chips">
+                        <div className="aus-indice-chip">
+                            <div className="aus-indice-chip-label">Total días ausentes</div>
+                            <div className="aus-indice-chip-val" style={{ color: colIndice }}>{stats.total}</div>
+                            <div className="aus-indice-chip-sub">días en el período</div>
+                        </div>
+                        <div className="aus-indice-chip">
+                            <div className="aus-indice-chip-label">Empleados afectados</div>
+                            <div className="aus-indice-chip-val" style={{ color: "#f1f5f9" }}>{filasRaw.length}</div>
+                            <div className="aus-indice-chip-sub">de {stats.nominaTotal} en nómina</div>
+                        </div>
+                        <div className="aus-indice-chip">
+                            <div className="aus-indice-chip-label">Días hábiles</div>
+                            <div className="aus-indice-chip-val" style={{ color: "#f1f5f9" }}>{stats.diasLab}</div>
+                            <div className="aus-indice-chip-sub">{MESES_ES[mesSel-1]} {añoSel}</div>
+                        </div>
+                        {AUS_CODES.filter(c => stats.porcod[c] > 0).map(c => (
+                            <div key={c} className="aus-indice-chip">
+                                <div className="aus-indice-chip-label">{AUS_META[c].desc}</div>
+                                <div className="aus-indice-chip-val" style={{ color: AUS_META[c].bg }}>
+                                    {stats.porcod[c]}
+                                </div>
+                                <div className="aus-indice-chip-sub">días</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {cargando && <div className="aus-loading">Cargando…</div>}
 
@@ -232,10 +296,10 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                         </div>
                     )}
 
-                    {/* ── Estadísticas ── */}
+                    {/* ── Tarjetas por código ── */}
                     <div className="aus-stats">
-                        <div className="aus-stats-titulo">
-                            Estadísticas — {MESES_ES[mesSel-1]} {añoSel}
+                        <div className="aus-stats-header">
+                            <div className="aus-stats-titulo">Detalle por motivo — {MESES_ES[mesSel-1]} {añoSel}</div>
                         </div>
                         <div className="aus-stats-grid">
                             {AUS_CODES.map(c => (
@@ -243,21 +307,25 @@ export default function AusentismoScreen({ año: añoProp, mes: mesProp }) {
                                     style={{ borderLeft: `4px solid ${AUS_META[c].bg}` }}>
                                     <div className="aus-stat-label">{AUS_META[c].label}</div>
                                     <div className="aus-stat-desc">{AUS_META[c].desc}</div>
-                                    <div className="aus-stat-val">{stats.porcod[c]}</div>
-                                    <div className="aus-stat-sub">días</div>
+                                    <div className="aus-stat-val" style={{ color: AUS_META[c].bg }}>
+                                        {stats.porcod[c]}
+                                    </div>
+                                    <div className="aus-stat-sub">
+                                        días · {stats.total > 0 ? ((stats.porcod[c]/stats.total)*100).toFixed(1) : 0}% del total
+                                    </div>
                                 </div>
                             ))}
                             <div className="aus-stat-card aus-stat-card--total">
                                 <div className="aus-stat-label">Total</div>
                                 <div className="aus-stat-desc">Días de ausentismo</div>
                                 <div className="aus-stat-val">{stats.total}</div>
-                                <div className="aus-stat-sub">{stats.pct.toFixed(1)}% del período</div>
+                                <div className="aus-stat-sub">{stats.indice.toFixed(2)}% índice RRHH</div>
                             </div>
                             <div className="aus-stat-card aus-stat-card--emp">
                                 <div className="aus-stat-label">Afectados</div>
                                 <div className="aus-stat-desc">Empleados con ausencias</div>
-                                <div className="aus-stat-val">{filasRaw.length}</div>
-                                <div className="aus-stat-sub">personas</div>
+                                <div className="aus-stat-val" style={{ color: "#0ea5e9" }}>{filasRaw.length}</div>
+                                <div className="aus-stat-sub">de {stats.nominaTotal} en nómina</div>
                             </div>
                         </div>
                     </div>

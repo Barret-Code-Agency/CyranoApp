@@ -125,17 +125,18 @@
 
 .sup-mes-semanas { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
 .sup-mes-sem {
-    background: var(--color-surface2); border: 1px solid var(--color-border);
+    background: transparent; border: 1px solid rgba(var(--color-primary-rgb,0,169,224),.2);
     border-radius: var(--radius-md,10px); padding: 10px 8px; text-align: center;
+    cursor: pointer; user-select: none; transition: border-color .18s, background .18s, box-shadow .18s;
 }
-.sup-mes-sem.current { border-color: rgba(var(--color-primary-rgb,0,169,224),.4); background: rgba(var(--color-primary-rgb,0,169,224),.05); }
+.sup-mes-sem:hover   { border-color: rgba(var(--color-primary-rgb,0,169,224),.45); background: rgba(var(--color-primary-rgb,0,169,224),.05); }
+.sup-mes-sem.current { border-color: rgba(var(--color-primary-rgb,0,169,224),.35); }
+.sup-mes-sem.expanded { border-color: var(--color-primary) !important; background: rgba(var(--color-primary-rgb,0,169,224),.09) !important; box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb,0,169,224),.13) !important; }
 .sup-mes-sem-title  { font-size: 10px; font-weight: 700; color: var(--color-muted); margin-bottom: 2px; }
-.sup-mes-sem.current .sup-mes-sem-title { color: var(--color-primary); }
+.sup-mes-sem.current .sup-mes-sem-title  { color: var(--color-primary); }
+.sup-mes-sem.expanded .sup-mes-sem-title { color: var(--color-primary); }
 .sup-mes-sem-range  { font-size: 9px; color: var(--color-muted); margin-bottom: 5px; }
 .sup-mes-sem-pct    { font-family: var(--font-display,"Bebas Neue",sans-serif); font-size: 1.3rem; line-height: 1; }
-.sup-mes-sem-pct.green  { color: var(--color-success); }
-.sup-mes-sem-pct.orange { color: #f59e0b; }
-.sup-mes-sem-pct.red    { color: var(--color-danger); }
 .sup-mes-sem-count { font-size: 10px; color: var(--color-muted); margin-top: 2px; }
 .sup-mes-sem-empty { font-size: 10px; color: var(--color-muted); }
 
@@ -163,7 +164,7 @@
 .sup-card-title.warn::before { background: #d97706; }
 
 /* ── Desglose turnos ── */
-.sup-week-banner { align-items: flex-start !important; }
+/* align-items: flex-start !important; → removido para permitir centrado vertical en Card 2 */
 
 .sup-week-circles {
     display: flex; gap: 12px; flex-wrap: wrap;

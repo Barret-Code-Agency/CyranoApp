@@ -43,18 +43,19 @@ const calcTiempos = (jorns) => {
     let admin = 0, taller = 0, vulnerab = 0, reclamos = 0, gremial = 0, almuerzo = 0, otras = 0;
     jorns.forEach(j => {
         const acts = [...(j.actividades || [])]
-            .sort((a, b) => toMin(a.horaInicio || "00:00") - toMin(b.horaInicio || "00:00"));
+            .sort((a, b) => toMin(a.horaInicio || a.inicio || "00:00") - toMin(b.horaInicio || b.inicio || "00:00"));
 
         acts.forEach(a => {
-            // Duración: desde horaInicio→horaFin o campo duracion (cap) o duracionMin
+            // Campos de hora: algunos usan horaInicio/horaFin, otros inicio/fin
+            const hi = a.horaInicio || a.inicio;
+            const hf = a.horaFin    || a.fin;
+            // Duración: preferir diferencia de horas, sino campo duracion/duracionMin
             let d = 0;
-            if (a.horaInicio && a.horaFin) {
-                d = diffMin(a.horaInicio, a.horaFin);
-            } else if (a.duracion) {
-                d = Number(a.duracion) || 0;
-            } else if (a.duracionMin) {
-                d = Number(a.duracionMin) || 0;
+            if (hi && hf) {
+                d = diffMin(hi, hf);
             }
+            if (d <= 0 && a.duracion)    d = Number(a.duracion)    || 0;
+            if (d <= 0 && a.duracionMin) d = Number(a.duracionMin) || 0;
             if (d <= 0) return;
 
             switch (a.tipo) {
@@ -72,10 +73,12 @@ const calcTiempos = (jorns) => {
         });
 
         // Gaps entre actividades como tiempo de traslado implícito
-        const conHora = acts.filter(a => a.horaInicio && a.horaFin);
+        const conHora = acts.filter(a => (a.horaInicio || a.inicio) && (a.horaFin || a.fin));
         for (let i = 1; i < conHora.length; i++) {
-            const g = diffMin(conHora[i - 1].horaFin, conHora[i].horaInicio);
-            if (g > 1 && g < 120) traslado += g;  // gaps de 2–119 min = traslado implícito
+            const prevFin  = conHora[i - 1].horaFin  || conHora[i - 1].fin;
+            const nextIni  = conHora[i].horaInicio    || conHora[i].inicio;
+            const g = diffMin(prevFin, nextIni);
+            if (g > 1 && g < 120) traslado += g;
         }
     });
     const total = ctrl + cap + traslado + admin + taller + vulnerab + reclamos + gremial + almuerzo + otras;
@@ -160,6 +163,7 @@ const TABS = [
     { key: "objetivos",    label: "Objetivos",    icon: "📍" },
     { key: "tiempos",      label: "Tiempos",      icon: "⏱"  },
     { key: "km",           label: "Km & Flota",   icon: "🚗"  },
+    { key: "cumplimiento", label: "Cumpl. obj.",  icon: "🎯"  },
 ];
 
 // ══════════════════════════════════════════════════════════════
@@ -186,7 +190,7 @@ function TurnoStatRow({ icon, label, value, color, total }) {
 // ══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════
-export default function DashboardScreen() {
+export default function DashboardScreen({ embedded }) {
     const { jornadas, plan, data, mantenimiento, getSupervisoresConEmail, getPlanSupervisor } = useAppData();
     const [tab, setTab] = useState("resumen");
     const [periodo, setPeriodo] = useState("mes");
@@ -403,6 +407,7 @@ export default function DashboardScreen() {
     return (
         <div className="sup-dash">
             {/* ── Período ── */}
+            {!embedded && (
             <div style={{ display: "flex", gap: 6, marginBottom: "var(--space-3)" }}>
                 {[["semana","7 días"],["mes","30 días"],["todo","Todo"]].map(([k,l]) => (
                     <button key={k} onClick={() => setPeriodo(k)} style={{
@@ -414,8 +419,10 @@ export default function DashboardScreen() {
                     }}>{l}</button>
                 ))}
             </div>
+            )}
 
             {/* ── Tabs ── */}
+            {!embedded && (
             <div style={{ display: "flex", gap: 4, marginBottom: "var(--space-3)", overflowX: "auto", paddingBottom: 2 }}>
                 {TABS.map(t => (
                     <button key={t.key} onClick={() => setTab(t.key)} style={{
@@ -427,9 +434,10 @@ export default function DashboardScreen() {
                     }}>{t.icon} {t.label}</button>
                 ))}
             </div>
+            )}
 
             {/* ══ RESUMEN ══ */}
-            {tab === "resumen" && (<>
+            {!embedded && tab === "resumen" && (<>
                 {/* Banner global */}
                 <div className="sup-week-banner">
                     <div className="sup-week-left">
@@ -534,7 +542,7 @@ export default function DashboardScreen() {
             </>)}
 
             {/* ══ SUPERVISORES ══ */}
-            {tab === "supervisores" && (<>
+            {!embedded && tab === "supervisores" && (<>
                 {supDataComputed.length === 0
                     ? <div className="sup-empty" style={{ padding: 40 }}>Sin supervisores registrados.</div>
                     : supDataComputed.map((s, i) => {
@@ -648,7 +656,7 @@ export default function DashboardScreen() {
             </>)}
 
             {/* ══ OBJETIVOS ══ */}
-            {tab === "objetivos" && (<>
+            {!embedded && tab === "objetivos" && (<>
                 {cumplPlan.length === 0
                     ? <div className="sup-empty" style={{ padding: 40 }}>Sin plan cargado.</div>
                     : [...cumplPlan].sort((a, b) => a.pct - b.pct).map((p, i) => {
@@ -692,7 +700,7 @@ export default function DashboardScreen() {
             </>)}
 
             {/* ══ TIEMPOS ══ */}
-            {tab === "tiempos" && (<>
+            {!embedded && tab === "tiempos" && (<>
                 {/* ── Definición completa de categorías de tiempo ── */}
                 {(() => {
                     const CATS_T = [
@@ -794,7 +802,7 @@ export default function DashboardScreen() {
             </>)}
 
             {/* ══ KM & FLOTA ══ */}
-            {tab === "km" && (<>
+            {!embedded && tab === "km" && (<>
                 <div className="sup-card sup-card-week">
                     <div className="sup-card-title">🚗 Km por semana (últimas 8)</div>
                     <LineChart data={kmSemanas} color="var(--color-primary)" />
@@ -889,6 +897,99 @@ export default function DashboardScreen() {
                         })}
                     </div>
                 )}
+            </>)}
+
+            {/* ══ CUMPLIMIENTO POR OBJETIVOS ══ */}
+            {(embedded || tab === "cumplimiento") && (<>
+                {cumplPlan.length === 0 ? (
+                    <div className="sup-empty" style={{ padding: 40 }}>Sin plan cargado para calcular cumplimiento.</div>
+                ) : (<>
+                    {/* KPIs globales */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 4 }}>
+                        {[
+                            { val: cumplTotal + "%",                                                             label: "Cumplimiento global",   col: cumplTotal>=80?"#10b981":cumplTotal>=50?"#f59e0b":"#ef4444" },
+                            { val: cumplPlan.filter(p=>p.pct>=80).length + "/" + cumplPlan.length,               label: "Objetivos ≥ 80%",       col: "#10b981" },
+                            { val: cumplPlan.filter(p=>p.pct<50).length,                                         label: "Objetivos críticos",    col: "#ef4444" },
+                        ].map((k,i) => (
+                            <div key={i} className="sup-card" style={{ textAlign:"center", padding:"12px 8px" }}>
+                                <div style={{ fontFamily:"var(--font-display,\"Bebas Neue\",sans-serif)", fontSize:"1.8rem", color:k.col, lineHeight:1 }}>{k.val}</div>
+                                <div style={{ fontSize:10, color:"var(--color-muted)", marginTop:4 }}>{k.label}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Barra de progreso global */}
+                    <div className="sup-card" style={{ padding: "12px 16px" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                            <span style={{ fontSize:12, fontWeight:700 }}>Cumplimiento general del plan</span>
+                            <span style={{ fontFamily:"var(--font-display,\"Bebas Neue\",sans-serif)", fontSize:"1.2rem", color: cumplTotal>=80?"#10b981":cumplTotal>=50?"#f59e0b":"#ef4444" }}>{cumplTotal}%</span>
+                        </div>
+                        <div className="sup-prog-bar" style={{ height:10 }}>
+                            <div className="sup-prog-fill" style={{ width:cumplTotal+"%", background: cumplTotal>=80?"#10b981":cumplTotal>=50?"#f59e0b":"#ef4444" }} />
+                        </div>
+                    </div>
+
+                    {/* Barras horizontales: % cumplimiento por objetivo */}
+                    <div className="sup-card">
+                        <div className="sup-card-title">🎯 % Cumplimiento por objetivo</div>
+                        {[...cumplPlan].sort((a,b)=>a.pct-b.pct).map((p,i)=>{
+                            const col = p.pct>=80?"#10b981":p.pct>=50?"#f59e0b":"#ef4444";
+                            return (
+                                <div key={i} style={{ marginBottom: 10 }}>
+                                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3, gap:8 }}>
+                                        <span style={{ fontSize:11, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{p.objetivo}</span>
+                                        <span style={{ fontFamily:"var(--font-display,\"Bebas Neue\",sans-serif)", fontSize:"1rem", color:col, flexShrink:0 }}>{p.pct}%</span>
+                                    </div>
+                                    <div className="sup-prog-bar">
+                                        <div className="sup-prog-fill" style={{ width:p.pct+"%", background:col }} />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Tabla detallada: todos los objetivos */}
+                    <div className="sup-card">
+                        <div className="sup-card-title">📋 Detalle por objetivo</div>
+                        <div style={{ overflowX:"auto" }}>
+                            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                                <thead>
+                                    <tr style={{ borderBottom:"2px solid var(--color-border)" }}>
+                                        {["Objetivo","Total","Cump.%","☀️ Día","🌙 Noc","📅 FdS","Sup."].map((h,i)=>(
+                                            <th key={i} style={{ textAlign:i===0?"left":"center", padding:"6px 4px", color:"var(--color-muted)", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[...cumplPlan].sort((a,b)=>a.pct-b.pct).map((p,i)=>{
+                                        const col = p.pct>=80?"#10b981":p.pct>=50?"#f59e0b":"#ef4444";
+                                        // Contar supervisores únicos que visitaron este objetivo
+                                        const sups = new Set(controles.filter(c=>c.objetivo===p.objetivo).map(c=>c.jornada?.nombre||c.jornada?.supervisor||"?")).size;
+                                        return (
+                                            <tr key={i} style={{ borderBottom:"1px solid var(--color-border)", background: i%2?"var(--color-surface2)":"" }}>
+                                                <td style={{ padding:"7px 0", fontWeight:600, maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.objetivo}</td>
+                                                <td style={{ textAlign:"center", padding:"7px 4px" }}>{p.visitas}/{p.planTot}</td>
+                                                <td style={{ textAlign:"center", padding:"7px 4px" }}>
+                                                    <span style={{ background:`${col}18`, color:col, border:`1px solid ${col}44`, borderRadius:20, padding:"1px 8px", fontWeight:800 }}>{p.pct}%</span>
+                                                </td>
+                                                <td style={{ textAlign:"center", padding:"7px 4px", color:p.planDia>0?(p.pctDia>=100?"#10b981":p.pctDia>=50?"#f59e0b":"#ef4444"):"var(--color-muted)" }}>
+                                                    {p.planDia>0?`${p.realDia}/${p.planDia}`:"—"}
+                                                </td>
+                                                <td style={{ textAlign:"center", padding:"7px 4px", color:p.planNoc>0?(p.pctNoc>=100?"#10b981":p.pctNoc>=50?"#f59e0b":"#ef4444"):"var(--color-muted)" }}>
+                                                    {p.planNoc>0?`${p.realNoc}/${p.planNoc}`:"—"}
+                                                </td>
+                                                <td style={{ textAlign:"center", padding:"7px 4px", color:p.planFdS>0?(p.pctFdS>=100?"#10b981":p.pctFdS>=50?"#f59e0b":"#ef4444"):"var(--color-muted)" }}>
+                                                    {p.planFdS>0?`${p.realFdS}/${p.planFdS}`:"—"}
+                                                </td>
+                                                <td style={{ textAlign:"center", padding:"7px 4px", color:"var(--color-muted)" }}>{sups>0?sups:"—"}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>)}
             </>)}
         </div>
     );

@@ -84,12 +84,24 @@ function CalendarioSemanal({ actividades = {}, legajos = [] }) {
 
     const cumplesPorKey = {};
     legajos.forEach(p => {
-        if (!p.nacimiento) return;
-        const [dd, mm] = p.nacimiento.split("/").map(Number);
+        if (!p.nacimiento && p.nacimiento !== 0) return;
+        let dd, mm;
+        const n = Number(p.nacimiento);
+        if (typeof p.nacimiento === "number" || (n > 20000 && n < 60000 && !isNaN(n))) {
+            const dt = new Date((n - 25569) * 86400000);
+            dd = dt.getUTCDate(); mm = dt.getUTCMonth() + 1;
+        } else {
+            const s = String(p.nacimiento);
+            const sep = s.includes("/") ? "/" : "-";
+            const parts = s.split(sep).map(Number);
+            if (parts.length < 2 || parts.some(isNaN)) return;
+            dd = parts[0] > 31 ? parts[2] : parts[0];
+            mm = parts[1];
+        }
         dias.forEach(d => {
             if (d.getDate() === dd && d.getMonth() + 1 === mm) {
                 const key = fmtKey(d);
-                const ap = (p.nombre || "").trim().split(" ")[0];
+                const ap = ((p.apellido || "") + " " + (p.nombre || "")).trim().split(/\s+/).slice(0, 2).join(" ") || p.nombre || "—";
                 cumplesPorKey[key] = [...(cumplesPorKey[key] || []), ap];
             }
         });

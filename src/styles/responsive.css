@@ -8,6 +8,13 @@
    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 ─────────────────────────────────────────────────────── */
 
+/* ── DESKTOP: pantallas de supervisión al 50% del ancho ─ */
+@media (min-width: 768px) {
+    .main {
+        max-width: 50%;
+    }
+}
+
 /* ── 2. BASE MÓVIL ───────────────────────────────────── */
 @media (max-width: 600px) {
 
