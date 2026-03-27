@@ -10,7 +10,7 @@ import {
     LineChart, Line, ComposedChart, Cell, LabelList, ReferenceLine,
 } from "recharts";
 import "./DashboardsGestionScreen.css";
-import { getDias, fmtKey, horasDeValor, normalizarTurno } from "../../utils/periodoUtils";
+import { getDias, fmtKey, horasDeValor, normalizarTurno, HORAS_KEYS } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -224,119 +224,130 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         return { ext50: Math.round(ext50 * 10) / 10, ext100: Math.round(ext100 * 10) / 10 };
     }
 
+    // ── Helper compartido: horas contratadas de un objetivo para un día ─────────
+    // Idéntico a horasDiaObj() de FacturacionScreen
+    function hsContrato(dia, obj, diasEsp) {
+        if (!obj) return 0;
+        const key = fmtKey(dia);
+        if (FERIADOS_ARG[key]) return obj.horasFeriados != null ? Number(obj.horasFeriados) : 0;
+        if (diasEsp?.[key] === false) return 0;
+        const hs = obj[HORAS_KEYS[dia.getDay()]];
+        return hs != null ? Number(hs) : 0;
+    }
+
     // ── Métricas por cliente — MES EN CURSO ───────────────────────────────────
     const mesActual = meses[meses.length - 1];
     const clienteMetricasMes = useMemo(() => {
         const { año, mes } = mesActual;
         const dias = getDias(año, mes);
         const docsDelMes = filteredDocs.filter(d => d._mes?.año === año && d._mes?.mes === mes);
-        // Prefijo para filtrar claves del mes calendario (YYYY-MM-)
         const calPrefix = `${año}-${String(mes).padStart(2, "0")}-`;
 
-        // Paso 1: acumular datos por legajo (real data + cliente principal)
-        const byLeg = {};
-        docsDelMes.forEach(doc => {
-            const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
-            (doc.personal || []).forEach(p => {
-                const leg = String(p.legajo || "");
-                if (!byLeg[leg]) byLeg[leg] = { nombre: p.nombre || leg, cliHoras: {}, realData: {} };
-                const r = byLeg[leg];
-                // Horas en este cliente: programado primero; si no hay, usar real (para extras sin planilla)
-                const progTurnos = Object.keys(p.programado || {}).filter(k => esTurno((p.programado||{})[k]));
-                if (progTurnos.length > 0) {
-                    progTurnos.forEach(fecha => {
-                        r.cliHoras[cli] = (r.cliHoras[cli] || 0) + parseHoras(p.programado[fecha]);
-                    });
-                } else {
-                    Object.keys(p.real || {}).forEach(fecha => {
-                        const v = p.real[fecha];
-                        if (esTurno(v)) r.cliHoras[cli] = (r.cliHoras[cli] || 0) + parseHoras(v);
-                    });
-                }
-                // Acumular real (puede aparecer en varios docs del mismo mes)
-                Object.entries(p.real || {}).forEach(([k, v]) => {
-                    const hs = horasDeValor(normalizarTurno(v));
-                    r.realData[k] = hs > 0 ? (r.realData[k] || 0) + hs : (r.realData[k] || v || "");
-                });
-                // Capacitación cuenta como horas extra
-                Object.entries(p.capacitacion || {}).forEach(([k, v]) => {
-                    const hc = Number(v) || 0;
-                    if (hc <= 0) return;
-                    r.realData[k] = typeof r.realData[k] === "number" ? r.realData[k] + hc : hc;
-                });
-            });
-        });
+        // Mapa de objetivos por ID (para horas contratadas, igual a FacturacionScreen)
+        const objMap = {};
+        objetivos.forEach(o => { if (o.id) objMap[o.id] = o; });
 
-        // Cliente principal de cada legajo
-        const legCliPrincipal = {};
-        Object.entries(byLeg).forEach(([leg, r]) => {
-            legCliPrincipal[leg] = Object.entries(r.cliHoras).sort((a, b) => b[1] - a[1])[0]?.[0] || "Sin cliente";
-        });
+        // Resolución de nombre de cliente: doc.clienteNombre → obj.clienteNombre → vacío (se omite)
+        const cliDeDoc = doc =>
+            (doc.clienteNombre || doc.cliente || doc.contrato ||
+             objMap[doc.objetivoId]?.clienteNombre || "").trim();
 
-        // Paso 2: acumular métricas operativas por cliente (de los docs)
         const byCli = {};
+        const byLeg = {}; // para calcExtras
         const init = cli => {
-            if (!byCli[cli]) byCli[cli] = { prog: 0, trab: 0, adicHoras: 0, factCalend: 0, ausDias: 0, ausHoras: 0, vacDias: 0, vacHoras: 0, ext50Hs: 0, ext50Cant: new Set(), ext100Hs: 0, ext100Cant: new Set() };
+            if (!byCli[cli]) byCli[cli] = {
+                prog: 0, trab: 0, adicHoras: 0, factCalend: 0,
+                ausDias: 0, ausHoras: 0, vacDias: 0, vacHoras: 0,
+                ext50Hs: 0, ext50Cant: new Set(), ext100Hs: 0, ext100Cant: new Set(),
+            };
         };
 
         docsDelMes.forEach(doc => {
-            const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
+            const cli = cliDeDoc(doc);
+            if (!cli) return; // doc sin cliente identificable → omitir
+            const obj     = objMap[doc.objetivoId] || null;
+            const diasEsp = doc.diasEspeciales || {};
+            const personal = doc.personal || [];
             init(cli);
             const c = byCli[cli];
-            (doc.personal || []).forEach(p => {
+
+            // ── Prog / Trab / Adicionales: contratado vs real por día (como FacturacionScreen) ──
+            dias.forEach(dia => {
+                const key    = fmtKey(dia);
+                const cubrir = hsContrato(dia, obj, diasEsp);
+                const realDia = personal.reduce((s, p) =>
+                    s + horasDeValor(normalizarTurno((p.real || {})[key] || "")), 0);
+                c.prog += cubrir;
+                c.trab += Math.min(realDia, cubrir);
+                if (realDia > cubrir) c.adicHoras += realDia - cubrir;
+            });
+
+            // ── Ausentismo: iterar personal por sus datos de programado/real ──
+            personal.forEach(p => {
                 const rawProg = p.programado || {};
                 const hasProg = Object.keys(rawProg).some(k => esTurno(rawProg[k]));
-                const progSrc = hasProg ? rawProg : (p.real || {});
-                Object.keys(progSrc).forEach(fecha => {
-                    const vP = progSrc[fecha];
+                const src = hasProg ? rawProg : (p.real || {});
+                Object.keys(src).forEach(fecha => {
+                    const vP = src[fecha];
                     const vR = hasProg ? (p.real || {})[fecha] : vP;
-                    if (hasProg) {
-                        if (!esTurno(vP)) return;
-                        const h = parseHoras(vP);
-                        c.prog += h;
-                        if (vR && esTurno(vR))               c.trab += parseHoras(vR);
-                        else if (esAusentismo(vR))             { c.ausDias++; c.ausHoras += h; }
-                        else if (vR?.toLowerCase() === "vac")  { c.vacDias++; c.vacHoras += h; }
-                        // !vR → sin dato real: la hora queda como no cubierta (prog - trab)
-                    } else {
-                        // Sin turno programado: esta persona no estaba en la planilla → sus horas son adicionales.
-                        // No se suman a prog (no era obligación cubrirla) ni a trab.
-                        if (esTurno(vP))                        c.adicHoras += parseHoras(vP);
-                        else if (esAusentismo(vP))             { c.ausDias++; c.ausHoras += 12; }
-                        else if (vP?.toLowerCase() === "vac")  { c.vacDias++; c.vacHoras += 12; }
+                    if (!esTurno(vP)) {
+                        if (!hasProg) {
+                            if (esAusentismo(vP))                 { c.ausDias++; c.ausHoras += 12; }
+                            else if (vP?.toLowerCase() === "vac") { c.vacDias++; c.vacHoras += 12; }
+                        }
+                        return;
                     }
+                    const h = parseHoras(vP);
+                    if (esAusentismo(vR))                 { c.ausDias++; c.ausHoras += h; }
+                    else if (vR?.toLowerCase() === "vac") { c.vacDias++; c.vacHoras += h; }
                 });
                 if (hasProg) {
                     Object.keys(p.real || {}).forEach(fecha => {
                         const vR = p.real[fecha], vP = rawProg[fecha];
-                        if (esTurno(vR) && !esTurno(vP)) c.adicHoras += parseHoras(vR);
                         if (!vP) {
                             if (esAusentismo(vR))               { c.ausDias++; c.ausHoras += 12; }
                             else if (vR?.toLowerCase() === "vac") { c.vacDias++; c.vacHoras += 12; }
                         }
                     });
                 }
+
+                // ── Acumular realData por legajo (para extras) ──
+                const leg = String(p.legajo || "");
+                if (!leg) return;
+                if (!byLeg[leg]) byLeg[leg] = { cliHoras: {}, realData: {} };
+                const r = byLeg[leg];
+                dias.forEach(dia => {
+                    const key = fmtKey(dia);
+                    const h = horasDeValor(normalizarTurno((p.real || {})[key] || ""));
+                    if (h > 0) r.cliHoras[cli] = (r.cliHoras[cli] || 0) + h;
+                });
+                Object.entries(p.real || {}).forEach(([k, v]) => {
+                    const hs = horasDeValor(normalizarTurno(v));
+                    r.realData[k] = hs > 0 ? (r.realData[k] || 0) + hs : (r.realData[k] || v || "");
+                });
+                Object.entries(p.capacitacion || {}).forEach(([k, v]) => {
+                    const hc = Number(v) || 0;
+                    if (hc > 0) r.realData[k] = typeof r.realData[k] === "number" ? r.realData[k] + hc : hc;
+                });
             });
         });
 
-        // Paso 2b: Hs Facturadas mes calendario (1 al último día del mes)
-        // El período de liquidación M cubre días 1-23 del mes M.
-        // El período siguiente (M+1) cubre días 24-31 del mes M.
-        // Se suman horas reales de ambos períodos filtrando por prefijo de fecha del mes calendario.
+        // ── Hs Facturadas mes calendario (1 al último día): suma horas reales ──
         const acumFactCalend = (docs) => {
             docs.forEach(doc => {
-                const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
-                init(cli);
+                const cli = cliDeDoc(doc);
+                if (!cli || !byCli[cli]) return;
+                const c = byCli[cli];
                 (doc.personal || []).forEach(p => {
                     Object.entries(p.real || {}).forEach(([fecha, vR]) => {
                         if (!fecha.startsWith(calPrefix)) return;
                         const h = horasDeValor(normalizarTurno(vR));
-                        if (h > 0) byCli[cli].factCalend += h;
+                        if (h > 0) c.factCalend += h;
                     });
                     Object.entries(p.capacitacion || {}).forEach(([fecha, v]) => {
                         if (!fecha.startsWith(calPrefix)) return;
                         const hc = Number(v) || 0;
-                        if (hc > 0) byCli[cli].factCalend += hc;
+                        if (hc > 0) c.factCalend += hc;
                     });
                 });
             });
@@ -344,28 +355,29 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         acumFactCalend(docsDelMes);         // días 1-23 del mes M
         acumFactCalend(filteredDocsProximo); // días 24-31 del mes M (período M+1)
 
-        // Paso 3: calcular extras por legajo y atribuir al cliente principal
+        // ── Extras por legajo → cliente donde más horas reales trabajó ──
         Object.entries(byLeg).forEach(([leg, r]) => {
             if (excluidos.has(leg)) return;
-            const cli = legCliPrincipal[leg];
-            init(cli);
+            const cli = Object.entries(r.cliHoras).sort((a, b) => b[1] - a[1])[0]?.[0];
+            if (!cli || !byCli[cli]) return;
             const c = byCli[cli];
             const { ext50, ext100 } = calcExtras(leg, r.realData, dias);
             if (ext50  > 0) { c.ext50Hs  += ext50;  c.ext50Cant.add(leg);  }
             if (ext100 > 0) { c.ext100Hs += ext100; c.ext100Cant.add(leg); }
         });
 
-        // Totales globales
-        let totalProg = 0, totalFact = 0, totalAusDias = 0, totalAusHoras = 0, totalVacDias = 0, totalVacHoras = 0, totalExt50 = 0, totalExt100 = 0;
-        const rows = Object.entries(byCli).filter(([name]) => name !== "Sin cliente").map(([name, d]) => {
-            const fact = Math.round(d.factCalend); // horas reales del mes calendario (1-último día)
+        // ── Totales y filas ──
+        let totalProg = 0, totalFact = 0, totalAusDias = 0, totalAusHoras = 0,
+            totalVacDias = 0, totalVacHoras = 0, totalExt50 = 0, totalExt100 = 0;
+        const rows = Object.entries(byCli).map(([name, d]) => {
+            const fact      = Math.round(d.factCalend);
             const ext50Pct  = fact > 0 ? Math.round((d.ext50Hs  / fact) * 100 * 10) / 10 : 0;
             const ext100Pct = fact > 0 ? Math.round((d.ext100Hs / fact) * 100 * 10) / 10 : 0;
             const ausPct    = d.prog > 0 ? Math.round((d.ausHoras / d.prog) * 100 * 10) / 10 : 0;
-            totalProg    += d.prog;      totalFact      += fact;
-            totalAusDias += d.ausDias;  totalAusHoras  += d.ausHoras;
-            totalVacDias += d.vacDias;  totalVacHoras  += d.vacHoras;
-            totalExt50   += d.ext50Hs; totalExt100  += d.ext100Hs;
+            totalProg    += d.prog;     totalFact     += fact;
+            totalAusDias += d.ausDias; totalAusHoras += d.ausHoras;
+            totalVacDias += d.vacDias; totalVacHoras += d.vacHoras;
+            totalExt50   += d.ext50Hs; totalExt100   += d.ext100Hs;
             return {
                 name,
                 prog:       d.prog,
@@ -386,7 +398,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         }).sort((a, b) => b.prog - a.prog);
 
         return { rows, totalProg, totalFact, totalAusDias, totalAusHoras, totalVacDias, totalVacHoras, totalExt50, totalExt100 };
-    }, [filteredDocs, filteredDocsProximo, mesActual, excluidos, regimenMap, grupoMap, francosMap]);
+    }, [filteredDocs, filteredDocsProximo, mesActual, excluidos, regimenMap, grupoMap, francosMap, objetivos]);
 
     // ── Métricas 6 meses (para tab comparativo) ───────────────────────────────
     const metricas6m = useMemo(() => {
@@ -394,33 +406,59 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         const legajoCargo = {};
         legajos.forEach(l => { if (l.legajo) legajoCargo[String(l.legajo)] = l.cargo || l.tarea || "Sin puesto"; });
 
+        // Mapa de objetivos por ID (compartido con clienteMetricasMes)
+        const objMap = {};
+        objetivos.forEach(o => { if (o.id) objMap[o.id] = o; });
+
+        const cliDeDoc6m = doc =>
+            (doc.clienteNombre || doc.cliente || doc.contrato ||
+             objMap[doc.objetivoId]?.clienteNombre || "").trim();
+
         const porMes = [];
         const cliKeys = new Set();
         const puestoKeys = new Set();
-        const cliMes = {};   // { label: { cli: { prog,trab,fact,nocub,ausDias,ausHs,vacDias,ext50,ext100,adicionales,personal:Set } } }
-        const puestoMes = {}; // { label: { puesto: Set<legajo> } }
+        const cliMes = {};
+        const puestoMes = {};
 
         meses.forEach(({ año, mes, label }) => {
             const docs = filteredDocs.filter(d => d._mes?.año === año && d._mes?.mes === mes);
             const dias = getDias(año, mes);
 
             let prog = 0, trab = 0, adicionales = 0, ausDias = 0, ausHsAcum = 0, vacDias = 0;
-            const byLegReal = {}; // legajo → { realData, cli }
+            const byLegReal = {};
             const cliData = {};
-            const personalTotalSet = new Set(); // legajos únicos del mes (para % ausentismo por días)
+            const personalTotalSet = new Set();
             if (!puestoMes[label]) puestoMes[label] = {};
 
             docs.forEach(doc => {
-                const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
-                if (cli === "Sin cliente") return; // no atribuible → ignorar
+                const cli = cliDeDoc6m(doc);
+                if (!cli) return; // doc sin cliente identificable → omitir
                 cliKeys.add(cli);
                 if (!cliData[cli]) cliData[cli] = { prog: 0, trab: 0, adicionales: 0, ausDias: 0, ausHs: 0, vacDias: 0, ext50: 0, ext100: 0, personal: new Set() };
 
-                (doc.personal ?? []).forEach(p => {
+                const obj     = objMap[doc.objetivoId] || null;
+                const diasEsp = doc.diasEspeciales || {};
+                const personal = doc.personal || [];
+
+                // ── Prog / Trab / Adicionales por día (horas contratadas vs reales) ──
+                dias.forEach(dia => {
+                    const key    = fmtKey(dia);
+                    const cubrir = hsContrato(dia, obj, diasEsp);
+                    const realDia = personal.reduce((s, p) =>
+                        s + horasDeValor(normalizarTurno((p.real || {})[key] || "")), 0);
+                    prog += cubrir; cliData[cli].prog += cubrir;
+                    const cubierto = Math.min(realDia, cubrir);
+                    trab += cubierto; cliData[cli].trab += cubierto;
+                    if (realDia > cubrir) {
+                        adicionales += realDia - cubrir;
+                        cliData[cli].adicionales += realDia - cubrir;
+                    }
+                });
+
+                personal.forEach(p => {
                     const leg = String(p.legajo || "");
                     const puesto = (leg && legajoCargo[leg]) || "Sin puesto";
                     puestoKeys.add(puesto);
-
                     if (leg) {
                         cliData[cli].personal.add(leg);
                         personalTotalSet.add(leg);
@@ -428,7 +466,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                         puestoMes[label][puesto].add(leg);
                     }
 
-                    // realData + capacitación para calcExtras
+                    // realData para extras
                     if (leg) {
                         if (!byLegReal[leg]) byLegReal[leg] = { realData: {}, cli };
                         Object.entries(p.real || {}).forEach(([k, v]) => { byLegReal[leg].realData[k] = v; });
@@ -438,41 +476,29 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                         });
                     }
 
+                    // ── Ausentismo por persona ──
                     const rawProg = p.programado || {};
                     const hasProg = Object.keys(rawProg).some(k => esTurno(rawProg[k]));
-                    const progSrc = hasProg ? rawProg : (p.real || {});
-
-                    Object.keys(progSrc).forEach(fecha => {
-                        const vP = progSrc[fecha];
+                    const src = hasProg ? rawProg : (p.real || {});
+                    Object.keys(src).forEach(fecha => {
+                        const vP = src[fecha];
                         const vR = hasProg ? (p.real || {})[fecha] : vP;
                         if (!esTurno(vP)) {
-                            // Sin programado: detectar ausentismo/vacaciones en real
                             if (!hasProg) {
-                                // Ausentismo y vacaciones no suman a horas a cubrir
                                 if (esAusentismo(vP))                 { ausDias++; cliData[cli].ausDias++; cliData[cli].ausHs += 12; }
                                 else if (vP?.toLowerCase() === "vac") { vacDias++; cliData[cli].vacDias++; }
                             }
                             return;
                         }
                         const h = parseHoras(vP);
-                        if (hasProg) {
-                            prog += h; cliData[cli].prog += h;
-                            if (vR && esTurno(vR))       { const hR = parseHoras(vR); trab += hR; cliData[cli].trab += hR; }
-                            else if (esAusentismo(vR))   { ausDias++; ausHsAcum += h; cliData[cli].ausDias++; cliData[cli].ausHs += h; }
-                            else if (vR?.toLowerCase() === "vac") { vacDias++; cliData[cli].vacDias++; }
-                            // !vR → sin dato real: queda como no cubierto (prog - trab)
-                        } else {
-                            // Sin turno programado: sus horas reales son adicionales (no inflan prog ni trab)
-                            adicionales += h; cliData[cli].adicionales += h;
-                        }
+                        if (esAusentismo(vR))                 { ausDias++; ausHsAcum += h; cliData[cli].ausDias++; cliData[cli].ausHs += h; }
+                        else if (vR?.toLowerCase() === "vac") { vacDias++; cliData[cli].vacDias++; }
                     });
-
                     if (hasProg) {
                         Object.keys(p.real ?? {}).forEach(fecha => {
                             const vR = p.real[fecha], vP = rawProg[fecha];
-                            if (esTurno(vR) && !esTurno(vP)) { const h = parseHoras(vR); adicionales += h; cliData[cli].adicionales += h; }
                             if (!vP) {
-                                if (esAusentismo(vR))              { ausDias++; cliData[cli].ausDias++; }
+                                if (esAusentismo(vR))               { ausDias++; cliData[cli].ausDias++; }
                                 else if (vR?.toLowerCase() === "vac") { vacDias++; cliData[cli].vacDias++; }
                             }
                         });
@@ -480,23 +506,22 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                 });
             });
 
-            // Extras por legajo (incluyendo capacitaciones en realData)
+            // Extras por legajo
             let ext50 = 0, ext100 = 0;
             Object.entries(byLegReal).forEach(([leg, { realData, cli }]) => {
                 const e = calcExtras(leg, realData, dias);
                 ext50 += e.ext50; ext100 += e.ext100;
-                if (cliData[cli]) { cliData[cli].ext50 += e.ext50; cliData[cli].ext100 += e.ext100; }
+                if (cli && cliData[cli]) { cliData[cli].ext50 += e.ext50; cliData[cli].ext100 += e.ext100; }
             });
             ext50 = Math.round(ext50 * 10) / 10;
             ext100 = Math.round(ext100 * 10) / 10;
 
-            const ausHs = Math.round(ausHsAcum * 10) / 10;
-            const fact = trab + adicionales;
-            const nocub = Math.max(0, prog - trab);
+            const ausHs   = Math.round(ausHsAcum * 10) / 10;
+            const fact    = trab + adicionales;
+            const nocub   = Math.max(0, prog - trab);
             const totalExt = Math.round((ext50 + ext100) * 10) / 10;
-            const ausPct = prog > 0 ? parseFloat(((ausHs / prog) * 100).toFixed(1)) : 0;
-            const pctExt = trab > 0 ? parseFloat(((totalExt / trab) * 100).toFixed(1)) : 0;
-            // Índice de ausentismo en días: días perdidos / (personal × días del período)
+            const ausPct  = prog > 0 ? parseFloat(((ausHs / prog) * 100).toFixed(1)) : 0;
+            const pctExt  = trab > 0 ? parseFloat(((totalExt / trab) * 100).toFixed(1)) : 0;
             const ausPctDias = personalTotalSet.size > 0 && dias.length > 0
                 ? parseFloat(((ausDias / (personalTotalSet.size * dias.length)) * 100).toFixed(1))
                 : 0;
@@ -505,14 +530,14 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
 
             cliMes[label] = {};
             Object.entries(cliData).forEach(([cli, d]) => {
-                const cFact = d.trab + d.adicionales;
-                const cNocub = Math.max(0, d.prog - d.trab);
-                const cExt50 = Math.round(d.ext50 * 10) / 10;
-                const cExt100 = Math.round(d.ext100 * 10) / 10;
+                const cFact    = d.trab + d.adicionales;
+                const cNocub   = Math.max(0, d.prog - d.trab);
+                const cExt50   = Math.round(d.ext50  * 10) / 10;
+                const cExt100  = Math.round(d.ext100 * 10) / 10;
                 const cTotalExt = Math.round((cExt50 + cExt100) * 10) / 10;
-                const cPctExt = d.trab > 0 ? parseFloat(((cTotalExt / d.trab) * 100).toFixed(1)) : 0;
-                const cCobPct = d.prog > 0 ? parseFloat(((d.trab / d.prog) * 100).toFixed(1)) : 0;
-                const cAusPct = d.prog > 0 ? parseFloat(((d.ausHs / d.prog) * 100).toFixed(1)) : 0;
+                const cPctExt  = d.trab > 0 ? parseFloat(((cTotalExt / d.trab) * 100).toFixed(1)) : 0;
+                const cCobPct  = d.prog > 0 ? parseFloat(((d.trab  / d.prog)   * 100).toFixed(1)) : 0;
+                const cAusPct  = d.prog > 0 ? parseFloat(((d.ausHs / d.prog)   * 100).toFixed(1)) : 0;
                 cliMes[label][cli] = {
                     prog: d.prog, trab: d.trab, fact: cFact, nocub: cNocub,
                     ausDias: d.ausDias, ausHs: d.ausHs, ausPct: cAusPct,
@@ -562,7 +587,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
             porMesCliCobPct:   buildCliArray("cobPct"),
             porMesPuesto,
         };
-    }, [filteredDocs, meses, legajos, diagramas]);
+    }, [filteredDocs, meses, legajos, diagramas, objetivos, excluidos, regimenMap, grupoMap, francosMap]);
 
     // ── Extras del mes actual por persona (top lists) ─────────────────────────
     const extrasDelMes = useMemo(() => {
