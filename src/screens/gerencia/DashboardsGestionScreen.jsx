@@ -147,7 +147,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                 setCapacitaciones(capSnap.docs.map(d => d.data()));
 
                 const objSnap = await getDocs(query(collection(db, "objetivos"), where("empresaId", "==", empresaId)));
-                setObjetivos(objSnap.docs.map(d => d.data()));
+                setObjetivos(objSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
                 const diagSnap = await getDocs(query(collection(db, "diagramas14x14"), where("empresaId", "==", empresaId))).catch(() => ({ docs: [] }));
                 setDiagramas(diagSnap.docs.map(d => d.data()));
@@ -526,7 +526,16 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                 ? parseFloat(((ausDias / (personalTotalSet.size * dias.length)) * 100).toFixed(1))
                 : 0;
 
-            porMes.push({ label, prog, trab, fact, nocub, ausDias, ausHs, ausPct, ausPctDias, vacDias, ext50, ext100, totalExt, pctExt, adicionales });
+            porMes.push({
+                label,
+                prog:        Math.round(prog),
+                trab:        Math.round(trab),
+                fact:        Math.round(fact),
+                nocub:       Math.round(nocub),
+                adicionales: Math.round(adicionales),
+                ausDias, ausHs, ausPct, ausPctDias, vacDias,
+                ext50, ext100, totalExt, pctExt,
+            });
 
             cliMes[label] = {};
             Object.entries(cliData).forEach(([cli, d]) => {
