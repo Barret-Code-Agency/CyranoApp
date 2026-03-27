@@ -357,7 +357,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
 
         // Totales globales
         let totalProg = 0, totalFact = 0, totalAusDias = 0, totalAusHoras = 0, totalVacDias = 0, totalVacHoras = 0, totalExt50 = 0, totalExt100 = 0;
-        const rows = Object.entries(byCli).map(([name, d]) => {
+        const rows = Object.entries(byCli).filter(([name]) => name !== "Sin cliente").map(([name, d]) => {
             const fact = Math.round(d.factCalend); // horas reales del mes calendario (1-último día)
             const ext50Pct  = fact > 0 ? Math.round((d.ext50Hs  / fact) * 100 * 10) / 10 : 0;
             const ext100Pct = fact > 0 ? Math.round((d.ext100Hs / fact) * 100 * 10) / 10 : 0;
@@ -412,6 +412,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
 
             docs.forEach(doc => {
                 const cli = (doc.clienteNombre || doc.cliente || doc.contrato || "").trim() || "Sin cliente";
+                if (cli === "Sin cliente") return; // no atribuible → ignorar
                 cliKeys.add(cli);
                 if (!cliData[cli]) cliData[cli] = { prog: 0, trab: 0, adicionales: 0, ausDias: 0, ausHs: 0, vacDias: 0, ext50: 0, ext100: 0, personal: new Set() };
 
@@ -618,10 +619,6 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
 
     const { rows, totalProg, totalFact, totalAusDias, totalAusHoras, totalVacDias, totalVacHoras, totalExt50, totalExt100 } = clienteMetricasMes;
 
-    // Versiones sin "Sin cliente" para los gráficos (se mantiene en la tabla)
-    const rowsChart    = rows.filter(r => r.name !== "Sin cliente");
-    const cliKeysChart = metricas6m.cliKeys.filter(c => c !== "Sin cliente");
-
     return (
         <div className="dg-root">
 
@@ -823,8 +820,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                     <div className="dg-charts-row dg-charts-row--3">
                         <ChartCard titulo="📉 Ausentismo por cliente">
                             {rows.length === 0 ? <div className="dg-empty">Sin datos</div> : (
-                                <ResponsiveContainer width="100%" height={Math.max(200, rowsChart.length * 28)}>
-                                    <BarChart data={rowsChart} layout="vertical" margin={{ top: 16, right: 50, left: 8, bottom: 0 }}>
+                                <ResponsiveContainer width="100%" height={Math.max(200, rows.length * 28)}>
+                                    <BarChart data={rows} layout="vertical" margin={{ top: 16, right: 50, left: 8, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                                         <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                                         <YAxis type="category" dataKey="name" width={150} tick={<YTickLeft axisWidth={150} maxChars={22} />} />
@@ -839,8 +836,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
 
                         <ChartCard titulo="🔶 Horas extra por cliente">
                             {rows.filter(r => r.ext50Hs > 0 || r.ext100Hs > 0).length === 0 ? <div className="dg-empty">Sin extras este mes</div> : (
-                                <ResponsiveContainer width="100%" height={Math.max(200, rowsChart.length * 28)}>
-                                    <BarChart data={rowsChart} layout="vertical" margin={{ top: 6, right: 30, left: 8, bottom: 0 }}>
+                                <ResponsiveContainer width="100%" height={Math.max(200, rows.length * 28)}>
+                                    <BarChart data={rows} layout="vertical" margin={{ top: 6, right: 30, left: 8, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                                         <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
                                         <YAxis type="category" dataKey="name" width={150} tick={<YTickLeft axisWidth={150} maxChars={22} />} />
@@ -855,8 +852,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
 
                         <ChartCard titulo="✅ Cobertura por cliente">
                             {rows.length === 0 ? <div className="dg-empty">Sin datos</div> : (
-                                <ResponsiveContainer width="100%" height={Math.max(200, rowsChart.length * 28)}>
-                                    <BarChart data={rowsChart} layout="vertical" margin={{ top: 16, right: 50, left: 8, bottom: 0 }}>
+                                <ResponsiveContainer width="100%" height={Math.max(200, rows.length * 28)}>
+                                    <BarChart data={rows} layout="vertical" margin={{ top: 16, right: 50, left: 8, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                                         <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                                         <YAxis type="category" dataKey="name" width={150} tick={<YTickLeft axisWidth={150} maxChars={22} />} />
@@ -1051,8 +1048,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} />
                                         <Tooltip content={<CustomTooltip suffix=" hs" />} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
-                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === cliKeysChart.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
                                         ))}
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1065,7 +1062,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
                                         <Tooltip formatter={v => [`${v}%`]} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
+                                        {metricas6m.cliKeys.map((cli, i) => (
                                             <Line key={cli} type="monotone" dataKey={cli} name={cli} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
                                         ))}
                                     </LineChart>
@@ -1082,8 +1079,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} />
                                         <Tooltip content={<CustomTooltip suffix=" hs" />} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
-                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === cliKeysChart.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
                                         ))}
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1096,8 +1093,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} />
                                         <Tooltip content={<CustomTooltip suffix=" hs" />} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
-                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === cliKeysChart.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
                                         ))}
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1113,8 +1110,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} />
                                         <Tooltip content={<CustomTooltip suffix=" hs" />} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
-                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === cliKeysChart.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
                                         ))}
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1127,7 +1124,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
                                         <Tooltip formatter={v => [`${v}%`]} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
+                                        {metricas6m.cliKeys.map((cli, i) => (
                                             <Line key={cli} type="monotone" dataKey={cli} name={cli} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
                                         ))}
                                     </LineChart>
@@ -1144,7 +1141,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                                         <Tooltip content={<CustomTooltip suffix=" pers." />} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
+                                        {metricas6m.cliKeys.map((cli, i) => (
                                             <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} radius={[4,4,0,0]} />
                                         ))}
                                     </BarChart>
@@ -1175,8 +1172,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} />
                                         <Tooltip content={<CustomTooltip suffix=" hs" />} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
-                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === cliKeysChart.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
                                         ))}
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1189,8 +1186,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} />
                                         <Tooltip content={<CustomTooltip suffix=" hs" />} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
-                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === cliKeysChart.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
                                         ))}
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1206,8 +1203,8 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} />
                                         <Tooltip content={<CustomTooltip suffix=" hs" />} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
-                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === cliKeysChart.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
+                                        {metricas6m.cliKeys.map((cli, i) => (
+                                            <Bar key={cli} dataKey={cli} name={cli} fill={COLORS[i % COLORS.length]} stackId="a" radius={i === metricas6m.cliKeys.length - 1 ? [4,4,0,0] : [0,0,0,0]} />
                                         ))}
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1220,7 +1217,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                                         <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                                         <Tooltip formatter={v => [`${v}%`]} />
                                         <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                                        {cliKeysChart.map((cli, i) => (
+                                        {metricas6m.cliKeys.map((cli, i) => (
                                             <Line key={cli} type="monotone" dataKey={cli} name={cli} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
                                         ))}
                                     </LineChart>
