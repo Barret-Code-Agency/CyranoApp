@@ -31,6 +31,7 @@ import ConsolidadoScreen             from "../shared/ConsolidadoScreen";
 import FacturacionScreen             from "./FacturacionScreen";
 import AnalisisHorasPASScreen        from "./AnalisisHorasPASScreen";
 import Diagramas14x14Screen          from "../shared/Diagramas14x14Screen";
+import HorasObjetivoMesScreen        from "../shared/HorasObjetivoMesScreen";
 import ControlClienteScreen          from "../shared/ControlClienteScreen";
 import AusentismoScreen              from "../shared/AusentismoScreen";
 import GestionPremiosScreen          from "./GestionPremiosScreen";
@@ -589,8 +590,9 @@ export default function AdminContratoHome({ onExit }) {
             { id: "analisis_pas",    icon: "📊", titulo: "Análisis de horas PAS",      desc: "Análisis de cobertura y horas por puesto del período", color: "blue" },
             { id: "importacion",     icon: "📥", titulo: "Importación de horarios",    desc: "Importación de horarios desde archivo externo",         color: "gold" },
             { id: "ausentismo",      icon: "📉", titulo: "Ausentismo",                 desc: "Registro y análisis de ausentismo del período",          color: "blue" },
+            { id: "horas_obj_mes",   icon: "⏱",  titulo: "Horas por objetivo / mes",   desc: "Configurá las horas contractuales históricas por mes",   color: "gold" },
         ];
-        const CON_PERIODO = ["programacion", "real", "vista", "diagramas14", "control_cliente", "facturacion", "analisis_pas", "importacion"];
+        const CON_PERIODO = ["programacion", "real", "vista", "diagramas14", "control_cliente", "facturacion", "analisis_pas", "importacion", "horas_obj_mes"];
 
         // Items con selector de período
         if (subSeccion && CON_PERIODO.includes(subSeccion)) {
@@ -668,6 +670,12 @@ export default function AdminContratoHome({ onExit }) {
                     <ImportarRealesPanel año={año} mes={mes} />
                 </div>
             );
+            if (subSeccion === "horas_obj_mes") return (
+                <div className="sh-supervision-wrapper sh-fullscreen">
+                    {renderHeader()}{subpanelVolver}
+                    <HorasObjetivoMesScreen año={año} mes={mes} onBack={volverPeriodo} />
+                </div>
+            );
         }
 
         // Consolidado sin PeriodoCard (gestiona su propio período)
@@ -700,6 +708,7 @@ export default function AdminContratoHome({ onExit }) {
                 </div>
             );
         }
+
 
         // Menú principal de turnos
         return (

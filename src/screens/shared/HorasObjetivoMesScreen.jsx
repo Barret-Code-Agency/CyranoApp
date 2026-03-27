@@ -1,7 +1,9 @@
 // src/screens/shared/HorasObjetivoMesScreen.jsx
 // Gestión de horas por objetivo / mes
-//   Tab 1 – Vista tabla: todos los objetivos del período, horas día a día
+//   Tab 1 – Tabla: todos los objetivos del período, horas contratadas día a día
 //   Tab 2 – Config: editar horas contractuales por objetivo (override mensual)
+//
+// Recibe año y mes desde AdminContratoHome (vía PeriodoCard — mismo estilo que el resto de pantallas)
 
 import { useState, useEffect, useMemo } from "react";
 import { collection, query, where, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
@@ -26,7 +28,7 @@ const DIAS_SEMANA = [
 ];
 const HORAS_COMUNES = [0, 8, 9, 10, 12, 13];
 
-// Horas contratadas para un día (igual que FacturacionScreen / DashboardsGestionScreen)
+// Horas contratadas para un día (igual que FacturacionScreen)
 function hsContrato(dia, obj, diasEsp = {}) {
     if (!obj) return null;
     const key = fmtKey(dia);
@@ -41,56 +43,16 @@ function fmtHs(n) {
     return Number.isInteger(n) ? `${n}` : n.toFixed(1).replace(".", ",");
 }
 
-// ── Selector de período (estilo Consolidado) ──────────────────────────────────
-function SelectorPeriodo({ onSelect }) {
-    const hoy = new Date();
-    const [año, setAño] = useState(hoy.getFullYear());
-    const [mes, setMes] = useState(hoy.getMonth() + 1);
-
-    const mesAnt = mes === 1 ? 12 : mes - 1;
-    const añoAnt = mes === 1 ? año - 1 : año;
-
-    return (
-        <div className="hom-sel-wrap">
-            <div className="hom-sel-card">
-                <span className="hom-sel-icon">⏱</span>
-                <div className="hom-sel-info">
-                    <strong>Horas por objetivo / mes</strong>
-                    <small>
-                        Del 24/{String(mesAnt).padStart(2, "0")}/{añoAnt}
-                        &nbsp;al&nbsp;
-                        23/{String(mes).padStart(2, "0")}/{año}
-                    </small>
-                </div>
-                <div className="hom-sel-campos">
-                    <select className="hom-select" value={mes}
-                        onChange={e => setMes(Number(e.target.value))}>
-                        {MESES_ES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                    </select>
-                    <select className="hom-select hom-select--año" value={año}
-                        onChange={e => setAño(Number(e.target.value))}>
-                        {Array.from({ length: 6 }, (_, i) => hoy.getFullYear() - 1 + i)
-                            .map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                    <button className="hom-btn-ver" onClick={() => onSelect({ año, mes })}>
-                        Ver →
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 // ── Tab 1: Tabla de horas por objetivo × día ──────────────────────────────────
-function TablaHorasObjMes({ config }) {
+function TablaHorasObjMes({ año, mes }) {
     const { empresaId } = useAppData();
     const { objetivos }  = useClientesData(empresaId);
     const [docs,     setDocs]     = useState([]);
     const [cargando, setCargando] = useState(false);
 
-    const dias    = useMemo(() => getDias(config.año, config.mes), [config]);
-    const mesAnt  = config.mes === 1 ? 12 : config.mes - 1;
-    const añoAnt  = config.mes === 1 ? config.año - 1 : config.año;
+    const dias   = useMemo(() => getDias(año, mes), [año, mes]);
+    const mesAnt = mes === 1 ? 12 : mes - 1;
+    const añoAnt = mes === 1 ? año - 1 : año;
 
     useEffect(() => {
         if (!empresaId) return;
@@ -99,7 +61,7 @@ function TablaHorasObjMes({ config }) {
             .then(snap => {
                 const data = snap.docs
                     .map(d => ({ id: d.id, ...d.data() }))
-                    .filter(d => d.año === config.año && d.mes === config.mes);
+                    .filter(d => d.año === año && d.mes === mes);
                 data.sort((a, b) =>
                     (a.clienteNombre || "").localeCompare(b.clienteNombre || "") ||
                     (a.objetivoNombre || "").localeCompare(b.objetivoNombre || "")
@@ -108,7 +70,7 @@ function TablaHorasObjMes({ config }) {
             })
             .catch(console.error)
             .finally(() => setCargando(false));
-    }, [empresaId, config]);
+    }, [empresaId, año, mes]);
 
     const objMap = useMemo(() => {
         const m = {};
@@ -122,8 +84,8 @@ function TablaHorasObjMes({ config }) {
         const hsPorDia = dias.map(dia => hsContrato(dia, obj, diasEsp));
         const total    = hsPorDia.reduce((s, h) => s + (h ?? 0), 0);
         return {
-            cliente:   doc.clienteNombre || "—",
-            objetivo:  doc.objetivoNombre || doc.objetivoId || "—",
+            cliente:  doc.clienteNombre || "—",
+            objetivo: doc.objetivoNombre || doc.objetivoId || "—",
             hsPorDia,
             total,
         };
@@ -141,10 +103,9 @@ function TablaHorasObjMes({ config }) {
     return (
         <div className="hom-tabla-wrap">
             <div className="hom-tabla-info">
-                Del 24/{String(mesAnt).padStart(2, "0")}/{añoAnt} al 23/{String(config.mes).padStart(2, "0")}/{config.año}
-                &nbsp;·&nbsp;
-                <strong>{filas.length}</strong> objetivo{filas.length !== 1 ? "s" : ""}
-                &nbsp;·&nbsp;total período: <strong>{Math.round(totalGeneral)} hs</strong>
+                Del 24/{String(mesAnt).padStart(2, "0")}/{añoAnt} al 23/{String(mes).padStart(2, "0")}/{año}
+                &nbsp;·&nbsp;<strong>{filas.length}</strong> objetivo{filas.length !== 1 ? "s" : ""}
+                &nbsp;·&nbsp;total período: <strong>{Math.round(totalGeneral).toLocaleString()} hs</strong>
             </div>
 
             <div className="hom-tabla-scroll">
@@ -154,10 +115,10 @@ function TablaHorasObjMes({ config }) {
                             <th className="hom-th hom-th-cliente">Cliente</th>
                             <th className="hom-th hom-th-obj">Objetivo</th>
                             {dias.map((dia, i) => {
-                                const key    = fmtKey(dia);
-                                const esFer  = !!FERIADOS_ARG[key];
-                                const dow    = dia.getDay();
-                                const esFin  = dow === 0 || dow === 6;
+                                const key   = fmtKey(dia);
+                                const esFer = !!FERIADOS_ARG[key];
+                                const dow   = dia.getDay();
+                                const esFin = dow === 0 || dow === 6;
                                 return (
                                     <th key={i} title={key}
                                         className={`hom-th hom-th-dia${esFin ? " hom-finde" : ""}${esFer ? " hom-feriado" : ""}`}>
@@ -175,8 +136,8 @@ function TablaHorasObjMes({ config }) {
                                 <td className="hom-td hom-td-cliente">{fila.cliente}</td>
                                 <td className="hom-td hom-td-obj">{fila.objetivo}</td>
                                 {fila.hsPorDia.map((h, ci) => {
-                                    const dia  = dias[ci];
-                                    const dow  = dia.getDay();
+                                    const dia   = dias[ci];
+                                    const dow   = dia.getDay();
                                     const esFin = dow === 0 || dow === 6;
                                     const esFer = !!FERIADOS_ARG[fmtKey(dia)];
                                     return (
@@ -208,13 +169,13 @@ function TablaHorasObjMes({ config }) {
 }
 
 // ── Tab 2: Editor de override por objetivo ────────────────────────────────────
-function EditorHorasObjetivo() {
+function EditorHorasObjetivo({ año: añoProp, mes: mesProp }) {
     const { empresaId } = useAppData();
     const { clientes, objetivos, cargando: cargandoListas } = useClientesData(empresaId);
 
     const hoy = new Date();
-    const [año,        setAño]       = useState(hoy.getFullYear());
-    const [mes,        setMes]       = useState(hoy.getMonth() + 1);
+    const [año,        setAño]       = useState(añoProp ?? hoy.getFullYear());
+    const [mes,        setMes]       = useState(mesProp ?? hoy.getMonth() + 1);
     const [clienteId,  setClienteId] = useState("");
     const [objetivoId, setObjetivoId]= useState("");
     const [horas,      setHoras]     = useState({});
@@ -223,7 +184,7 @@ function EditorHorasObjetivo() {
     const [guardado,   setGuardado]  = useState(false);
     const [error,      setError]     = useState("");
 
-    const periodoKey = `${año}-${String(mes).padStart(2, "0")}`;
+    const periodoKey  = `${año}-${String(mes).padStart(2, "0")}`;
     const clienteSel  = clientes.find(c => c.id === clienteId);
     const objFiltrados = !clienteId ? [] : objetivos.filter(o => {
         if (!clienteSel) return false;
@@ -362,19 +323,12 @@ function EditorHorasObjetivo() {
     );
 }
 
-// ── Pantalla principal ────────────────────────────────────────────────────────
-export default function HorasObjetivoMesScreen({ onBack }) {
-    const [tab,    setTab]    = useState("tabla");
-    const [config, setConfig] = useState(null);
+// ── Pantalla principal — recibe año y mes desde AdminContratoHome ─────────────
+export default function HorasObjetivoMesScreen({ año, mes, onBack }) {
+    const [tab, setTab] = useState("tabla");
 
     return (
         <div className="hom-root">
-            <div className="vh-subpanel">
-                <button className="vh-back" onClick={onBack}>← Volver al panel</button>
-                <div className="vh-subpanel-title">⏱ Horas por objetivo / mes</div>
-            </div>
-
-            {/* Tabs */}
             <div className="hom-tabs">
                 <button
                     className={`hom-tab${tab === "tabla" ? " hom-tab--active" : ""}`}
@@ -388,23 +342,10 @@ export default function HorasObjetivoMesScreen({ onBack }) {
                 </button>
             </div>
 
-            {tab === "tabla" && (
-                <div className="hom-body">
-                    <SelectorPeriodo onSelect={setConfig} />
-                    {config && (
-                        <TablaHorasObjMes
-                            key={`${config.año}-${config.mes}`}
-                            config={config}
-                        />
-                    )}
-                </div>
-            )}
-
-            {tab === "config" && (
-                <div className="hom-body">
-                    <EditorHorasObjetivo />
-                </div>
-            )}
+            <div className="hom-body">
+                {tab === "tabla" && <TablaHorasObjMes año={año} mes={mes} />}
+                {tab === "config" && <EditorHorasObjetivo año={año} mes={mes} />}
+            </div>
         </div>
     );
 }

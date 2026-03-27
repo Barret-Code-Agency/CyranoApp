@@ -35,58 +35,6 @@
 .hom-tab:hover { background: #f1f5f9; color: #1e293b; }
 .hom-tab--active { background: #fff; color: #2563eb; font-weight: 700; border: 1px solid #e2e8f0; border-bottom: 1px solid #fff; margin-bottom: -1px; }
 
-/* ── Selector de período (estilo Consolidado) ── */
-.hom-sel-wrap {
-    max-width: 50%;
-}
-.hom-sel-card {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-left: 4px solid #7c3aed;
-    border-radius: 10px;
-    padding: 14px 18px;
-}
-.hom-sel-icon {
-    font-size: 22px;
-    flex-shrink: 0;
-}
-.hom-sel-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1;
-}
-.hom-sel-info strong { font-size: 14px; color: #1e293b; }
-.hom-sel-info small  { font-size: 11px; color: #94a3b8; }
-.hom-sel-campos {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.hom-select {
-    padding: 6px 10px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    font-size: 13px;
-    background: #fff;
-    min-width: 100px;
-}
-.hom-select--año { min-width: 72px; }
-.hom-btn-ver {
-    padding: 7px 18px;
-    background: #2563eb;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-}
-.hom-btn-ver:hover { background: #1d4ed8; }
-
 /* ── Tabla ── */
 .hom-tabla-wrap {
     display: flex;
