@@ -22,6 +22,16 @@ export function getDias(año, mes) {
     return dias;
 }
 
+// Retorna un array de Date del día 1 al último día del mes indicado (mes calendario).
+export function getDiasCalendario(año, mes) {
+    const dias = [];
+    const total = new Date(año, mes, 0).getDate(); // último día del mes
+    for (let d = 1; d <= total; d++) {
+        dias.push(new Date(año, mes - 1, d));
+    }
+    return dias;
+}
+
 // ── Clave de fecha ────────────────────────────────────────────────────────────
 // Retorna "YYYY-MM-DD" a partir de un objeto Date.
 // IMPORTANTE: esta versión construye la clave manualmente (no usa toISOString)
@@ -53,6 +63,25 @@ export const HORAS_KEYS = [
     "horasDomingo","horasLunes","horasMartes","horasMiercoles",
     "horasJueves","horasViernes","horasSabado",
 ];
+
+// Lee las horas contratadas para un día desde un documento de horas (override o objetivo).
+// Soporta:
+//   Formato nuevo → hc.dias["YYYY-MM-DD"]   (un valor por fecha, guardado desde HorasObjetivoMesScreen)
+//   Formato viejo → hc.horasLunes, hc.horasFeriados, etc.  (objetivo base o override legacy)
+// FERIADOS_ARG se importa donde se use esta función; aquí se recibe como parámetro para
+// no crear dependencia circular con utils/feriados.
+export function horasDiaDeDoc(dia, hc, diasEsp = {}, feriadosMap = {}) {
+    if (!hc) return null;
+    const key = fmtKey(dia);
+    if (diasEsp[key] === false) return 0;
+    // Formato nuevo: mapa por fecha
+    if (hc.dias) return (key in hc.dias) ? hc.dias[key] : null;
+    // Formato viejo: feriado
+    if (feriadosMap[key]) return hc.horasFeriados != null ? Number(hc.horasFeriados) : null;
+    // Formato viejo: día de semana
+    const hs = hc[HORAS_KEYS[dia.getDay()]];
+    return hs != null ? Number(hs) : null;
+}
 
 // ── Horas de un turno ─────────────────────────────────────────────────────────
 // Interpreta un string de turno "HH:MM – HH:MM" y devuelve las horas trabajadas.

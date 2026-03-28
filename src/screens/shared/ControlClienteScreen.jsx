@@ -1,5 +1,7 @@
 // src/screens/ControlClienteScreen.jsx
-// Vista Control Cliente — idéntica a VistaTurnos + columna Hs Trab + filas de resumen
+// Vista Control Cliente — mes calendario completo (1-31)
+// Días  1-23 → planilla del período actual   (año/mes)
+// Días 24-31 → planilla del período siguiente (año/mes+1)
 
 import { useState, useEffect } from "react";
 import html2canvas from "html2canvas";
@@ -10,21 +12,45 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import "./ProgramacionServiciosScreen.css";
 import "./ControlClienteScreen.css";
-import { getDias, fmtKey, DIAS_ES, MESES_ES, OPCIONES, REAL_AUS_CODES, HORAS_KEYS, horasDeValor, normalizarTurno, r1 } from "../../utils/periodoUtils";
+import { getDiasCalendario, fmtKey, DIAS_ES, MESES_ES, OPCIONES, REAL_AUS_CODES, horasDiaDeDoc, horasDeValor, normalizarTurno, r1 } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 
 // ── Constantes ───────────────────────────────────────────────────────────────────
 const COL_PROG        = "programacionServicios";
-const JPEG_QUALITY    = 0.95;   // calidad de imagen para PDF
-const DOWNLOAD_DELAY  = 300;    // ms entre descargas consecutivas (evita colisiones)
-// DIAS_ES, MESES_ES, OPCIONES, REAL_AUS_CODES, HORAS_KEYS, horasDeValor, r1, getDias, fmtKey importados desde periodoUtils
+const COL_OVERRID     = "horasObjetivoMes";
+const JPEG_QUALITY    = 0.95;
+const DOWNLOAD_DELAY  = 300;
+
+// Merge personal de dos docs del mismo objetivo.
+// Los turnos son por YYYY-MM-DD y no se solapan entre períodos.
+function mergePersonal(personalA, personalB) {
+    const byLeg = {};
+    const addP = (personal) => {
+        (personal || []).forEach(p => {
+            const leg = String(p.legajo ?? "");
+            if (!byLeg[leg]) {
+                byLeg[leg] = {
+                    ...p,
+                    real:         { ...(p.real         || {}) },
+                    programado:   { ...(p.programado   || {}) },
+                    capacitacion: { ...(p.capacitacion || {}) },
+                };
+            } else {
+                Object.assign(byLeg[leg].real,         p.real         || {});
+                Object.assign(byLeg[leg].programado,   p.programado   || {});
+                Object.assign(byLeg[leg].capacitacion, p.capacitacion || {});
+            }
+        });
+    };
+    addP(personalA);
+    addP(personalB);
+    return Object.values(byLeg);
+}
 
 function CeldaContenido({ val, op }) {
     if (!val) return <span className="ps-celda-vacio">—</span>;
     const hs = horasDeValor(normalizarTurno(val));
-    if (hs > 0) {
-        return <span>{hs.toFixed(2).replace(".", ",")}</span>;
-    }
+    if (hs > 0) return <span>{hs.toFixed(2).replace(".", ",")}</span>;
     return <>{op?.label ?? val}</>;
 }
 
@@ -32,32 +58,120 @@ function CeldaContenido({ val, op }) {
 export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
     const { empresaId } = useAppData();
     const { objetivos } = useClientesData(empresaId);
-    const [docs, setDocs]         = useState([]);
-    const [cargando, setCargando] = useState(false);
+    const [docs,        setDocs]        = useState([]); // docs mergeados por objetivoId
+    const [overridesA,  setOverridesA]  = useState({}); // objetivoId → override período A
+    const [overridesB,  setOverridesB]  = useState({}); // objetivoId → override período B
+    const [cargando,    setCargando]    = useState(false);
     const [descargando, setDescargando] = useState(false);
 
     useEffect(() => {
         if (!empresaId) return;
         setCargando(true);
-        getDocs(query(
-            collection(db, COL_PROG),
-            where("empresaId", "==", empresaId)
-        ))
-            .then(snap => {
-                let data = snap.docs
-                    .map(d => ({ docId: d.id, ...d.data() }))
-                    .filter(d => d.año === año && d.mes === mes);
-                if (zonaFija) data = data.filter(d => d.zona === zonaFija);
-                data.sort((a, b) => (a.clienteNombre || "").localeCompare(b.clienteNombre || ""));
-                setDocs(data);
+
+        // Período B = siguiente mes de liquidación (cubre días 24-31 del mes calendario)
+        const añoB = mes === 12 ? año + 1 : año;
+        const mesB = mes === 12 ? 1 : mes + 1;
+
+        Promise.all([
+            // Planillas período A (días 1-23 del mes calendario)
+            getDocs(query(collection(db, COL_PROG),
+                where("empresaId", "==", empresaId),
+                where("año", "==", año),
+                where("mes", "==", mes))),
+            // Planillas período B (días 24-31 del mes calendario)
+            getDocs(query(collection(db, COL_PROG),
+                where("empresaId", "==", empresaId),
+                where("año", "==", añoB),
+                where("mes", "==", mesB))),
+            // Overrides de horas período A
+            getDocs(query(collection(db, COL_OVERRID),
+                where("empresaId", "==", empresaId),
+                where("año", "==", año),
+                where("mes", "==", mes))),
+            // Overrides de horas período B
+            getDocs(query(collection(db, COL_OVERRID),
+                where("empresaId", "==", empresaId),
+                where("año", "==", añoB),
+                where("mes", "==", mesB))),
+        ])
+            .then(([snapA, snapB, overSnapA, overSnapB]) => {
+                // Indexar por objetivoId
+                const docsA = {};
+                snapA.docs.forEach(d => {
+                    const dat = { docId: d.id, ...d.data() };
+                    if (dat.objetivoId) docsA[dat.objetivoId] = dat;
+                });
+                const docsB = {};
+                snapB.docs.forEach(d => {
+                    const dat = { docId: d.id, ...d.data() };
+                    if (dat.objetivoId) docsB[dat.objetivoId] = dat;
+                });
+
+                // Unión de todos los objetivos presentes en alguno de los dos períodos
+                const allOids = new Set([...Object.keys(docsA), ...Object.keys(docsB)]);
+
+                let merged = [...allOids].map(oid => {
+                    const dA   = docsA[oid];
+                    const dB   = docsB[oid];
+                    const base = dA || dB;
+                    return {
+                        objetivoId:    oid,
+                        clienteNombre: base.clienteNombre  || "",
+                        proyectoNombre:base.proyectoNombre || "",
+                        objetivoNombre:base.objetivoNombre || "",
+                        zona:          base.zona           || "",
+                        diasEspA:      dA?.diasEspeciales  || {},
+                        diasEspB:      dB?.diasEspeciales  || {},
+                        personal:      mergePersonal(dA?.personal, dB?.personal),
+                    };
+                });
+
+                if (zonaFija) merged = merged.filter(d => d.zona === zonaFija);
+                merged.sort((a, b) =>
+                    a.clienteNombre.localeCompare(b.clienteNombre) ||
+                    a.proyectoNombre.localeCompare(b.proyectoNombre) ||
+                    a.objetivoNombre.localeCompare(b.objetivoNombre)
+                );
+                setDocs(merged);
+
+                // Overrides por período
+                const oA = {}, oB = {};
+                overSnapA.docs.forEach(d => { const od = d.data(); if (od.objetivoId) oA[od.objetivoId] = od; });
+                overSnapB.docs.forEach(d => { const od = d.data(); if (od.objetivoId) oB[od.objetivoId] = od; });
+                setOverridesA(oA);
+                setOverridesB(oB);
             })
             .catch(console.error)
             .finally(() => setCargando(false));
-    }, [empresaId, año, mes]);
+    }, [empresaId, año, mes]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const dias = getDias(año, mes);
-    const mesAnterior = mes === 1 ? 12 : mes - 1;
-    const añoAnterior = mes === 1 ? año - 1 : año;
+    const dias = getDiasCalendario(año, mes);
+
+    // ── Helpers por día ───────────────────────────────────────────────────────
+    // Días 1-23 → período A;  días 24+ → período B
+    const esB = (dia) => dia.getDate() >= 24;
+
+    const horasDiaDoc = (dia, hcA, hcB, diasEspA, diasEspB) => {
+        const hc      = esB(dia) ? hcB      : hcA;
+        const diasEsp = esB(dia) ? diasEspB : diasEspA;
+        return horasDiaDeDoc(dia, hc, diasEsp, FERIADOS_ARG);
+    };
+
+    const hsRealesDia = (personal, dia) => {
+        const key = fmtKey(dia);
+        return r1(personal.reduce((s, p) =>
+            s + horasDeValor(normalizarTurno((p.real || p.programado || {})[key] || "")), 0));
+    };
+
+    const ausentismoDia = (personal, dia) => {
+        const key = fmtKey(dia);
+        return personal.filter(p => REAL_AUS_CODES.includes((p.real || p.programado || {})[key] || "")).length;
+    };
+
+    const hsCapacitacionDia = (personal, dia) => {
+        const key = fmtKey(dia);
+        return r1(personal.reduce((s, p) => s + (Number(p.capacitacion?.[key]) || 0), 0));
+    };
 
     // ── Descarga ──────────────────────────────────────────────────────────────
     const capturar = async (id) => {
@@ -83,10 +197,10 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
             .filter(Boolean).join(" - ")
             .replace(/[/\\?%*:|"<>]/g, "-");
 
-    const descargarUno = async (docId, nombre, fmt) => {
+    const descargarUno = async (oid, nombre, fmt) => {
         setDescargando(true);
         try {
-            const raw = await capturar(`cc-obj-${docId}`);
+            const raw = await capturar(`cc-obj-${oid}`);
             if (!raw) return;
             const canvas = conMargenes(raw);
             if (fmt === "jpg") {
@@ -109,7 +223,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
         try {
             if (fmt === "jpg") {
                 for (const d of docs) {
-                    const raw = await capturar(`cc-obj-${d.docId}`);
+                    const raw = await capturar(`cc-obj-${d.objetivoId}`);
                     if (!raw) continue;
                     const canvas = conMargenes(raw);
                     const a = document.createElement("a");
@@ -121,7 +235,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
             } else {
                 let pdf = null;
                 for (const d of docs) {
-                    const raw = await capturar(`cc-obj-${d.docId}`);
+                    const raw = await capturar(`cc-obj-${d.objetivoId}`);
                     if (!raw) continue;
                     const canvas = conMargenes(raw);
                     const w = canvas.width, h = canvas.height;
@@ -138,38 +252,13 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
         } finally { setDescargando(false); }
     };
 
-    // ── Cálculos por fila de resumen ─────────────────────────────────────────
-    const horasDiaDoc = (dia, hc, diasEsp) => {
-        if (!hc) return null;
-        const key = fmtKey(dia);
-        if (FERIADOS_ARG[key]) return hc.horasFeriados != null ? Number(hc.horasFeriados) : null;
-        if (diasEsp[key] === false) return 0;
-        const hs = hc[HORAS_KEYS[dia.getDay()]];
-        return hs != null ? Number(hs) : null;
-    };
-
-    const hsRealesDia = (personal, dia) => {
-        const key = fmtKey(dia);
-        return r1(personal.reduce((s, p) => s + horasDeValor(normalizarTurno((p.real || p.programado || {})[key] || "")), 0));
-    };
-
-    const ausentismoDia = (personal, dia) => {
-        const key = fmtKey(dia);
-        return personal.filter(p => REAL_AUS_CODES.includes((p.real || p.programado || {})[key] || "")).length;
-    };
-
-    const hsCapacitacionDia = (personal, dia) => {
-        const key = fmtKey(dia);
-        return r1(personal.reduce((s, p) => s + (Number(p.capacitacion?.[key]) || 0), 0));
-    };
-
     // ── Render ───────────────────────────────────────────────────────────────
     return (
         <div className="ps-vt-root">
             {/* Header */}
             <div className="ps-vt-header">
                 <span className="ps-vt-hint" style={{ margin: "0 auto", fontWeight: 600 }}>
-                    24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior} — 23/{String(mes).padStart(2,"0")}/{año}
+                    {MESES_ES[mes - 1]} {año}
                 </span>
                 {docs.length > 0 && (
                     <div className="ps-vt-dl-group">
@@ -188,29 +277,26 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                     <div className="ps-vt-empty">No hay planillas programadas para este período.</div>
                 )}
                 {!cargando && docs.map(d => {
-                    const obj     = objetivos.find(o => o.id === d.objetivoId) || null;
-                    const hc      = obj;   // mismos campos: horasLunes, horasSabado, etc.
-                    const diasEsp = d.diasEspeciales || {};
-                    const personal = d.personal || [];
+                    const obj  = objetivos.find(o => o.id === d.objetivoId) || null;
+                    // Override período A (días 1-23): si no existe usa el objetivo base
+                    const hcA  = overridesA[d.objetivoId] ?? obj;
+                    // Override período B (días 24-31): si no existe usa el objetivo base
+                    const hcB  = overridesB[d.objetivoId] ?? obj;
 
-                    const totalReales     = r1(dias.reduce((s, dia) => s + hsRealesDia(personal, dia), 0));
-                    const totalACubrir    = r1(dias.reduce((s, dia) => s + (horasDiaDoc(dia, hc, diasEsp) ?? 0), 0));
-                    const totalNoCubier   = r1(dias.reduce((s, dia) => {
-                        const real   = hsRealesDia(personal, dia);
-                        const cubrir = horasDiaDoc(dia, hc, diasEsp) ?? 0;
-                        return s + Math.max(0, cubrir - real);
-                    }, 0));
-                    const totalAdicional  = r1(dias.reduce((s, dia) => {
-                        const real   = hsRealesDia(personal, dia);
-                        const cubrir = horasDiaDoc(dia, hc, diasEsp) ?? 0;
-                        return s + Math.max(0, real - cubrir);
-                    }, 0));
-                    const totalFacturar       = r1(totalACubrir - totalNoCubier + totalAdicional);
-                    const totalCapacitacion   = r1(dias.reduce((s, dia) => s + hsCapacitacionDia(personal, dia), 0));
-                    const totalAusentismo     = dias.reduce((s, dia) => s + ausentismoDia(personal, dia), 0);
+                    const { diasEspA, diasEspB, personal } = d;
+
+                    const hsDia = (dia) => horasDiaDoc(dia, hcA, hcB, diasEspA, diasEspB);
+
+                    const totalReales   = r1(dias.reduce((s, dia) => s + hsRealesDia(personal, dia), 0));
+                    const totalACubrir  = r1(dias.reduce((s, dia) => s + (hsDia(dia) ?? 0), 0));
+                    const totalNoCubier = r1(dias.reduce((s, dia) => s + Math.max(0, (hsDia(dia) ?? 0) - hsRealesDia(personal, dia)), 0));
+                    const totalAdicional= r1(dias.reduce((s, dia) => s + Math.max(0, hsRealesDia(personal, dia) - (hsDia(dia) ?? 0)), 0));
+                    const totalFacturar     = r1(totalACubrir - totalNoCubier + totalAdicional);
+                    const totalCapacitacion = r1(dias.reduce((s, dia) => s + hsCapacitacionDia(personal, dia), 0));
+                    const totalAusentismo   = dias.reduce((s, dia) => s + ausentismoDia(personal, dia), 0);
 
                     return (
-                        <div key={d.docId} className="ps-vt-objetivo" id={`cc-obj-${d.docId}`}>
+                        <div key={d.objetivoId} className="ps-vt-objetivo" id={`cc-obj-${d.objetivoId}`}>
                             {/* Cabecera del objetivo */}
                             <div className="ps-vt-obj-header">
                                 <div className="ps-vt-obj-info">
@@ -221,9 +307,9 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                                 <span className="ps-vt-obj-count">{personal.length} personas</span>
                                 <div className="ps-vt-obj-dl">
                                     <button className="ps-vt-dl-btn ps-vt-dl-btn--jpg" disabled={descargando}
-                                        onClick={() => descargarUno(d.docId, nombreArchivo(d), "jpg")}>⬇ JPG</button>
+                                        onClick={() => descargarUno(d.objetivoId, nombreArchivo(d), "jpg")}>⬇ JPG</button>
                                     <button className="ps-vt-dl-btn ps-vt-dl-btn--pdf" disabled={descargando}
-                                        onClick={() => descargarUno(d.docId, nombreArchivo(d), "pdf")}>⬇ PDF</button>
+                                        onClick={() => descargarUno(d.objetivoId, nombreArchivo(d), "pdf")}>⬇ PDF</button>
                                 </div>
                             </div>
 
@@ -238,6 +324,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                                                     <th className="ps-th-sticky ps-th-nombre">Nombre y Apellido</th>
                                                     {dias.map(dia => {
                                                         const key       = fmtKey(dia);
+                                                        const diasEsp   = esB(dia) ? diasEspB : diasEspA;
                                                         const fin       = dia.getDay() === 0 || dia.getDay() === 6;
                                                         const ferNombre = FERIADOS_ARG[key];
                                                         const trabaja   = diasEsp[key];
@@ -273,10 +360,11 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                                                             <td className="ps-td-sticky ps-td-legajo">{p.legajo}</td>
                                                             <td className="ps-td-sticky ps-td-nombre">{p.nombre}</td>
                                                             {dias.map(dia => {
-                                                                const key    = fmtKey(dia);
-                                                                const val    = data[key] || "";
-                                                                const op     = OPCIONES.find(o => o.val === val);
-                                                                const fin    = dia.getDay() === 0 || dia.getDay() === 6;
+                                                                const key     = fmtKey(dia);
+                                                                const diasEsp = esB(dia) ? diasEspB : diasEspA;
+                                                                const val     = data[key] || "";
+                                                                const op      = OPCIONES.find(o => o.val === val);
+                                                                const fin     = dia.getDay() === 0 || dia.getDay() === 6;
                                                                 const trabaja = diasEsp[key];
                                                                 return (
                                                                     <td key={key}
@@ -297,23 +385,21 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                                             </tbody>
 
                                             <tfoot>
-                                                {/* Hs. a cubrir — igual que VistaTurnos */}
+                                                {/* Hs. a cubrir */}
                                                 <tr className="ps-tfoot cc-tfoot-first">
                                                     <td colSpan={2} className="ps-tfoot-label">Hs. a cubrir</td>
                                                     {dias.map(dia => {
-                                                        const hs = horasDiaDoc(dia, hc, diasEsp);
+                                                        const hs = hsDia(dia);
                                                         return (
                                                             <td key={fmtKey(dia)} className={`ps-tfoot-cel ${hs == null ? "ps-tfoot-cel--sin" : ""}`}>
                                                                 {hs != null ? hs : "—"}
                                                             </td>
                                                         );
                                                     })}
-                                                    <td className="ps-tfoot-total">
-                                                        {totalACubrir} hs
-                                                    </td>
+                                                    <td className="ps-tfoot-total">{totalACubrir} hs</td>
                                                 </tr>
 
-                                                {/* Horas reales cubiertas */}
+                                                {/* Horas reales */}
                                                 <tr className="cc-tfoot-row">
                                                     <td colSpan={2} className="ps-tfoot-label">Hs. reales cubiertas</td>
                                                     {dias.map(dia => {
@@ -327,9 +413,7 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                                                 <tr className="cc-tfoot-row cc-tfoot-row--nocub">
                                                     <td colSpan={2} className="ps-tfoot-label">Hs. NO cubiertas</td>
                                                     {dias.map(dia => {
-                                                        const real   = hsRealesDia(personal, dia);
-                                                        const cubrir = horasDiaDoc(dia, hc, diasEsp) ?? 0;
-                                                        const v = r1(Math.max(0, cubrir - real));
+                                                        const v = r1(Math.max(0, (hsDia(dia) ?? 0) - hsRealesDia(personal, dia)));
                                                         return <td key={fmtKey(dia)} className="ps-tfoot-cel">{v || "—"}</td>;
                                                     })}
                                                     <td className="ps-tfoot-total">{totalNoCubier} hs</td>
@@ -339,29 +423,25 @@ export default function ControlClienteScreen({ año, mes, zonaFija = null }) {
                                                 <tr className="cc-tfoot-row cc-tfoot-row--adic">
                                                     <td colSpan={2} className="ps-tfoot-label">Hs. adicionales</td>
                                                     {dias.map(dia => {
-                                                        const real   = hsRealesDia(personal, dia);
-                                                        const cubrir = horasDiaDoc(dia, hc, diasEsp) ?? 0;
-                                                        const v = r1(Math.max(0, real - cubrir));
+                                                        const v = r1(Math.max(0, hsRealesDia(personal, dia) - (hsDia(dia) ?? 0)));
                                                         return <td key={fmtKey(dia)} className="ps-tfoot-cel">{v || "—"}</td>;
                                                     })}
                                                     <td className="ps-tfoot-total">{totalAdicional} hs</td>
                                                 </tr>
 
-                                                {/* Horas a Facturar = a cubrir − no cubiertas + adicionales */}
+                                                {/* Horas a Facturar */}
                                                 <tr className="cc-tfoot-row cc-tfoot-row--fact">
                                                     <td colSpan={2} className="ps-tfoot-label">Hs. a Facturar</td>
                                                     {dias.map(dia => {
-                                                        const cubrir = horasDiaDoc(dia, hc, diasEsp) ?? 0;
+                                                        const cubrir = hsDia(dia) ?? 0;
                                                         const real   = hsRealesDia(personal, dia);
-                                                        const noCub  = r1(Math.max(0, cubrir - real));
-                                                        const adic   = r1(Math.max(0, real - cubrir));
-                                                        const v      = r1(cubrir - noCub + adic);
+                                                        const v      = r1(cubrir - r1(Math.max(0, cubrir - real)) + r1(Math.max(0, real - cubrir)));
                                                         return <td key={fmtKey(dia)} className="ps-tfoot-cel">{v || "—"}</td>;
                                                     })}
                                                     <td className="ps-tfoot-total">{totalFacturar} hs</td>
                                                 </tr>
 
-                                                {/* Horas capacitación */}
+                                                {/* Capacitación */}
                                                 <tr className="cc-tfoot-row cc-tfoot-row--cap">
                                                     <td colSpan={2} className="ps-tfoot-label">Hs. capacitación</td>
                                                     {dias.map(dia => {

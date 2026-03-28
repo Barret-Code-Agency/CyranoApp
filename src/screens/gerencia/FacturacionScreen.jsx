@@ -9,7 +9,7 @@ import { db } from "../../firebase";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import "./FacturacionScreen.css";
-import { getDias, fmtKey, MESES_ES, HORAS_KEYS, horasDeValor, r1 } from "../../utils/periodoUtils";
+import { getDiasCalendario, fmtKey, MESES_ES, horasDiaDeDoc, horasDeValor, normalizarTurno, r1 } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
 
 // ── Configuración de distribución ────────────────────────────────────────────
@@ -53,12 +53,7 @@ const COL_PROG = "programacionServicios";
 // MESES_ES, HORAS_KEYS, horasDeValor, r1, getDias, fmtKey, FERIADOS_ARG importados desde utils
 
 function horasDiaObj(dia, obj, diasEsp) {
-    if (!obj) return null;
-    const key = fmtKey(dia);
-    if (FERIADOS_ARG[key]) return obj.horasFeriados != null ? Number(obj.horasFeriados) : null;
-    if (diasEsp?.[key] === false) return 0;
-    const hs = obj[HORAS_KEYS[dia.getDay()]];
-    return hs != null ? Number(hs) : null;
+    return horasDiaDeDoc(dia, obj, diasEsp, FERIADOS_ARG);
 }
 
 function fmt(n) {
@@ -88,9 +83,7 @@ export default function FacturacionScreen({ año, mes, onBack, zonaFija = null }
     const [exportando,setExportando]= useState(false);
     const tablaRef = useRef(null);
 
-    const dias = useMemo(() => getDias(año, mes), [año, mes]);
-    const mesAnterior = mes === 1 ? 12 : mes - 1;
-    const añoAnterior = mes === 1 ? año - 1 : año;
+    const dias = useMemo(() => getDiasCalendario(año, mes), [año, mes]);
 
     useEffect(() => {
         if (!empresaId) return;
@@ -121,15 +114,24 @@ export default function FacturacionScreen({ año, mes, onBack, zonaFija = null }
             const obj      = objetivos.find(o => o.id === d.objetivoId) || null;
             const diasEsp  = d.diasEspeciales || {};
             const personal = d.personal || [];
-            const { cc, proy } = parseCodigo(obj?.codigo || d.objetivoId);
+            const cc   = obj?.cCosto       || "";
+            const proy = obj?.numProyecto  || "";
 
-            const vendidas = r1(dias.reduce((s, dia) => s + (horasDiaObj(dia, obj, diasEsp) ?? 0), 0));
-            const reales   = r1(dias.reduce((s, dia) => {
+            // Igual que ControlCliente: comparación día a día
+            const hsRealDia = (dia) => {
                 const key = fmtKey(dia);
-                return s + personal.reduce((ps, p) => ps + horasDeValor((p.real || p.programado || {})[key] || ""), 0);
+                return personal.reduce((s, p) => s + horasDeValor(normalizarTurno((p.real || p.programado || {})[key] || "")), 0);
+            };
+
+            const vendidas    = r1(dias.reduce((s, dia) => s + (horasDiaObj(dia, obj, diasEsp) ?? 0), 0));
+            const noCubiertas = r1(dias.reduce((s, dia) => {
+                const cubrir = horasDiaObj(dia, obj, diasEsp) ?? 0;
+                return s + Math.max(0, cubrir - hsRealDia(dia));
             }, 0));
-            const noCubiertas  = r1(Math.max(0, vendidas - reales));
-            const adicionales  = r1(Math.max(0, reales - vendidas));
+            const adicionales = r1(dias.reduce((s, dia) => {
+                const cubrir = horasDiaObj(dia, obj, diasEsp) ?? 0;
+                return s + Math.max(0, hsRealDia(dia) - cubrir);
+            }, 0));
             const totalFacturar = r1(vendidas - noCubiertas + adicionales);
 
             return {
@@ -204,14 +206,7 @@ export default function FacturacionScreen({ año, mes, onBack, zonaFija = null }
         <div className="fc-root">
             {/* Header */}
             <div className="fc-header">
-                <div className="fc-header-left">
-                    <span className="fc-title">💰 Facturación</span>
-                    <span className="fc-periodo">
-                        24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior}
-                        {" – "}
-                        23/{String(mes).padStart(2,"0")}/{año}
-                    </span>
-                </div>
+                <div className="fc-header-left"></div>
                 <div className="fc-header-actions">
                     <button className="fc-btn fc-btn--pdf" disabled={exportando || cargando} onClick={exportarPDF}>
                         {exportando ? "Generando…" : "⬇ Exportar PDF"}
@@ -231,8 +226,7 @@ export default function FacturacionScreen({ año, mes, onBack, zonaFija = null }
                     <div className="fc-reporte-header">
                         <div className="fc-reporte-titulo">Horas a Facturar</div>
                         <div className="fc-reporte-subtitulo">
-                            {MESES_ES[mes-1]} {año} &nbsp;·&nbsp;
-                            24/{String(mesAnterior).padStart(2,"0")}/{añoAnterior} al 23/{String(mes).padStart(2,"0")}/{año}
+                            {MESES_ES[mes-1]} {año}
                         </div>
                     </div>
 

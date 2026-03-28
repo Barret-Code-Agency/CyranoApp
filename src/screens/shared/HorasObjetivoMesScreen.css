@@ -7,6 +7,71 @@
     background: var(--color-bg, #f8fafc);
 }
 
+/* ── Topbar ── */
+.hom-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+.hom-topbar-info {
+    font-size: 13px;
+    color: #475569;
+}
+.hom-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+.hom-dirty      { color: #d97706; font-weight: 600; }
+.hom-error-inline { font-size: 12px; color: #b91c1c; }
+.hom-ok-inline    { font-size: 12px; color: #16a34a; font-weight: 600; }
+
+/* ── Leyenda ── */
+.hom-leyenda {
+    font-size: 12px;
+    color: #64748b;
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.hom-ley-finde { color: #8b5cf6; }
+.hom-ley-fer   { color: #d97706; }
+.hom-ley-edit  { color: #94a3b8; margin-left: 8px; }
+
+/* ── Celda editable ── */
+.hom-celda-val {
+    display: block;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    min-width: 24px;
+    text-align: center;
+}
+.hom-celda-val:hover { background: #dbeafe; }
+.hom-celda-fer  { color: #92400e; }
+.hom-celda-finde { color: #6d28d9; }
+.hom-celda-cero { color: #cbd5e1; display: block; text-align: center; }
+.hom-celda-input {
+    width: 44px;
+    padding: 2px 4px;
+    font-size: 11px;
+    text-align: center;
+    border: 1.5px solid #3b82f6;
+    border-radius: 4px;
+}
+
+/* ── Fila modificada ── */
+.hom-tr-dirty td { background: #fffbeb !important; }
+.hom-mod-badge { color: #d97706; margin-left: 4px; font-size: 10px; }
+
 .hom-body {
     padding: 20px 24px;
     display: flex;
@@ -93,6 +158,10 @@
 .hom-cero       { color: #cbd5e1; }
 .hom-finde      { background: #f5f3ff !important; }
 .hom-feriado    { background: #fef9c3 !important; }
+
+/* Separador entre período A (1-23) y período B (24-31) */
+.hom-th-limite,
+.hom-td-limite { border-left: 2px solid #6366f1 !important; }
 
 .hom-tr-total td { border-top: 2px solid #e2e8f0; background: #f8fafc; padding: 6px 4px; }
 .hom-tr-total .hom-td-cliente { background: #f8fafc; }
@@ -239,6 +308,19 @@
     cursor: pointer;
 }
 .hom-btn-guardar:disabled { opacity: 0.6; cursor: default; }
+.hom-btn-prev {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.hom-btn-prev:hover { background: #e2e8f0; color: #1e293b; }
+.hom-btn-prev:disabled { opacity: 0.5; cursor: default; }
 .hom-ok {
     font-size: 13px;
     color: #16a34a;

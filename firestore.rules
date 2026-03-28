@@ -322,6 +322,24 @@ service cloud.firestore {
       );
     }
 
+    // ── Horas por objetivo por mes ────────────────────────────────────────────
+    match /horasObjetivoMes/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
+    // ── Asignaciones de grupo 14x14 por mes ───────────────────────────────────
+    match /grupoAsignaciones14x14/{id} {
+      allow read: if isAuth() && (isSuperAdmin() || resource.data.empresaId == miEmpresaId());
+      allow create: if isAuth() && request.resource.data.empresaId == miEmpresaId();
+      allow update, delete: if isAuth() && (
+        isSuperAdmin() || esAdminDeEmpresa(resource.data.empresaId)
+      );
+    }
+
     // ── Denegación por defecto — todo lo no listado explícitamente ────────────
     match /{document=**} {
       allow read, write: if false;

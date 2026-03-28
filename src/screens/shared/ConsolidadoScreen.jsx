@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAppData } from "../../context/AppDataContext";
 import { useAuth }     from "../../context/AuthContext";
-import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
     ResponsiveContainer, BarChart, Bar,
@@ -130,7 +130,11 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
     const [cargoMap,     setCargoMap]     = useState({}); // legajo → cargo
     const [rolMap,       setRolMap]       = useState({}); // legajo → rol
     const [grupoMap,     setGrupoMap]     = useState({}); // legajo → grupoTurno14
+    const [ccMap,        setCcMap]        = useState({}); // legajo → centroCosto
+    const [proyMap,      setProyMap]      = useState({}); // legajo → proyecto
     const [francosMap,   setFrancosMap]   = useState({}); // grupo → Set<"YYYY-MM-DD">
+    const [grupoMesMap,  setGrupoMesMap]  = useState({}); // legajo → grupo (override mensual)
+    const [horasObjMes,  setHorasObjMes]  = useState({}); // objetivoId → horasPorDow override
     const [excluidos,    setExcluidos]    = useState(new Set());
     const [cargando,     setCargando]     = useState(true);
     const [errorCarga,   setErrorCarga]   = useState("");
@@ -173,19 +177,23 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                 const tm  = {};
                 const cm  = {};
                 const rlm = {}; // rol map
+                const ccm = {}; // centroCosto map
+                const pym = {}; // proyecto map
                 const exc = new Set();
                 const pers = [];
                 legSnap.docs.forEach(d => {
                     const data = d.data();
                     if (!data.legajo) return;
                     const leg = String(data.legajo);
-                    zm[leg] = data.zona         || "";
-                    rm[leg] = data.regimen      || "";
-                    dm[leg] = d.id;
-                    gm[leg] = data.grupoTurno14 || "";
+                    zm[leg]  = data.zona         || "";
+                    rm[leg]  = data.regimen      || "";
+                    dm[leg]  = d.id;
+                    gm[leg]  = data.grupoTurno14 || "";
                     tm[leg]  = data.tarea        || "";
                     cm[leg]  = data.cargo        || "";
                     rlm[leg] = data.rol          || "";
+                    ccm[leg] = data.centroCosto  || "";
+                    pym[leg] = data.proyecto     || "";
                     // Excluir por tarea, por estado inactivo o por cargo "fuera de convenio"
                     const inactivo       = data.estado && data.estado !== "Activo";
                     const fueraConvenio  = (data.cargo || "").includes("(FC)");
@@ -229,6 +237,32 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                     if (g.grupo && g.francos) fm[g.grupo] = new Set(g.francos);
                 });
 
+                // ── Grupos 14x14 por mes ───────────────────────────────────────
+                const periodoKey = `${config.año}-${String(config.mes).padStart(2,"0")}`;
+                const gmMes = {};
+                try {
+                    const asigSnap = await getDoc(doc(db, "grupoAsignaciones14x14", `${empresaId}_${periodoKey}`));
+                    if (asigSnap.exists()) {
+                        const asigs = asigSnap.data().asignaciones || {};
+                        Object.assign(gmMes, asigs); // legajo → "A" | "B"
+                    }
+                } catch (_) { /* colección opcional */ }
+
+                // ── Horas por objetivo por mes ────────────────────────────────
+                const hom = {}; // objetivoId → { horasDomingo, horasLunes, ... }
+                try {
+                    const horasSnap = await getDocs(query(
+                        collection(db, "horasObjetivoMes"),
+                        where("empresaId", "==", empresaId),
+                        where("año", "==", config.año),
+                        where("mes", "==", config.mes),
+                    ));
+                    horasSnap.docs.forEach(d => {
+                        const h = d.data();
+                        if (h.objetivoId) hom[h.objetivoId] = h;
+                    });
+                } catch (_) { /* colección opcional */ }
+
                 setZonaMap(zm);
                 setRegimenMap(rm);
                 setDocIdMap(dm);
@@ -236,7 +270,11 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                 setCargoMap(cm);
                 setRolMap(rlm);
                 setGrupoMap(gm);
+                setCcMap(ccm);
+                setProyMap(pym);
                 setFrancosMap(fm);
+                setGrupoMesMap(gmMes);
+                setHorasObjMes(hom);
                 setExcluidos(exc);
                 setTodoPersonal(pers);
             } catch (e) {
@@ -257,14 +295,16 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
             const partes = (doc.objetivoId || "").split("-");
             const cc      = partes[0] || "";
             const proyecto= partes[1] || "";
+            // Override de horas por mes si existe para este objetivo
+            const horasOvr = horasObjMes[doc.objetivoId];
             const hpd = [
-                doc.horasDomingo   ?? null,
-                doc.horasLunes     ?? null,
-                doc.horasMartes    ?? null,
-                doc.horasMiercoles ?? null,
-                doc.horasJueves    ?? null,
-                doc.horasViernes   ?? null,
-                doc.horasSabado    ?? null,
+                horasOvr?.horasDomingo   ?? doc.horasDomingo   ?? null,
+                horasOvr?.horasLunes     ?? doc.horasLunes     ?? null,
+                horasOvr?.horasMartes    ?? doc.horasMartes    ?? null,
+                horasOvr?.horasMiercoles ?? doc.horasMiercoles ?? null,
+                horasOvr?.horasJueves    ?? doc.horasJueves    ?? null,
+                horasOvr?.horasViernes   ?? doc.horasViernes   ?? null,
+                horasOvr?.horasSabado    ?? doc.horasSabado    ?? null,
             ];
             const vistoEnDoc = new Set(); // evita duplicados dentro del mismo doc
             (doc.personal || []).forEach(p => {
@@ -276,7 +316,8 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                     byLeg[leg] = {
                         legajo: leg,
                         nombre: p.nombre || "",
-                        cc, proyecto,
+                        cc:      ccMap[leg]  || cc,
+                        proyecto: proyMap[leg] || proyecto,
                         zona:    zonaMap[leg] || doc.zona || doc.proyectoNombre || "",
                         regimen: regimenMap[leg] || "",
                         rawDias: {},
@@ -360,7 +401,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
             .filter(p => !legajesConProg.has(String(p.legajo || "")) && !excluidos.has(String(p.legajo || "")))
             .map(p => {
                 const leg = String(p.legajo || "");
-                return { legajo: leg, nombre: p.nombre || "", cc: "", proyecto: "",
+                return { legajo: leg, nombre: p.nombre || "", cc: ccMap[leg] || "", proyecto: proyMap[leg] || "",
                     zona: zonaMap[leg] || "", regimen: regimenMap[leg] || "",
                     horasPorDow: null, data: {}, nocData: {} };
             });
@@ -372,7 +413,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
             return la !== lb ? la - lb : String(a.legajo).localeCompare(String(b.legajo));
         });
         return resultado;
-    }, [rawDocs, todoPersonal, zonaMap, regimenMap, excluidos, vista]);
+    }, [rawDocs, todoPersonal, zonaMap, regimenMap, excluidos, vista, ccMap, proyMap, horasObjMes, grupoMesMap]);
 
     const zonasDisponibles = useMemo(() => {
         // Zonas fijas predefinidas + cualquier zona extra que venga del data
@@ -492,7 +533,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
     const grafPersonas = useMemo(() => {
         return todasFilas.map(f => {
             const r = calcResumen(f.data, f.capData);
-            const { ext50, ext100 } = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData);
+            const { ext50, ext100 } = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMesMap[f.legajo] || grupoMap[f.legajo] || "", f.capData);
             const exc = f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0;
             return {
                 nombre: f.nombre.trim(),
@@ -514,7 +555,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
             };
         }, { lvHs: 0, saDomFerHs: 0 });
         const totPag = todasFilas.reduce((acc, f) => {
-            const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData);
+            const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMesMap[f.legajo] || grupoMap[f.legajo] || "", f.capData);
             return { ext50: acc.ext50 + ext.ext50, ext100: acc.ext100 + ext.ext100 };
         }, { ext50: 0, ext100: 0 });
         const autExt50  = Math.round(totAut.lvHs       * 0.07 * 10) / 10;
@@ -584,7 +625,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
         const filasDatos = filas.map(f => {
             const r   = calcResumen(f.data, f.capData);
             const reg = regimenMap[f.legajo] || "";
-            const { ext50, ext100 } = calcExtras(f.data, reg, grupoMap[f.legajo] || "", f.capData);
+            const { ext50, ext100 } = calcExtras(f.data, reg, grupoMesMap[f.legajo] || grupoMap[f.legajo] || "", f.capData);
             const noc = Object.values(f.nocData || {}).reduce((s,v) => s+v, 0);
             const exc = f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0;
             const esSC = String(f.zona || "").toUpperCase().includes("SANTA CRUZ");
@@ -1005,7 +1046,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                         <td className="con-td-sum con-td-sum--aus">{r.vac     || "—"}</td>
                                         {(() => {
                                             const reg = regimenMap[f.legajo] || "";
-                                            const { ext50, ext100 } = calcExtras(f.data, reg, grupoMap[f.legajo] || "", f.capData);
+                                            const { ext50, ext100 } = calcExtras(f.data, reg, grupoMesMap[f.legajo] || grupoMap[f.legajo] || "", f.capData);
                                             const noc = Object.values(f.nocData || {}).reduce((s,v)=>s+v,0);
                                             const exc = f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0;
                                             return <>
@@ -1103,8 +1144,8 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                             sab:   acc.sab   + r.sabado,
                                             dom:   acc.dom   + r.domingo,
                                             fer:   acc.fer   + r.ferDias,
-                                            ext50: acc.ext50 + calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData).ext50,
-                                            ext100:acc.ext100+ calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData).ext100,
+                                            ext50: acc.ext50 + calcExtras(f.data, regimenMap[f.legajo] || "", grupoMesMap[f.legajo] || grupoMap[f.legajo] || "", f.capData).ext50,
+                                            ext100:acc.ext100+ calcExtras(f.data, regimenMap[f.legajo] || "", grupoMesMap[f.legajo] || grupoMap[f.legajo] || "", f.capData).ext100,
                                             exc:   acc.exc   + (f.proyecto === "113" ? Math.max(0, (calcBase(f.horasPorDow) || 0) - 200) : 0),
                                             noc:   acc.noc   + Object.values(f.nocData || {}).reduce((s,v)=>s+v,0),
                                             // bonus
@@ -1188,7 +1229,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                             {(() => {
                                 const tots = filas.reduce((acc, f) => {
                                     const r   = calcResumen(f.data, f.capData);
-                                    const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData);
+                                    const ext = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMesMap[f.legajo] || grupoMap[f.legajo] || "", f.capData);
                                     return {
                                         ext50: acc.ext50 + ext.ext50,
                                         ext100:acc.ext100+ ext.ext100,
@@ -1272,7 +1313,7 @@ function ConsolidadoGrilla({ config, onBack = null, zonaFija = null }) {
                                 const aut50  = Math.round(totAut.lvHs       * 0.07 * 10) / 10;
                                 const aut100 = Math.round(totAut.saDomFerHs * 0.07 * 10) / 10;
                                 const totPag = rows.reduce((acc, f) => {
-                                    const e = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMap[f.legajo] || "", f.capData);
+                                    const e = calcExtras(f.data, regimenMap[f.legajo] || "", grupoMesMap[f.legajo] || grupoMap[f.legajo] || "", f.capData);
                                     return { ext50: acc.ext50 + e.ext50, ext100: acc.ext100 + e.ext100 };
                                 }, { ext50: 0, ext100: 0 });
                                 const pag50  = Math.round(totPag.ext50  * 10) / 10;

@@ -92,16 +92,25 @@ function parsearExcel(buffer, fechasPermitidas) {
         // Formato A (estándar): fechas en fila 5 (índice 4), legajo en col B (índice 1)
         fechaRowIdx  = 4;
         legajoCol    = 1;
-        nombreCol    = 0; // col A o col C como fallback
+        nombreCol    = 0;
         dataStartIdx = 5;
     } else if (rows[0] && rows[0].some(esSerial)) {
         // Formato B (Adm): fechas en fila 1 (índice 0), legajo en col A (índice 0)
         fechaRowIdx  = 0;
         legajoCol    = 0;
-        nombreCol    = 1; // col B = nombre
+        nombreCol    = 1;
         dataStartIdx = 1;
     } else {
-        throw new Error("No se encontraron fechas en el archivo. Verificá el formato.");
+        // Búsqueda ampliada: escanear filas 1-7 para archivos con cabeceras distintas
+        const filaCandidata = [1, 2, 3, 5, 6].find(i => rows[i] && rows[i].some(esSerial));
+        if (filaCandidata !== undefined) {
+            fechaRowIdx  = filaCandidata;
+            legajoCol    = 1;
+            nombreCol    = 0;
+            dataStartIdx = filaCandidata + 1;
+        } else {
+            throw new Error("No se encontraron fechas en el archivo. Verificá el formato.");
+        }
     }
 
     // ── Fila de fechas ─────────────────────────────────────────────────────────
@@ -116,6 +125,9 @@ function parsearExcel(buffer, fechasPermitidas) {
 
     if (fechaCols.length === 0)
         throw new Error("No se encontraron fechas válidas. Verificá el formato del archivo.");
+
+    // Fechas que el archivo tiene (para diagnóstico si no matchean con el período)
+    const todasLasFechasArchivo = fechaCols.map(f => f.dateKey);
 
     // ── Filas de datos (de a 2 filas por agente) ───────────────────────────────
     const dataRows = rows.slice(dataStartIdx);
@@ -163,7 +175,7 @@ function parsearExcel(buffer, fechasPermitidas) {
         }
     }
 
-    return personal;
+    return { personal, todasLasFechasArchivo };
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
@@ -215,10 +227,19 @@ export default function ImportarRealesPanel({ año, mes }) {
         const resultados = [];
         for (const file of files) {
             try {
-                const buf     = await file.arrayBuffer();
-                const personal = parsearExcel(buf, fechasSet);
+                const buf = await file.arrayBuffer();
+                const { personal, todasLasFechasArchivo } = parsearExcel(buf, fechasSet);
                 if (personal.length === 0) {
-                    setError(`"${file.name}": no se encontraron turnos dentro del período ${tituloPeriodo}.`);
+                    // Armar mensaje diagnóstico
+                    const primerFecha = todasLasFechasArchivo[0] ?? "?";
+                    const ultFecha    = todasLasFechasArchivo[todasLasFechasArchivo.length - 1] ?? "?";
+                    const rangoArchivo = `${primerFecha} → ${ultFecha}`;
+                    const rangoEsperado = `${[...fechasSet].sort()[0]} → ${[...fechasSet].sort().pop()}`;
+                    setError(
+                        `"${file.name}": no se encontraron turnos en el período ${tituloPeriodo}.\n` +
+                        `El archivo contiene fechas: ${rangoArchivo}\n` +
+                        `Período esperado: ${rangoEsperado}`
+                    );
                     return;
                 }
                 resultados.push({ nombre: file.name, personal });

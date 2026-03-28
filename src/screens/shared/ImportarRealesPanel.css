@@ -58,6 +58,7 @@
     padding: 0.65rem 1rem;
     margin-bottom: 1rem;
     font-size: 0.88rem;
+    white-space: pre-wrap;
 }
 
 /* ── Dropzone ───────────────────────────────────────────────────────────── */
