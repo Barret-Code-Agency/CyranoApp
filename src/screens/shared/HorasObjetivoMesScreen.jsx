@@ -163,7 +163,7 @@ function CeldaEditable({ value, onChange, deshabilitada, feriado, finde }) {
 // ── Pantalla principal ────────────────────────────────────────────────────────
 export default function HorasObjetivoMesScreen({ año, mes, onBack }) {
     const { empresaId } = useAppData();
-    const { objetivos } = useClientesData(empresaId);
+    const { objetivos, clientes, cargando: cargandoCatalogo } = useClientesData(empresaId);
 
     // Período B (días 24-31 del mes calendario)
     const { año: añoB, mes: mesB } = periodoSiguiente(año, mes);
@@ -205,8 +205,19 @@ export default function HorasObjetivoMesScreen({ año, mes, onBack }) {
         return m;
     }, [objetivos]);
 
+    // Indexado por doc ID Y por nombre normalizado para cubrir clientes creados con addDoc (ID aleatorio)
+    const clienteMap = useMemo(() => {
+        const m = {};
+        clientes.forEach(c => {
+            if (c.id)     m[c.id] = c;
+            if (c.nombre) m[c.nombre.toLowerCase().trim()] = c;
+        });
+        return m;
+    }, [clientes]);
+
     useEffect(() => {
-        if (!empresaId) return;
+        // Esperar a que el catálogo de objetivos y clientes esté listo antes de correr los queries
+        if (!empresaId || cargandoCatalogo) return;
         setCargando(true);
         setDirtyA(new Set());
         setDirtyB(new Set());
@@ -230,14 +241,36 @@ export default function HorasObjetivoMesScreen({ año, mes, onBack }) {
                 progSnapB.docs.forEach(d => { const dat = d.data(); if (dat.objetivoId) docsB[dat.objetivoId] = dat; });
                 const allOids = new Set([...Object.keys(docsA), ...Object.keys(docsB)]);
 
+                // Incluir TODOS los objetivos del catálogo aunque no tengan planilla cargada todavía
+                // (ej: Santa Cruz cuando aún no se importó la programación del mes)
+                Object.keys(objMap).forEach(oid => allOids.add(oid));
+
                 let merged = [...allOids].map(oid => {
-                    const base = docsA[oid] || docsB[oid];
+                    const base   = docsA[oid] || docsB[oid];
+                    const catObj = objMap[oid];
+                    // Cliente: resolver en orden de confiabilidad
+                    // 1. clientes collection (lookup por clienteId) — fuente más confiable
+                    // 2. clienteNombre en el catálogo de objetivos (seteado por seed)
+                    // 3. vacío
+                    const clienteId = catObj?.clienteId || base?.clienteId || "";
+                    const clienteNombre =
+                        clienteMap[clienteId]?.nombre ||
+                        catObj?.clienteNombre ||
+                        base?.clienteNombre ||
+                        "";
+                    // Objetivo: código + proyecto + nombre (ej: "217-1-2 BSC Administracion Sur")
+                    const objetivoNombre = [
+                        catObj?.codigo,
+                        catObj?.proyecto,
+                        catObj?.nombre,
+                    ].filter(Boolean).join(" ") ||
+                        base?.objetivoNombre || "";
                     return {
-                        objetivoId:     oid,
-                        clienteNombre:  base.clienteNombre  || "",
-                        objetivoNombre: base.objetivoNombre || "",
-                        diasEspA:       docsA[oid]?.diasEspeciales || {},
-                        diasEspB:       docsB[oid]?.diasEspeciales || {},
+                        objetivoId: oid,
+                        clienteNombre,
+                        objetivoNombre,
+                        diasEspA: docsA[oid]?.diasEspeciales || {},
+                        diasEspB: docsB[oid]?.diasEspeciales || {},
                     };
                 });
                 merged.sort((a, b) =>
@@ -343,7 +376,7 @@ export default function HorasObjetivoMesScreen({ año, mes, onBack }) {
             })
             .catch(console.error)
             .finally(() => setCargando(false));
-    }, [empresaId, año, mes]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [empresaId, año, mes, cargandoCatalogo, objMap, clienteMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Aplica el patrón del mes anterior a todos los objetivos (sobrescribe el estado actual)
     const cargarMesAnterior = useCallback(() => {

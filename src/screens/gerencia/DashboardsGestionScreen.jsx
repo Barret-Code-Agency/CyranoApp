@@ -10,8 +10,9 @@ import {
     LineChart, Line, ComposedChart, Cell, LabelList, ReferenceLine,
 } from "recharts";
 import "./DashboardsGestionScreen.css";
-import { getDias, fmtKey, horasDeValor, normalizarTurno, HORAS_KEYS } from "../../utils/periodoUtils";
+import { getDias, fmtKey, horasDeValor, normalizarTurno } from "../../utils/periodoUtils";
 import { FERIADOS_ARG } from "../../utils/feriados";
+import { useHorasACubrir } from "../../hooks/useHorasACubrir";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -107,8 +108,13 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
     const [zonaActiva,      setZonaActiva]      = useState(null);
     const [diagramas,       setDiagramas]       = useState([]);
     const [activeTab,       setActiveTab]       = useState("mes");
+    const [overridesAll,    setOverridesAll]    = useState([]);
 
     const meses = useMemo(() => ultimos6Meses(), []);
+
+    const mesActualAño = meses[meses.length - 1].año;
+    const mesActualMes = meses[meses.length - 1].mes;
+    const { porObjetivo: hACMes, diasPorObjetivo: diasPorObjMes } = useHorasACubrir(empresaId, mesActualAño, mesActualMes);
 
     useEffect(() => {
         if (!empresaId) return;
@@ -151,6 +157,9 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
 
                 const diagSnap = await getDocs(query(collection(db, "diagramas14x14"), where("empresaId", "==", empresaId))).catch(() => ({ docs: [] }));
                 setDiagramas(diagSnap.docs.map(d => d.data()));
+
+                const overSnap = await getDocs(query(collection(db, "horasObjetivoMes"), where("empresaId", "==", empresaId)));
+                setOverridesAll(overSnap.docs.map(d => ({ id: d.id, ...d.data() })));
             } finally {
                 setLoading(false);
             }
@@ -224,39 +233,22 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         return { ext50: Math.round(ext50 * 10) / 10, ext100: Math.round(ext100 * 10) / 10 };
     }
 
-    // ── Helper compartido: horas contratadas de un objetivo para un día ─────────
-    // Idéntico a horasDiaObj() de FacturacionScreen
-    function hsContrato(dia, obj, diasEsp) {
-        if (!obj) return 0;
-        const key = fmtKey(dia);
-        if (FERIADOS_ARG[key]) return obj.horasFeriados != null ? Number(obj.horasFeriados) : 0;
-        if (diasEsp?.[key] === false) return 0;
-        const hs = obj[HORAS_KEYS[dia.getDay()]];
-        return hs != null ? Number(hs) : 0;
-    }
-
     // ── Métricas por cliente — MES EN CURSO ───────────────────────────────────
     const mesActual = meses[meses.length - 1];
     const clienteMetricasMes = useMemo(() => {
         const { año, mes } = mesActual;
         const dias = getDias(año, mes);
         const docsDelMes = filteredDocs.filter(d => d._mes?.año === año && d._mes?.mes === mes);
-        const calPrefix = `${año}-${String(mes).padStart(2, "0")}-`;
 
-        // Mapa de objetivos por ID (para horas contratadas, igual a FacturacionScreen)
-        const objMap = {};
-        objetivos.forEach(o => { if (o.id) objMap[o.id] = o; });
-
-        // Resolución de nombre de cliente: doc.clienteNombre → obj.clienteNombre → vacío (se omite)
+        // Resolución de nombre de cliente: doc.clienteNombre → vacío (se omite)
         const cliDeDoc = doc =>
-            (doc.clienteNombre || doc.cliente || doc.contrato ||
-             objMap[doc.objetivoId]?.clienteNombre || "").trim();
+            (doc.clienteNombre || doc.cliente || doc.contrato || "").trim();
 
         const byCli = {};
         const byLeg = {}; // para calcExtras
         const init = cli => {
             if (!byCli[cli]) byCli[cli] = {
-                prog: 0, trab: 0, adicHoras: 0, factCalend: 0,
+                prog: 0, trab: 0, adicHoras: 0,
                 ausDias: 0, ausHoras: 0, vacDias: 0, vacHoras: 0,
                 ext50Hs: 0, ext50Cant: new Set(), ext100Hs: 0, ext100Cant: new Set(),
             };
@@ -265,16 +257,16 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         docsDelMes.forEach(doc => {
             const cli = cliDeDoc(doc);
             if (!cli) return; // doc sin cliente identificable → omitir
-            const obj     = objMap[doc.objetivoId] || null;
-            const diasEsp = doc.diasEspeciales || {};
             const personal = doc.personal || [];
             init(cli);
             const c = byCli[cli];
 
-            // ── Prog / Trab / Adicionales: contratado vs real por día (como FacturacionScreen) ──
-            dias.forEach(dia => {
+            // ── Prog/Trab/Adicionales días 1-23 (período A) ──
+            const oid = doc.objetivoId || "";
+            const diasObj = diasPorObjMes[oid] || {};
+            dias.filter(d => d.getDate() <= 23).forEach(dia => {
                 const key    = fmtKey(dia);
-                const cubrir = hsContrato(dia, obj, diasEsp);
+                const cubrir = diasObj[key] ?? 0;
                 const realDia = personal.reduce((s, p) =>
                     s + horasDeValor(normalizarTurno((p.real || {})[key] || "")), 0);
                 c.prog += cubrir;
@@ -332,28 +324,25 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
             });
         });
 
-        // ── Hs Facturadas mes calendario (1 al último día): suma horas reales ──
-        const acumFactCalend = (docs) => {
-            docs.forEach(doc => {
-                const cli = cliDeDoc(doc);
-                if (!cli || !byCli[cli]) return;
-                const c = byCli[cli];
-                (doc.personal || []).forEach(p => {
-                    Object.entries(p.real || {}).forEach(([fecha, vR]) => {
-                        if (!fecha.startsWith(calPrefix)) return;
-                        const h = horasDeValor(normalizarTurno(vR));
-                        if (h > 0) c.factCalend += h;
-                    });
-                    Object.entries(p.capacitacion || {}).forEach(([fecha, v]) => {
-                        if (!fecha.startsWith(calPrefix)) return;
-                        const hc = Number(v) || 0;
-                        if (hc > 0) c.factCalend += hc;
-                    });
-                });
+        // ── Prog/Trab/Adicionales días 24-31 (período B) ──
+        filteredDocsProximo.forEach(doc => {
+            const cli = cliDeDoc(doc);
+            if (!cli) return;
+            const oid = doc.objetivoId || "";
+            const personal = doc.personal || [];
+            const diasObj = diasPorObjMes[oid] || {};
+            if (!byCli[cli]) init(cli);
+            const c = byCli[cli];
+            dias.filter(d => d.getDate() >= 24).forEach(dia => {
+                const key    = fmtKey(dia);
+                const cubrir = diasObj[key] ?? 0;
+                const realDia = personal.reduce((s, p) =>
+                    s + horasDeValor(normalizarTurno((p.real || {})[key] || "")), 0);
+                c.prog += cubrir;
+                c.trab += Math.min(realDia, cubrir);
+                if (realDia > cubrir) c.adicHoras += realDia - cubrir;
             });
-        };
-        acumFactCalend(docsDelMes);         // días 1-23 del mes M
-        acumFactCalend(filteredDocsProximo); // días 24-31 del mes M (período M+1)
+        });
 
         // ── Extras por legajo → cliente donde más horas reales trabajó ──
         Object.entries(byLeg).forEach(([leg, r]) => {
@@ -370,7 +359,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         let totalProg = 0, totalFact = 0, totalAusDias = 0, totalAusHoras = 0,
             totalVacDias = 0, totalVacHoras = 0, totalExt50 = 0, totalExt100 = 0;
         const rows = Object.entries(byCli).map(([name, d]) => {
-            const fact      = Math.round(d.factCalend);
+            const fact      = Math.round(d.trab + d.adicHoras);
             const ext50Pct  = fact > 0 ? Math.round((d.ext50Hs  / fact) * 100 * 10) / 10 : 0;
             const ext100Pct = fact > 0 ? Math.round((d.ext100Hs / fact) * 100 * 10) / 10 : 0;
             const ausPct    = d.prog > 0 ? Math.round((d.ausHoras / d.prog) * 100 * 10) / 10 : 0;
@@ -398,21 +387,42 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         }).sort((a, b) => b.prog - a.prog);
 
         return { rows, totalProg, totalFact, totalAusDias, totalAusHoras, totalVacDias, totalVacHoras, totalExt50, totalExt100 };
-    }, [filteredDocs, filteredDocsProximo, mesActual, excluidos, regimenMap, grupoMap, francosMap, objetivos]);
+    }, [filteredDocs, filteredDocsProximo, mesActual, excluidos, regimenMap, grupoMap, francosMap, diasPorObjMes]);
 
     // ── Métricas 6 meses (para tab comparativo) ───────────────────────────────
     const metricas6m = useMemo(() => {
+        // Helper: construye diasPorObjetivo para mes calendario M desde overridesAll
+        const buildDiasPorObjMes = (año, mes) => {
+            const añoB = mes === 12 ? año + 1 : año;
+            const mesB = mes === 12 ? 1 : mes + 1;
+            const overMapA = {}, overMapB = {};
+            overridesAll
+                .filter(d => d.año === año && d.mes === mes)
+                .forEach(d => { if (d.objetivoId) overMapA[d.objetivoId] = d.dias || {}; });
+            overridesAll
+                .filter(d => d.año === añoB && d.mes === mesB)
+                .forEach(d => { if (d.objetivoId) overMapB[d.objetivoId] = d.dias || {}; });
+            // Combinar en diasPorObjetivo
+            const allOids = new Set([...Object.keys(overMapA), ...Object.keys(overMapB)]);
+            const diasPorObj = {};
+            allOids.forEach(oid => {
+                const combined = {};
+                const allDays = [...Object.keys(overMapA[oid] || {}), ...Object.keys(overMapB[oid] || {})];
+                allDays.forEach(key => {
+                    const [y, m] = key.split("-").map(Number);
+                    if (y === año && m === mes) combined[key] = (overMapA[oid]?.[key] || 0) + (overMapB[oid]?.[key] || 0);
+                });
+                diasPorObj[oid] = combined;
+            });
+            return diasPorObj;
+        };
+
         // legajo → cargo para análisis de puestos
         const legajoCargo = {};
         legajos.forEach(l => { if (l.legajo) legajoCargo[String(l.legajo)] = l.cargo || l.tarea || "Sin puesto"; });
 
-        // Mapa de objetivos por ID (compartido con clienteMetricasMes)
-        const objMap = {};
-        objetivos.forEach(o => { if (o.id) objMap[o.id] = o; });
-
         const cliDeDoc6m = doc =>
-            (doc.clienteNombre || doc.cliente || doc.contrato ||
-             objMap[doc.objetivoId]?.clienteNombre || "").trim();
+            (doc.clienteNombre || doc.cliente || doc.contrato || "").trim();
 
         const porMes = [];
         const cliKeys = new Set();
@@ -423,6 +433,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
         meses.forEach(({ año, mes, label }) => {
             const docs = filteredDocs.filter(d => d._mes?.año === año && d._mes?.mes === mes);
             const dias = getDias(año, mes);
+            const dPO = buildDiasPorObjMes(año, mes);
 
             let prog = 0, trab = 0, adicionales = 0, ausDias = 0, ausHsAcum = 0, vacDias = 0;
             const byLegReal = {};
@@ -436,14 +447,13 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
                 cliKeys.add(cli);
                 if (!cliData[cli]) cliData[cli] = { prog: 0, trab: 0, adicionales: 0, ausDias: 0, ausHs: 0, vacDias: 0, ext50: 0, ext100: 0, personal: new Set() };
 
-                const obj     = objMap[doc.objetivoId] || null;
-                const diasEsp = doc.diasEspeciales || {};
                 const personal = doc.personal || [];
 
-                // ── Prog / Trab / Adicionales por día (horas contratadas vs reales) ──
+                // ── Prog / Trab / Adicionales por día (horasObjetivoMes vs reales) ──
                 dias.forEach(dia => {
                     const key    = fmtKey(dia);
-                    const cubrir = hsContrato(dia, obj, diasEsp);
+                    const oid    = doc.objetivoId || "";
+                    const cubrir = dPO[oid]?.[key] ?? 0;
                     const realDia = personal.reduce((s, p) =>
                         s + horasDeValor(normalizarTurno((p.real || {})[key] || "")), 0);
                     prog += cubrir; cliData[cli].prog += cubrir;
@@ -596,7 +606,7 @@ export default function DashboardsGestionScreen({ onBack, embedded }) {
             porMesCliCobPct:   buildCliArray("cobPct"),
             porMesPuesto,
         };
-    }, [filteredDocs, meses, legajos, diagramas, objetivos, excluidos, regimenMap, grupoMap, francosMap]);
+    }, [filteredDocs, meses, legajos, diagramas, overridesAll, excluidos, regimenMap, grupoMap, francosMap]);
 
     // ── Extras del mes actual por persona (top lists) ─────────────────────────
     const extrasDelMes = useMemo(() => {

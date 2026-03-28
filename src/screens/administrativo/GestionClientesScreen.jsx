@@ -9,8 +9,19 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useClientesData } from "../../hooks/useClientesData";
-import { fmtObjetivo }    from "../../utils/formatters";
+import { fmtObjetivo } from "../../utils/formatters";
 import "./GestionClientesScreen.css";
+
+// Genera un ID estable a partir del nombre del cliente (slug)
+// "Brinks Argentina S.A." → "brinks-argentina-sa"
+function toSlug(nombre) {
+    return nombre
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")   // quita acentos
+        .replace(/[^a-z0-9]+/g, "-")                         // caracteres no alfanuméricos → guión
+        .replace(/^-|-$/g, "")                               // trim guiones
+        .substring(0, 50);
+}
 
 export default function GestionClientesScreen({ onBack }) {
     const { empresaId, empresaNombre } = useAppData();
@@ -75,8 +86,13 @@ export default function GestionClientesScreen({ onBack }) {
 
             if (tipo === "cliente") {
                 const data = { nombre: campos.nombre, empresa: empresaNombre, empresaId };
-                if (id) await updateDoc(doc(db, "clientes", id), data);
-                else    await addDoc(collection(db, "clientes"), { ...data, creadoEn: serverTimestamp() });
+                if (id) {
+                    await updateDoc(doc(db, "clientes", id), data);
+                } else {
+                    // Usar ID estable basado en el nombre (slug) para que clienteId en objetivos siempre matchee
+                    const nuevoId = toSlug(campos.nombre);
+                    await setDoc(doc(db, "clientes", nuevoId), { ...data, creadoEn: serverTimestamp() }, { merge: true });
+                }
             }
             else if (tipo === "objetivo") {
                 const cl = clientes.find(c => c.id === nivelCliente);
@@ -205,8 +221,7 @@ export default function GestionClientesScreen({ onBack }) {
                             <div key={o.id} className="gc-item">
                                 <div className="gc-item-main">
                                     <div className="gc-item-nombre-row">
-                                        {o.codigo && <span className="gc-item-badge">{o.codigo}</span>}
-                                        <strong>{o.proyecto} - {o.nombre}</strong>
+                                        <strong>{fmtObjetivo(o)}</strong>
                                     </div>
                                     {o.domicilio && <span className="gc-item-sub">📍 {o.domicilio}</span>}
                                 </div>

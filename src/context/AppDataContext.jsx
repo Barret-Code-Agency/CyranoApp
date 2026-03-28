@@ -79,6 +79,7 @@ export function AppDataProvider({ children, uid }) {
     const [empresaModulos, setEmpresaModulos] = useState(null);
     const [empresaActiva,  setEmpresaActiva]  = useState(true);  // false = suscripción vencida/desactivada
     const [userZona,       setUserZona]       = useState(null); // null = sin restricción
+    const [userRol,        setUserRol]        = useState(null); // null mientras carga
 
     // Ref para que las funciones de escritura accedan al empresaId actual sin stale closure
     const empresaIdRef = useRef(EMPRESA_ID_FALLBACK);
@@ -109,7 +110,9 @@ export function AppDataProvider({ children, uid }) {
                     ? (userSnap.data().empresaId ?? EMPRESA_ID_FALLBACK)
                     : EMPRESA_ID_FALLBACK;
                 const zona = userSnap.exists() ? (userSnap.data().zona || null) : null;
+                const rol  = userSnap.exists() ? (userSnap.data().rol  || null) : null;
                 setUserZona(zona);
+                setUserRol(rol);
 
                 // Si empresaId cambió (ej: migración externa), forzar recarga de suscripciones
                 if (suscripcionIniciada && empresaIdRef.current !== empresaId) {
@@ -558,9 +561,10 @@ export function AppDataProvider({ children, uid }) {
     };
 
     // Mezcla: las colecciones maestras tienen prioridad sobre config_global para esos campos
-    // Filtro por zona: si el usuario tiene zona asignada, solo ve items de su zona (o sin zona)
+    // Filtro por zona: si el usuario tiene zona asignada Y NO es admin, solo ve items de su zona (o sin zona)
+    const esAdminRol = userRol === "admin_contrato" || userRol === "super_admin";
     const zonaFiltrar = (items, rawItems) => {
-        if (!userZona || !rawItems) return items;
+        if (!userZona || !rawItems || esAdminRol) return items;
         return rawItems.filter(i => !i.zona || i.zona === userZona).map(i => i.label ?? i.nombre);
     };
     // Mapa label → cliente (nombreProyecto) para auto-rellenar en auditorías

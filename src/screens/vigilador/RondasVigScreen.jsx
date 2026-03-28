@@ -14,6 +14,7 @@ import {
 import { distanciaMetros, formatearHora } from "../../utils/geoUtils";
 import { otorgarTokens, TOKENS } from "../../utils/tokenService";
 import ChecklistModal from "../ChecklistModal";
+import FirmaPanel from "../../components/FirmaPanel";
 import "./RondasVigScreen.css";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -274,6 +275,32 @@ export default function RondasVigScreen({ onBack, onNovedad }) {
                                 { hour: "2-digit", minute: "2-digit" })
                             : "—"}
                     </div>
+
+                    <FirmaPanel
+                        tipo="ronda_completada"
+                        referenciaId={rondaActiva?.rondaId || null}
+                        datos={{
+                            rondaId:         rondaActiva?.rondaId || null,
+                            plantilla:       rondaActiva?.plantilla?.nombre || null,
+                            plantillaId:     rondaActiva?.plantilla?.id    || null,
+                            inicio:          rondaActiva?.inicio
+                                ? new Date(rondaActiva.inicio).toISOString() : null,
+                            checkpointsTotal:    cps.length,
+                            checkpointsCompletos:completos,
+                            estado:          completo ? "completa" : "parcial",
+                            progreso: Object.fromEntries(
+                                cps.map(cp => [
+                                    cp.id,
+                                    { estado: progreso[cp.id]?.estado || "pendiente",
+                                      llegada: progreso[cp.id]?.llegada || null }
+                                ])
+                            ),
+                        }}
+                        label="Firmar ronda"
+                        obligatoria={false}
+                        onFirmado={onBack}
+                        onOmitir={onBack}
+                    />
 
                     <button
                         className="rv-done-btn"

@@ -267,8 +267,10 @@
 .sh-cal-dia-chip--aniversario { background: rgba(245, 158, 11, 0.18); color: #92400e; }
 .sh-cal-dia-chip--supervision { background: rgba(59,  130, 246, 0.15); color: #1e40af; }
 .sh-cal-dia-chip--inconclusa  { background: rgba(239,  68,  68, 0.15); color: #991b1b; }
-.sh-cal-dia-chip--vtv         { background: rgba(16,  185, 129, 0.15); color: #065f46; }
+.sh-cal-dia-chip--vtv          { background: rgba(16,  185, 129, 0.15); color: #065f46; }
+.sh-cal-dia-chip--comunicacion { background: rgba(124,  58, 237, 0.15); color: #5b21b6; }
 .sh-cal-act--cumple            { background: #fffbeb; border-color: #fcd34d; }
+.sh-cal-act--comunicacion      { border-left-color: #7c3aed; background: rgba(124, 58, 237, 0.06); }
 
 .sh-cal-wa-btn {
     align-self: flex-start;

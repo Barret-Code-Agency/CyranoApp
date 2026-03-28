@@ -341,6 +341,25 @@ service cloud.firestore {
     }
 
     // ── Denegación por defecto — todo lo no listado explícitamente ────────────
+    // ── Firmas electrónicas — INMUTABLE (create-only, nunca update/delete) ──────
+    // Registro legal de conformidades: cierre de jornada, rondas, informes, planillas.
+    // La inmutabilidad es la garantía de validez — nadie puede alterar un registro firmado.
+    match /firmasElectronicas/{firmaId} {
+      // Crear: cualquier usuario autenticado puede firmar sus propios documentos
+      allow create: if isAuth()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.estado == "vigente";
+
+      // Leer: el propio firmante, o usuarios con rol supervisor/gerencia/admin/super_admin
+      allow read: if isAuth() && (
+                    resource.data.uid == request.auth.uid ||
+                    me().rol in ["supervisor","gerencia","administrativo","super_admin"]
+                  );
+
+      // NUNCA se puede modificar ni borrar — garantía de integridad
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

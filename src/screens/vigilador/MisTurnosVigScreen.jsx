@@ -2,10 +2,13 @@
 // Vista de turnos del vigilador logueado — filtra por su legajo en programacionServicios.
 
 import { useState, useEffect } from "react";
-import { useAuth }    from "../../context/AuthContext";
-import { useAppData } from "../../context/AppDataContext";
+import { useAuth }           from "../../context/AuthContext";
+import { useAppData }        from "../../context/AppDataContext";
+import { useClientesData }   from "../../hooks/useClientesData";
 import { collection, query, where, getDocs } from "firebase/firestore";
-import { db }         from "../../firebase";
+import { db }                from "../../firebase";
+import { fmtObjetivo }       from "../../utils/formatters";
+import FirmaPanel from "../../components/FirmaPanel";
 import "./MisTurnosVigScreen.css";
 
 const MESES    = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -89,6 +92,7 @@ function GrillaCalendario({ dias, programado, hoyKey }) {
 export default function MisTurnosVigScreen({ onBack }) {
     const { user }          = useAuth();
     const { empresaNombre, empresaId } = useAppData();
+    const { objetivos }     = useClientesData(empresaId);
 
     const hoy    = new Date();
     const hoyKey = hoy.toISOString().slice(0, 10);
@@ -100,6 +104,9 @@ export default function MisTurnosVigScreen({ onBack }) {
     const [error,        setError]        = useState(null);
     const [asignaciones, setAsignaciones] = useState([]);  // [{objetivoNombre, clienteNombre, programado}]
     const [sinLegajo,    setSinLegajo]    = useState(false);
+    const [miLegajo,     setMiLegajo]     = useState(null);
+    const [firmandoIdx,  setFirmandoIdx]  = useState(null);   // índice de la asignación con FirmaPanel abierto
+    const [firmadasIdx,  setFirmadasIdx]  = useState(new Set()); // índices ya firmados en esta sesión
 
     useEffect(() => {
         if (!empresaId || !user) return;
@@ -109,14 +116,15 @@ export default function MisTurnosVigScreen({ onBack }) {
 
         const cargar = async () => {
             try {
-                // 1. Encontrar el legajo del vigilador por nombre en la empresa
+                // 1. Encontrar el legajo del vigilador: primero por email, luego por nombre
                 const legajosSnap = await getDocs(query(
                     collection(db, "legajos"),
                     where("empresaId", "==", empresaId)
                 ));
-                const miLegajoDoc = legajosSnap.docs
-                    .map(d => d.data())
-                    .find(l => l.nombre === user.name);
+                const legajosData = legajosSnap.docs.map(d => d.data());
+                const miLegajoDoc =
+                    (user.email && legajosData.find(l => l.email === user.email)) ||
+                    legajosData.find(l => l.nombre === user.name);
 
                 if (!miLegajoDoc) {
                     setSinLegajo(true);
@@ -126,6 +134,7 @@ export default function MisTurnosVigScreen({ onBack }) {
                 }
 
                 const miLegajo = miLegajoDoc.legajo;
+                setMiLegajo(miLegajo);
 
                 // 2. Buscar programaciones del mes que contengan al vigilador
                 const progSnap = await getDocs(query(
@@ -140,10 +149,14 @@ export default function MisTurnosVigScreen({ onBack }) {
                     const data = doc.data();
                     const miPersonal = (data.personal ?? []).find(p => p.legajo === miLegajo);
                     if (miPersonal) {
+                        // Resolver nombre completo desde catálogo (codigo + proyecto + nombre)
+                        const catObj        = objetivos.find(o => o.id === data.objetivoId);
+                        const objetivoNombre = fmtObjetivo(catObj) || data.objetivoNombre || data.proyectoNombre || "Objetivo sin nombre";
+                        const clienteNombre  = catObj?.clienteNombre || data.clienteNombre || "";
                         resultado.push({
-                            objetivoNombre: data.objetivoNombre || data.proyectoNombre || "Objetivo sin nombre",
-                            clienteNombre:  data.clienteNombre  || "",
-                            programado:     miPersonal.programado ?? {},
+                            objetivoNombre,
+                            clienteNombre,
+                            programado: miPersonal.programado ?? {},
                         });
                     }
                 });
@@ -224,6 +237,9 @@ export default function MisTurnosVigScreen({ onBack }) {
                                     <div className="mtv-objetivo-cliente">{asig.clienteNombre}</div>
                                 )}
                             </div>
+                            {firmadasIdx.has(idx) && (
+                                <span className="mtv-firmado-badge">🔒 Firmado</span>
+                            )}
                         </div>
 
                         <GrillaCalendario
@@ -237,6 +253,37 @@ export default function MisTurnosVigScreen({ onBack }) {
                             dias={dias}
                             hoyKey={hoyKey}
                         />
+
+                        {/* Firma de planilla mensual */}
+                        {firmandoIdx === idx ? (
+                            <FirmaPanel
+                                tipo="planilla_mensual"
+                                legajo={miLegajo}
+                                datos={{
+                                    legajo:         miLegajo,
+                                    nombre:         user?.name       || "",
+                                    año,
+                                    mes,
+                                    objetivoNombre: asig.objetivoNombre,
+                                    clienteNombre:  asig.clienteNombre,
+                                    programado:     asig.programado,
+                                }}
+                                label="Firmar conformidad de planilla"
+                                obligatoria={false}
+                                onFirmado={() => {
+                                    setFirmadasIdx(s => new Set([...s, idx]));
+                                    setFirmandoIdx(null);
+                                }}
+                                onOmitir={() => setFirmandoIdx(null)}
+                            />
+                        ) : !firmadasIdx.has(idx) && (
+                            <button
+                                className="mtv-btn-firmar"
+                                onClick={() => setFirmandoIdx(idx)}
+                            >
+                                ✍️ Firmar conformidad de planilla
+                            </button>
+                        )}
                     </div>
                 ))}
 

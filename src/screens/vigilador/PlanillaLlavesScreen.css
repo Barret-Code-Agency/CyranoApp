@@ -1,0 +1,257 @@
+/* src/screens/vigilador/PlanillaLlavesScreen.css */
+
+.pll-root {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 0 0 24px;
+}
+
+/* ── Encabezado estilo planilla ── */
+.pll-header {
+    border: 2px solid #1a4480;
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 4px 16px;
+    align-items: center;
+}
+
+.pll-header-logo {
+    grid-row: 1 / 3;
+}
+
+.pll-logo-text {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: #1a4480;
+    letter-spacing: 1px;
+}
+
+.pll-logo-sub {
+    font-size: 0.65rem;
+    color: #1a4480;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.pll-header-titulo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #111;
+}
+
+.pll-header-meta {
+    font-size: 0.78rem;
+    color: #6b7280;
+}
+
+/* ── Tabla ── */
+.pll-tabla-wrap {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+}
+
+.pll-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    min-width: 720px;
+}
+
+.pll-tabla th {
+    background: #1a4480;
+    color: #fff;
+    font-weight: 600;
+    padding: 8px 10px;
+    text-align: left;
+    white-space: nowrap;
+    border-right: 1px solid #2a5490;
+}
+
+.pll-tabla th:last-child { border-right: none; }
+
+.pll-tabla td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.pll-tabla td:last-child { border-right: none; }
+
+.pll-tr:nth-child(even) td { background: #f9fafb; }
+.pll-tr--pendiente td { background: #fff7ed !important; }
+
+.pll-td-center {
+    text-align: center;
+    color: #9ca3af;
+    padding: 20px !important;
+}
+
+.pll-td-vacio { font-style: italic; }
+
+.pll-td-llave  { font-weight: 600; color: #1a4480; }
+.pll-td-codigo { font-family: monospace; font-size: 0.78rem; color: #64748b; }
+
+.pll-pendiente {
+    color: #d97706;
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+/* Inventario */
+.pll-inv {
+    font-weight: 700;
+    text-align: center;
+    color: #16a34a;
+}
+.pll-inv--neg { color: #dc2626; }
+.pll-inv-total { font-size: 1rem; }
+
+/* Footer total */
+.pll-tfoot td {
+    background: #f0f4ff !important;
+    border-top: 2px solid #1a4480;
+}
+.pll-tfoot-label {
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.82rem;
+    text-align: right;
+    padding-right: 12px !important;
+}
+
+/* ── Botón devolver ── */
+.pll-btn-dev {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.pll-btn-dev:hover { background: #bfdbfe; }
+
+/* ── Alerta pendientes ── */
+.pll-alerta-pendiente {
+    background: #fff7ed;
+    border: 1.5px solid #fb923c;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.84rem;
+    color: #7c2d12;
+}
+
+/* ── Formulario ── */
+.pll-form {
+    background: var(--color-surface2, #f9fafb);
+    border: 1.5px solid #1a4480;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pll-form-titulo {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #1a4480;
+}
+
+.pll-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pll-form-row label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.pll-form-row input,
+.pll-form-row select {
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    background: #fff;
+}
+
+.pll-form-row--info .pll-form-static {
+    font-size: 0.88rem;
+    color: #6b7280;
+    padding: 4px 0;
+}
+
+.pll-form-btns {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ── Botones generales ── */
+.pll-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.pll-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.pll-btn--primary  { background: #1a4480; color: #fff; }
+.pll-btn--primary:hover:not(:disabled) { background: #163b72; }
+
+.pll-btn--ghost {
+    background: transparent;
+    color: #6b7280;
+    border: 1px solid #d1d5db;
+}
+.pll-btn--ghost:hover { background: #f3f4f6; }
+
+.pll-btn--agregar {
+    width: 100%;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1.5px dashed #1d4ed8;
+}
+.pll-btn--agregar:hover { background: #dbeafe; }
+
+.pll-btn--firmar {
+    width: 100%;
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1.5px dashed #22c55e;
+}
+.pll-btn--firmar:hover { background: #dcfce7; }
+
+.pll-btn--volver {
+    background: var(--color-surface2, #f3f4f6);
+    color: #374151;
+    border: 1px solid #d1d5db;
+    align-self: flex-start;
+}
+.pll-btn--volver:hover { background: #e5e7eb; }
+
+/* ── Error ── */
+.pll-error {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    color: #dc2626;
+}

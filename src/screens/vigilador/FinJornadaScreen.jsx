@@ -2,11 +2,13 @@
 import { useState } from "react";
 import { nowTime } from "../../utils/helpers";
 import { useAppData } from "../../context/AppDataContext";
+import FirmaPanel from "../../components/FirmaPanel";
 import "./FinJornadaScreen.css";
 
 export default function FinJornadaScreen({ onClosed, onBack }) {
     const { jornadaActiva, cerrarJornada, data } = useAppData();
-    const [kmFinal, setKmFinal] = useState("");
+    const [kmFinal,          setKmFinal]          = useState("");
+    const [jornadaCerrada,   setJornadaCerrada]   = useState(null); // snapshot listo para firmar
     const session = jornadaActiva;
 
     if (!session) return null;
@@ -20,8 +22,9 @@ export default function FinJornadaScreen({ onClosed, onBack }) {
     const otras = (session.actividades || []).filter((a) => a.tipo === "otra");
 
     const handleCerrar = async () => {
-        const jornadaCerrada = await cerrarJornada({ kmFinal, horaFin });
-        onClosed(jornadaCerrada);
+        const cerrada = await cerrarJornada({ kmFinal, horaFin });
+        // Guardar snapshot para la firma — no llama a onClosed hasta que se firme
+        setJornadaCerrada(cerrada || { ...session, horaFin, kmFinal });
     };
 
     return (
@@ -91,11 +94,32 @@ export default function FinJornadaScreen({ onClosed, onBack }) {
                 ⚠️ Al cerrar se guardará el informe de jornada para <strong>{session.email}</strong>
             </div>
 
-            <button className="btn btn-danger"
-                disabled={false}
-                onClick={handleCerrar}>
-                🏁 Cerrar Jornada &amp; Enviar Informe
-            </button>
+            {!jornadaCerrada ? (
+                <button className="btn btn-danger" onClick={handleCerrar}>
+                    🏁 Cerrar Jornada &amp; Enviar Informe
+                </button>
+            ) : (
+                <FirmaPanel
+                    tipo="cierre_jornada"
+                    referenciaId={jornadaCerrada.jornadaID || null}
+                    datos={{
+                        jornadaID:   jornadaCerrada.jornadaID,
+                        nombre:      jornadaCerrada.nombre,
+                        email:       jornadaCerrada.email,
+                        fecha:       jornadaCerrada.fecha,
+                        horaInicio:  jornadaCerrada.horaInicio,
+                        horaFin:     jornadaCerrada.horaFin || horaFin,
+                        vehiculo:    jornadaCerrada.vehiculo || null,
+                        kmInicial:   jornadaCerrada.kmInicial || null,
+                        kmFinal:     jornadaCerrada.kmFinal || kmFinal || null,
+                        actividades: (jornadaCerrada.actividades || []).length,
+                    }}
+                    label="Firmar cierre de jornada"
+                    obligatoria={false}
+                    onFirmado={() => onClosed(jornadaCerrada)}
+                    onOmitir={() => onClosed(jornadaCerrada)}
+                />
+            )}
             <button className="btn btn-secondary" onClick={onBack}>← Volver al menú</button>
         </>
     );

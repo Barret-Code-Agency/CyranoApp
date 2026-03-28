@@ -1,0 +1,160 @@
+/* src/components/FirmaPanel.css */
+
+.fp-root,
+.fp-confirmar,
+.fp-firmado {
+    margin-top: 12px;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+/* ── Botón principal ── */
+.fp-root {
+    background: var(--color-surface2, #f5f7fa);
+    border: 1.5px dashed var(--color-border, #d0d5dd);
+}
+
+/* ── Confirmación ── */
+.fp-confirmar {
+    background: #fffbeb;
+    border: 1.5px solid #f59e0b;
+}
+
+.fp-confirmar-icono {
+    font-size: 2rem;
+}
+
+.fp-confirmar-titulo {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #92400e;
+}
+
+.fp-confirmar-aviso {
+    font-size: 0.85rem;
+    color: #78350f;
+    line-height: 1.4;
+    max-width: 360px;
+}
+
+.fp-confirmar-btns {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+}
+
+/* ── Firmado ── */
+.fp-firmado {
+    background: #f0fdf4;
+    border: 1.5px solid #22c55e;
+}
+
+.fp-firmado-icono {
+    font-size: 2rem;
+}
+
+.fp-firmado-titulo {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #15803d;
+}
+
+.fp-firmado-hash {
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: #166534;
+    background: #dcfce7;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: default;
+}
+
+.fp-firmado-id {
+    font-size: 0.72rem;
+    color: #6b7280;
+}
+
+.fp-firmado-nota {
+    font-size: 0.78rem;
+    color: #374151;
+    max-width: 340px;
+    line-height: 1.4;
+}
+
+/* ── Botones ── */
+.fp-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.fp-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.fp-btn--firmar {
+    background: #1d4ed8;
+    color: #fff;
+    width: 100%;
+    max-width: 300px;
+}
+
+.fp-btn--firmar:hover:not(:disabled) {
+    background: #1e40af;
+}
+
+.fp-btn--confirmar {
+    background: #16a34a;
+    color: #fff;
+    flex: 1;
+}
+
+.fp-btn--confirmar:hover:not(:disabled) {
+    background: #15803d;
+}
+
+.fp-btn--cancelar {
+    background: var(--color-surface2, #f3f4f6);
+    color: #374151;
+    border: 1px solid #d1d5db;
+    flex: 1;
+}
+
+.fp-btn--cancelar:hover:not(:disabled) {
+    background: #e5e7eb;
+}
+
+.fp-btn--omitir {
+    background: transparent;
+    color: #9ca3af;
+    font-size: 0.8rem;
+    font-weight: 400;
+    padding: 4px 8px;
+    text-decoration: underline;
+}
+
+.fp-btn--omitir:hover {
+    color: #6b7280;
+}
+
+.fp-error {
+    color: #dc2626;
+    font-size: 0.82rem;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    padding: 6px 12px;
+    border-radius: 6px;
+    width: 100%;
+}

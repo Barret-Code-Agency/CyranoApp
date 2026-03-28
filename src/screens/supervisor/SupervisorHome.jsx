@@ -31,6 +31,7 @@ import ConsolidadoScreen        from "../shared/ConsolidadoScreen";
 import Diagramas14x14Screen     from "../shared/Diagramas14x14Screen";
 import PedidoInsumosScreen      from "../shared/PedidoInsumosScreen";
 import DashboardsGestionScreen  from "../gerencia/DashboardsGestionScreen";
+import PlanillasVisorScreen     from "../shared/PlanillasVisorScreen";
 import AppHeader from "../../components/AppHeader";
 import "../../styles/ConsolidadoScreen.css";
 import "../../styles/SupervisorHome.css";
@@ -127,7 +128,7 @@ function CalendarioSemanal({ actividades = {}, legajos = [] }) {
                             <span className="sh-cal-daynum">{d.getDate()}</span>
                             <div className="sh-cal-dia-acts">
                                 {acts.map((a, i) => (
-                                    <span key={i} className={`sh-cal-dia-chip sh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.label}</span>
+                                    <span key={i} className={`sh-cal-dia-chip sh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.labelCorto ?? a.label}</span>
                                 ))}
                                 {(cumplesPorKey[key] || []).map((ap, i) => (
                                     <span key={`c${i}`} className="sh-cal-dia-chip sh-cal-dia-chip--cumple">🎂 {ap}</span>
@@ -256,6 +257,12 @@ export default function SupervisorHome({ user, onIniciarJornada, onExit }) {
             <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
                 <MonitorRondasScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+        if (subSeccion === "planillas") return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <PlanillasVisorScreen onBack={() => setSubSeccion(null)} />
             </div>
         );
         if (subSeccion === "ver_informes") return (

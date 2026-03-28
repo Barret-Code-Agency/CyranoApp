@@ -23,7 +23,8 @@ import CrearComunicacionScreen    from "../../forms/CrearComunicacionScreen";
 import PedidoInsumosScreen         from "../shared/PedidoInsumosScreen";
 import VerCapacitacionesScreen     from "../../forms/VerCapacitacionesScreen";
 import SubirCapacitacionScreen     from "../../forms/SubirCapacitacionScreen";
-import AppHeader from "../../components/AppHeader";
+import AppHeader             from "../../components/AppHeader";
+import PlanillasVisorScreen from "../shared/PlanillasVisorScreen";
 import "../../styles/VigHome.css";
 import "../../styles/SupervisorHome.css";
 import "../../styles/ConsolidadoScreen.css";
@@ -95,7 +96,7 @@ function CalendarioSemanal({ actividades = {}, legajos = [] }) {
                             <div className="vh-cal-dia-acts">
                                 {acts.map((a, i) => (
                                     <span key={i} className={`vh-cal-dia-chip vh-cal-dia-chip--${a.tipo ?? "default"}`}>
-                                        {a.label}
+                                        {a.labelCorto ?? a.label}
                                     </span>
                                 ))}
                                 {(cumplesPorKey[key] || []).map((ap, i) => (
@@ -512,6 +513,16 @@ export default function AdministrativoHome({ user: propUser, onLogout }) {
                         <span className="sh-modulo-arrow">›</span>
                     </button>
                 </div>
+            </div>
+        );
+    }
+
+    // ── Planillas ──────────────────────────────────────────────────────────
+    if (seccion === "planillas") {
+        return (
+            <div className="vh-root">
+                {header}
+                <PlanillasVisorScreen onBack={() => setSeccion(null)} />
             </div>
         );
     }

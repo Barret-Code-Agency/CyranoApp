@@ -5,14 +5,30 @@
 
 export const SEED_CLIENTES = [
     { id: "panamerican",  nombre: "Panamerican Silver" },
-    { id: "sofse",        nombre: "SOFSE" },
-    { id: "bsc",          nombre: "BSC" },
-    { id: "brinks-ar",   nombre: "Brinks Argentina S.A." },
-    { id: "santander",    nombre: "Banco Santander S.A." },
-    { id: "reginald-lee", nombre: "Reginald Lee S.A." },
+    { id: "bsc",          nombre: "Brinks Seguridad Corporativa S. A." },
+    { id: "brinks-ar",    nombre: "Brinks Argentina S. A." },
+    { id: "santander",    nombre: "Banco Santander S. A." },
+    { id: "reginald-lee", nombre: "Reginald Lee S. A." },
     { id: "ovnisa",       nombre: "Ovnisa S.A." },
     { id: "farmatodo",    nombre: "Farmatodo Argentina" },
 ];
+
+// Alias de clienteIds legacy → id canónico (para migración de datos históricos)
+// Cubre: IDs generados por addDoc(), nombres usados como ID, y clientes eliminados del seed
+export const SEED_CLIENTES_ALIASES = {
+    "sofse":                              "brinks-ar",  // SOFSE es un proyecto de Brinks Argentina
+    "BSC":                                "bsc",
+    "Brinks Seguridad Corporativa":       "bsc",
+    "Brinks Seguridad Corporativa S. A.": "bsc",
+    "Brinks Argentina S. A.":            "brinks-ar",
+    "Brinks Argentina S.A.":             "brinks-ar",
+    "Banco Santander S. A.":             "santander",
+    "Banco Santander S.A.":              "santander",
+    "Reginald Lee S. A.":                "reginald-lee",
+    "Reginald Lee S.A.":                 "reginald-lee",
+    "Panamerican Silver":                "panamerican",
+    "Ovnisa S.A.":                       "ovnisa",
+};
 
 // Una fila del Excel = un objetivo
 // campos: codigo, proyecto, nombre, clienteId, domicilio, horas por día
@@ -32,7 +48,7 @@ export const SEED_OBJETIVOS = [
     { codigo:"217-103-11",proyecto:"Cerro Moro",              nombre:"PAS Puesto 3",             clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:48, horasMartes:48, horasMiercoles:48, horasJueves:48, horasViernes:48, horasSabado:48, horasDomingo:48, horasFeriados:48 },
     { codigo:"217-103-12",proyecto:"Cerro Moro",              nombre:"PAS Puesto 4",             clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:48, horasMartes:48, horasMiercoles:48, horasJueves:48, horasViernes:48, horasSabado:48, horasDomingo:48, horasFeriados:48 },
     { codigo:"217-103-13",proyecto:"Cerro Moro",              nombre:"PAS Naty",                 clienteId:"panamerican",  domicilio:"Cerro Moro, Santa Cruz",            horasLunes:24, horasMartes:24, horasMiercoles:24, horasJueves:24, horasViernes:24, horasSabado:24, horasDomingo:24, horasFeriados:24 },
-    { codigo:"238-106-1", proyecto:"SOFSE",                   nombre:"Tecnicos Instaladores",    clienteId:"sofse",        domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:9,  horasMartes:9,  horasMiercoles:9,  horasJueves:9,  horasViernes:9,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
+    { codigo:"238-106-1", proyecto:"SOFSE",                   nombre:"Tecnicos Instaladores",    clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:9,  horasMartes:9,  horasMiercoles:9,  horasJueves:9,  horasViernes:9,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
     { codigo:"220-139-1", proyecto:"Brinks",                  nombre:"Recepcion",         clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:10, horasMartes:10, horasMiercoles:10, horasJueves:10, horasViernes:10, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
     { codigo:"220-139-2", proyecto:"Brinks",                  nombre:"Go",                       clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:10, horasMartes:10, horasMiercoles:10, horasJueves:10, horasViernes:10, horasSabado:0,  horasDomingo:0,  horasFeriados:0  },
     { codigo:"220-139-3", proyecto:"Brinks",                  nombre:"Monitoreo",                clienteId:"brinks-ar",    domicilio:"Avenida Rabanal 3120, CABA",        horasLunes:0,  horasMartes:0,  horasMiercoles:0,  horasJueves:0,  horasViernes:0,  horasSabado:0,  horasDomingo:0,  horasFeriados:0  },

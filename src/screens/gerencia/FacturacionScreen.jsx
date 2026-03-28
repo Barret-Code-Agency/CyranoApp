@@ -4,17 +4,17 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useAppData }      from "../../context/AppDataContext";
 import { useClientesData } from "../../hooks/useClientesData";
+import { useHorasACubrir } from "../../hooks/useHorasACubrir";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import "./FacturacionScreen.css";
-import { getDiasCalendario, fmtKey, MESES_ES, horasDiaDeDoc, horasDeValor, normalizarTurno, r1 } from "../../utils/periodoUtils";
-import { FERIADOS_ARG } from "../../utils/feriados";
+import { getDiasCalendario, fmtKey, MESES_ES, horasDeValor, normalizarTurno, r1 } from "../../utils/periodoUtils";
 
 // ── Configuración de distribución ────────────────────────────────────────────
 // match: función que recibe una fila y devuelve true si pertenece a esa línea
-// Se usa el campo `servicio` (objetivoNombre) y opcionalmente `clienteNombre`
+// Usa clienteId (fuente de verdad en Firestore) — nunca texto de clienteNombre
 const DIST_CONFIG = {
     fisica: [
         {
@@ -29,32 +29,26 @@ const DIST_CONFIG = {
             label: "Clientes",
             // Reginald Lee (todos) + Ovnisa + ATM Neutrales Seguridad Física
             match: f =>
-                /reginald/i.test(f.clienteNombre) ||
-                /ovnisa/i.test(f.clienteNombre) ||
-                (/santander|atm/i.test(f.clienteNombre) && /seguridad\s*f[ií]sica/i.test(f.servicio)),
+                f.clienteId === "reginald-lee" ||
+                f.clienteId === "ovnisa" ||
+                (f.clienteId === "santander" && /seguridad\s*f[ií]sica/i.test(f.servicio)),
         },
         // → más líneas aquí cuando el usuario las indique
     ],
     electronica: [
         {
             label: "Monitoreo",
-            match: f => /monitoreo/i.test(f.servicio) && (/brinks/i.test(f.clienteNombre) || /santander|atm/i.test(f.clienteNombre)),
+            match: f => /monitoreo/i.test(f.servicio) && (f.clienteId === "brinks-ar" || f.clienteId === "santander"),
         },
         {
             label: "Técnicos Instaladores",
-            match: f => /t[eé]cnico|instalador/i.test(f.servicio) || /sofse/i.test(f.clienteNombre),
+            match: f => /t[eé]cnico|instalador/i.test(f.servicio) || f.clienteId === "sofse",
         },
     ],
 };
 
 // ── Colecciones Firestore ─────────────────────────────────────────────────────
 const COL_PROG = "programacionServicios";
-
-// MESES_ES, HORAS_KEYS, horasDeValor, r1, getDias, fmtKey, FERIADOS_ARG importados desde utils
-
-function horasDiaObj(dia, obj, diasEsp) {
-    return horasDiaDeDoc(dia, obj, diasEsp, FERIADOS_ARG);
-}
 
 function fmt(n) {
     if (n == null || n === 0) return "0,0";
@@ -77,7 +71,11 @@ function parseCodigo(codigo) {
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function FacturacionScreen({ año, mes, onBack, zonaFija = null }) {
     const { empresaId } = useAppData();
-    const { objetivos } = useClientesData(empresaId);
+    const { objetivos, clientes } = useClientesData(empresaId);
+    const { porObjetivo: horasACubrir, diasPorObjetivo } = useHorasACubrir(empresaId, año, mes);
+    const clienteMap = useMemo(() => {
+        const m = {}; clientes.forEach(c => { if (c.id) m[c.id] = c; }); return m;
+    }, [clientes]);
     const [docs,      setDocs]      = useState([]);
     const [cargando,  setCargando]  = useState(false);
     const [exportando,setExportando]= useState(false);
@@ -112,39 +110,46 @@ export default function FacturacionScreen({ año, mes, onBack, zonaFija = null }
     const filas = useMemo(() => {
         return docs.map(d => {
             const obj      = objetivos.find(o => o.id === d.objetivoId) || null;
-            const diasEsp  = d.diasEspeciales || {};
             const personal = d.personal || [];
-            const cc   = obj?.cCosto       || "";
-            const proy = obj?.numProyecto  || "";
+            const oid      = d.objetivoId || "";
+            const cc   = obj?.cCosto      || d.codigo?.split("-")[0] || "";
+            const proy = obj?.numProyecto || d.codigo?.split("-")[1] || "";
 
-            // Igual que ControlCliente: comparación día a día
+            // Horas reales prestadas por día
             const hsRealDia = (dia) => {
                 const key = fmtKey(dia);
                 return personal.reduce((s, p) => s + horasDeValor(normalizarTurno((p.real || p.programado || {})[key] || "")), 0);
             };
 
-            const vendidas    = r1(dias.reduce((s, dia) => s + (horasDiaObj(dia, obj, diasEsp) ?? 0), 0));
+            // Horas a cubrir: fuente única → horasObjetivoMes (hook centralizado)
+            const vendidas = r1(horasACubrir[oid]?.horas ?? 0);
+
+            // noCubiertas / adicionales: comparación día a día con datos de horasObjetivoMes
+            const diasObj = diasPorObjetivo[oid] || {};
             const noCubiertas = r1(dias.reduce((s, dia) => {
-                const cubrir = horasDiaObj(dia, obj, diasEsp) ?? 0;
+                const key    = fmtKey(dia);
+                const cubrir = diasObj[key] ?? 0;
                 return s + Math.max(0, cubrir - hsRealDia(dia));
             }, 0));
             const adicionales = r1(dias.reduce((s, dia) => {
-                const cubrir = horasDiaObj(dia, obj, diasEsp) ?? 0;
+                const key    = fmtKey(dia);
+                const cubrir = diasObj[key] ?? 0;
                 return s + Math.max(0, hsRealDia(dia) - cubrir);
             }, 0));
             const totalFacturar = r1(vendidas - noCubiertas + adicionales);
 
             return {
-                docId:        d.docId,
-                clienteNombre: d.clienteNombre || "Sin cliente",
-                clienteId:    d.clienteId || "",
+                docId:     d.docId,
+                clienteId: d.clienteId || "",
+                // Nombre resuelto desde colección clientes (fuente única)
+                clienteNombre:  clienteMap[d.clienteId]?.nombre || d.clienteNombre || "Sin cliente",
                 proyectoNombre: d.proyectoNombre || obj?.proyecto || "",
-                servicio:     d.objetivoNombre || obj?.nombre || "",
+                servicio:       d.objetivoNombre || obj?.nombre || "",
                 cc, proy,
                 vendidas, noCubiertas, adicionales, totalFacturar,
             };
         });
-    }, [docs, objetivos, dias]);
+    }, [docs, objetivos, dias, horasACubrir, diasPorObjetivo, clienteMap]);
 
     // ── Agrupar por cliente ────────────────────────────────────────────────────
     const grupos = useMemo(() => {

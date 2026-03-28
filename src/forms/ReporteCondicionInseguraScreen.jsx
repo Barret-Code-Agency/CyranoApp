@@ -8,6 +8,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db }         from "../firebase";
 import { fmtObjetivo } from "../utils/formatters";
 import { useClientesData } from "../hooks/useClientesData";
+import FirmaPanel from "../components/FirmaPanel";
 import "./ReporteCondicionInseguraScreen.css";
 
 // ── Listas de características ─────────────────────────────────────────────────
@@ -111,6 +112,7 @@ export default function ReporteCondicionInseguraScreen({ onBack }) {
 
     const [estado,    setEstado]    = useState("idle"); // idle | guardando | ok | error
     const [errorMsg,  setErrorMsg]  = useState("");
+    const [docRefId,  setDocRefId]  = useState(null);
 
     const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
@@ -151,6 +153,7 @@ export default function ReporteCondicionInseguraScreen({ onBack }) {
                 emailReportante:      form.emailReportante.trim(),
                 creadoEn:             serverTimestamp(),
             });
+            setDocRefId(ref.id);
             setEstado("ok");
         } catch (e) {
             setErrorMsg("Error al guardar: " + e.message);
@@ -164,6 +167,24 @@ export default function ReporteCondicionInseguraScreen({ onBack }) {
                 <div className="rci-ok-icon">✅</div>
                 <div className="rci-ok-title">Reporte enviado</div>
                 <div className="rci-ok-sub">El reporte de condición insegura fue registrado correctamente.</div>
+                <FirmaPanel
+                    tipo="reporte_condicion_insegura"
+                    referenciaId={docRefId}
+                    datos={{
+                        reporteId:            docRefId,
+                        numero:               numeroReporte,
+                        clienteNombre:        clienteObj?.nombre  || "",
+                        objetivoNombre:       objetivoObj?.nombre || "",
+                        fecha:                form.fecha,
+                        lugar:                form.lugar,
+                        descripcionCondicion: form.descripcionCondicion,
+                        descripcionActo:      form.descripcionActo,
+                        reportante:           form.nombreReportante,
+                    }}
+                    label="Firmar reporte"
+                    obligatoria={false}
+                    onOmitir={() => {}}
+                />
                 <button className="rci-btn-primary" onClick={onBack}>Volver</button>
             </div>
         </div>

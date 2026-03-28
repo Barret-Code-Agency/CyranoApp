@@ -22,6 +22,9 @@ import { db } from "../../firebase";
 import { useClientesData } from "../../hooks/useClientesData";
 import { fmtObjetivo } from "../../utils/formatters";
 import ReporteCondicionInseguraScreen from "../../forms/ReporteCondicionInseguraScreen";
+import PlanillaLlavesScreen    from "./PlanillaLlavesScreen";
+import PlanillaVisitasScreen  from "./PlanillaVisitasScreen";
+import PlanillaVehiculosScreen from "./PlanillaVehiculosScreen";
 import TokensScreen from "./TokensScreen";
 import PedidoInsumosScreen from "../shared/PedidoInsumosScreen";
 import AppHeader from "../../components/AppHeader";
@@ -168,7 +171,7 @@ function CalendarioSemanal({ actividades = {}, legajos = [] }) {
                             <span className="vh-cal-daynum">{d.getDate()}</span>
                             <div className="vh-cal-dia-acts">
                                 {acts.map((a, i) => (
-                                    <span key={i} className={`vh-cal-dia-chip vh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.label}</span>
+                                    <span key={i} className={`vh-cal-dia-chip vh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.labelCorto ?? a.label}</span>
                                 ))}
                                 {(cumplesPorKey[key] || []).map((ap, i) => (
                                     <span key={`c${i}`} className="vh-cal-dia-chip vh-cal-dia-chip--cumple">🎂 {ap}</span>
@@ -319,15 +322,174 @@ const OPCIONES_PLANILLAS = [
 ];
 
 function PanelPlanillas({ onBack }) {
-    const [vista, setVista] = useState(null);
+    const { user }      = useAuth();
+    const { empresaId } = useAppData();
+    const [vista,         setVista]         = useState(null);
+    const [objetivoSel,   setObjetivoSel]   = useState(null); // { id, nombre, clienteNombre }
+    const [objetivosHoy,  setObjetivosHoy]  = useState([]);
+    const [cargandoObjs,  setCargandoObjs]  = useState(false);
 
-    if (vista) {
+    // Al elegir una planilla, cargamos los objetivos del vigilador para hoy
+    const elegirVista = async (id) => {
+        setCargandoObjs(true);
+        try {
+            const hoy     = new Date();
+            const hoyKey  = hoy.toISOString().slice(0, 10);
+            const año     = hoy.getFullYear();
+            const mes     = hoy.getMonth() + 1;
+
+            // Encontrar legajo del vigilador: primero por email, luego por nombre
+            const legSnap = await getDocs(query(
+                collection(db, "legajos"),
+                where("empresaId", "==", empresaId)
+            ));
+            const legajosData = legSnap.docs.map(d => d.data());
+            const miLegajoDoc =
+                (user?.email && legajosData.find(l => l.email === user.email)) ||
+                legajosData.find(l => l.nombre === user?.name);
+            const miLegajo = miLegajoDoc?.legajo;
+
+            // Días 1-23 → período actual (mes); días 24-31 → período siguiente (mes+1)
+            const hoyNum  = hoy.getDate();
+            const mesB    = mes === 12 ? 1  : mes + 1;
+            const añoB    = mes === 12 ? año + 1 : año;
+            const mesBusq = hoyNum >= 24 ? mesB : mes;
+            const añoBusq = hoyNum >= 24 ? añoB : año;
+
+            const progSnap = await getDocs(query(
+                collection(db, "programacionServicios"),
+                where("empresaId", "==", empresaId),
+                where("año", "==", añoBusq),
+                where("mes", "==", mesBusq),
+            ));
+
+            const objs = [];
+            progSnap.docs.forEach(d => {
+                const data = d.data();
+                const miP  = (data.personal || []).find(p =>
+                    miLegajo
+                        ? p.legajo === miLegajo
+                        : (user?.email && p.email === user.email) || p.nombre === user?.name
+                );
+                if (!miP) return;
+                const turnoHoy = (miP.programado || {})[hoyKey] || (miP.real || {})[hoyKey];
+                if (!turnoHoy || turnoHoy === "Fco" || turnoHoy === "Com") return;
+                objs.push({
+                    id:            data.objetivoId,
+                    nombre:        data.objetivoNombre || "",
+                    clienteNombre: data.clienteNombre  || "",
+                });
+            });
+
+            setObjetivosHoy(objs);
+            setVista(id);
+            // Si solo hay un objetivo, seleccionarlo automáticamente
+            if (objs.length === 1) setObjetivoSel(objs[0]);
+            else setObjetivoSel(null);
+        } catch (e) {
+            console.error(e);
+            setVista(id);
+            setObjetivosHoy([]);
+            setObjetivoSel(null);
+        } finally {
+            setCargandoObjs(false);
+        }
+    };
+
+    // ── Vista activa con objetivo seleccionado ────────────────────────────────
+    if (vista && objetivoSel) {
+        const op = OPCIONES_PLANILLAS.find(o => o.id === vista);
+        const volver = () => {
+            if (objetivosHoy.length > 1) setObjetivoSel(null);
+            else { setVista(null); setObjetivoSel(null); }
+        };
+
+        if (vista === "llaves") {
+            return (
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={volver}>← Volver</button>
+                    <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
+                    <PlanillaLlavesScreen
+                        objetivoId={objetivoSel.id}
+                        objetivoNombre={objetivoSel.nombre}
+                        clienteNombre={objetivoSel.clienteNombre}
+                        onBack={volver}
+                    />
+                </div>
+            );
+        }
+
+        if (vista === "visitas") {
+            return (
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={volver}>← Volver</button>
+                    <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
+                    <PlanillaVisitasScreen
+                        objetivoId={objetivoSel.id}
+                        objetivoNombre={objetivoSel.nombre}
+                        clienteNombre={objetivoSel.clienteNombre}
+                        onBack={volver}
+                    />
+                </div>
+            );
+        }
+
+        if (vista === "vehiculos") {
+            return (
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={volver}>← Volver</button>
+                    <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
+                    <PlanillaVehiculosScreen
+                        objetivoId={objetivoSel.id}
+                        objetivoNombre={objetivoSel.nombre}
+                        clienteNombre={objetivoSel.clienteNombre}
+                        onBack={volver}
+                    />
+                </div>
+            );
+        }
+
+        // Resto de planillas → Próximamente
+        return (
+            <div className="vh-subpanel">
+                <button className="vh-back" onClick={volver}>← Volver</button>
+                <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
+                <div className="vh-coming-soon">Próximamente</div>
+            </div>
+        );
+    }
+
+    // ── Selector de objetivo (cuando hay más de uno) ───────────────────────────
+    if (vista && !objetivoSel) {
         const op = OPCIONES_PLANILLAS.find(o => o.id === vista);
         return (
             <div className="vh-subpanel">
-                <button className="vh-back" onClick={() => setVista(null)}>← Volver al panel</button>
+                <button className="vh-back" onClick={() => setVista(null)}>← Volver</button>
                 <div className="vh-subpanel-title">{op.icon} {op.titulo}</div>
-                <div className="vh-coming-soon">Próximamente</div>
+                {cargandoObjs ? (
+                    <div className="vh-coming-soon">Cargando objetivos…</div>
+                ) : objetivosHoy.length === 0 ? (
+                    <div className="vh-coming-soon">Sin objetivo asignado para hoy</div>
+                ) : (
+                    <div className="vh-opciones">
+                        <p style={{ fontSize: "0.85rem", color: "var(--color-muted)", marginBottom: 8 }}>
+                            Seleccioná el puesto:
+                        </p>
+                        {objetivosHoy.map(obj => (
+                            <button
+                                key={obj.id}
+                                className="vh-opcion vh-opcion--blue"
+                                onClick={() => setObjetivoSel(obj)}
+                            >
+                                <div className="vh-opcion-info">
+                                    <strong>{obj.nombre}</strong>
+                                    {obj.clienteNombre && <small>{obj.clienteNombre}</small>}
+                                </div>
+                                <span className="vh-modulo-arrow">›</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
         );
     }
@@ -338,7 +500,7 @@ function PanelPlanillas({ onBack }) {
             <div className="vh-subpanel-title">📊 Planillas</div>
             <div className="sh-grid" style={{ padding: "var(--space-3) 0 0" }}>
                 {OPCIONES_PLANILLAS.map(op => (
-                    <button key={op.id} className="sh-modulo sh-modulo--slate" onClick={() => setVista(op.id)}>
+                    <button key={op.id} className="sh-modulo sh-modulo--slate" onClick={() => elegirVista(op.id)}>
                         <span className="sh-modulo-icon sh-modulo-icon--slate">{op.icon}</span>
                         <div className="sh-modulo-info">
                             <strong>{op.titulo}</strong>

@@ -34,7 +34,7 @@ function parseDDMM(valor) {
  *   - Actividades inconclusas en jornadas (tipo: "inconclusa")
  *   - Vencimiento de service / VTV / seguro de vehículos (tipo: "vtv")
  */
-export function useActividadesSemana(empresaId, legajos = []) {
+export function useActividadesSemana(empresaId, legajos = [], currentUserId = null) {
     const [actividades, setActividades] = useState({});
 
     useEffect(() => {
@@ -120,12 +120,35 @@ export function useActividadesSemana(empresaId, legajos = []) {
                 });
             } catch (e) { console.warn("[actividadesSemana] vehiculos:", e); }
 
+            // 5. Comunicaciones no leídas — aparecen hoy (o en su fecha si es futura)
+            try {
+                const comSnap = await getDocs(
+                    query(collection(db, "comunicaciones"), where("empresaId", "==", empresaId))
+                );
+                const hoyKey = fmtKey(hoy);
+                comSnap.docs.forEach(doc => {
+                    const c = doc.data();
+                    // Saltar si ya fue leída por el usuario actual
+                    if (currentUserId && (c.leidoPor || []).includes(currentUserId)) return;
+                    // Fecha de la comunicación; si es pasada → anclar a hoy
+                    const fechaDoc = c.creadoEn?.toDate ? fmtKey(c.creadoEn.toDate()) : hoyKey;
+                    const targetKey = fechaDoc >= hoyKey ? fechaDoc : hoyKey;
+                    if (targetKey > semanaEnd7) return;
+                    const tipoLabel = c.tipo === "novedad" ? "novedad" : "comunicación";
+                    addAct(targetKey, {
+                        labelCorto: `📢 Tenés una ${tipoLabel}`,
+                        label:      `📢 ${c.titulo || "Sin título"}`,
+                        tipo:       "comunicacion",
+                    });
+                });
+            } catch (e) { console.warn("[actividadesSemana] comunicaciones:", e); }
+
             setActividades({ ...acts });
         }
 
         build();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [empresaId, legajos.length]);
+    }, [empresaId, legajos.length, currentUserId]);
 
     return actividades;
 }

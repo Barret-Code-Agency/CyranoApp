@@ -17,9 +17,11 @@
  */
 export function fmtObjetivo(o) {
     if (!o) return "";
-    const codigo = [o.cCosto, o.numProyecto, o.numObjetivo].filter(Boolean).join("-");
-    const partes  = [codigo, o.nombreProyecto, o.nombre].filter(Boolean);
-    return partes.join(" ");
+    // Schema nuevo: { codigo: "217-1-2", proyecto: "BSC", nombre: "Administracion Sur" }
+    // Schema viejo: { cCosto, numProyecto, numObjetivo, nombreProyecto, nombre }
+    const codigo   = o.codigo || [o.cCosto, o.numProyecto, o.numObjetivo].filter(Boolean).join("-");
+    const proyecto = o.proyecto || o.nombreProyecto || "";
+    return [codigo, proyecto, o.nombre].filter(Boolean).join(" ");
 }
 
 /**

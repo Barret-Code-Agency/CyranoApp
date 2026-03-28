@@ -1,0 +1,73 @@
+/* PlanillaVisitasScreen.css — Reutiliza patrones de PlanillaLlavesScreen */
+.pvs-root { display: flex; flex-direction: column; gap: 12px; padding: 0 0 24px; }
+
+.pvs-header {
+    background: #1e3a5f; color: #fff;
+    padding: 12px 16px; border-radius: 8px;
+    display: flex; flex-direction: column; gap: 4px;
+}
+.pvs-header-logo { display: flex; flex-direction: column; gap: 1px; }
+.pvs-logo-text  { font-size: 1.1rem; font-weight: 800; letter-spacing: 1px; }
+.pvs-logo-sub   { font-size: 0.65rem; letter-spacing: 0.5px; opacity: 0.85; }
+.pvs-header-titulo { font-size: 1.3rem; font-weight: 700; text-align: center; margin: 4px 0; }
+.pvs-header-meta   { font-size: 0.8rem; opacity: 0.85; text-align: center; }
+
+.pvs-error {
+    background: #fee2e2; color: #991b1b;
+    padding: 8px 12px; border-radius: 6px; font-size: 0.85rem;
+}
+
+.pvs-tabla-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--color-border, #e2e8f0); }
+.pvs-tabla { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.pvs-tabla th {
+    background: #f1f5f9; color: #475569;
+    font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+.pvs-tabla td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.pvs-tr--en-planta td { background: #fff7ed; }
+.pvs-td-nombre { font-weight: 500; min-width: 130px; }
+.pvs-td-codigo { font-family: monospace; font-size: 0.78rem; color: #64748b; }
+.pvs-td-center { text-align: center; color: #94a3b8; padding: 16px; }
+.pvs-td-vacio  { font-style: italic; }
+.pvs-pendiente { color: #f59e0b; font-style: italic; font-size: 0.8rem; }
+.pvs-tfoot td  { background: #f8fafc; font-size: 0.8rem; color: #475569; padding: 6px 10px; }
+.pvs-tfoot-label { font-weight: 600; }
+
+.pvs-alerta-pendiente {
+    background: #fff7ed; border: 1px solid #fed7aa; color: #92400e;
+    padding: 10px 14px; border-radius: 8px; font-size: 0.85rem;
+}
+
+.pvs-btn-dev {
+    background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;
+    border-radius: 6px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer;
+    white-space: nowrap;
+}
+.pvs-btn-dev:hover { background: #bae6fd; }
+
+/* Form */
+.pvs-form {
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.pvs-form-titulo { font-weight: 700; color: #1e3a5f; font-size: 0.95rem; }
+.pvs-form-row { display: flex; flex-direction: column; gap: 4px; }
+.pvs-form-row label { font-size: 0.78rem; font-weight: 600; color: #475569; }
+.pvs-form-row input, .pvs-form-row select {
+    padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.88rem;
+}
+.pvs-form-row--info { flex-direction: row; align-items: center; gap: 8px; }
+.pvs-form-static { color: #475569; font-size: 0.88rem; }
+.pvs-form-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+/* Botones */
+.pvs-btn { padding: 10px 16px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer; border: none; }
+.pvs-btn--primary  { background: #1e3a5f; color: #fff; }
+.pvs-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.pvs-btn--ghost    { background: transparent; border: 1px solid #cbd5e1; color: #475569; }
+.pvs-btn--agregar  { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; width: 100%; text-align: left; }
+.pvs-btn--firmar   { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; width: 100%; }
+.pvs-btn--volver   { background: transparent; border: 1px solid #e2e8f0; color: #64748b; }
+.pvs-btn:hover:not(:disabled) { filter: brightness(0.95); }

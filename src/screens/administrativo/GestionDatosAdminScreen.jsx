@@ -10,6 +10,7 @@ import "./GestionDatosAdminScreen.css";
 import { fmtObjetivo } from "../../utils/formatters";
 import { parseFecha } from "../../utils/dateUtils";
 import { SEED_VEHICULOS } from "../../data/seedVehiculos";
+import { SEED_CLIENTES, SEED_CLIENTES_ALIASES } from "../../data/seedClientesData";
 
 // ── Helpers de fecha ─────────────────────────────────────────────────────────
 function fmtFechaExcel(valor) {
@@ -32,6 +33,7 @@ const COLECCIONES = [
             { key: "legajo",       label: "N° Legajo"      },
             { key: "dni",          label: "DNI"            },
             { key: "nombre",       label: "Apellido y Nombre" },
+            { key: "email",        label: "Email"          },
             { key: "nacimiento",   label: "Fecha Nac.",     renderFn: d => fmtFechaExcel(d.nacimiento)   },
             { key: "cargo",        label: "Cargo"          },
             { key: "rol",          label: "Rol"            },
@@ -45,11 +47,12 @@ const COLECCIONES = [
             { key: "centroCosto",  label: "C. Costo"       },
             { key: "proyecto",     label: "Proyecto"       },
         ],
-        searchFields: ["nombre", "legajo", "dni", "cargo", "rol", "cuil"],
+        searchFields: ["nombre", "legajo", "dni", "cargo", "rol", "cuil", "email"],
         campos: [
             { key: "legajo",       label: "N° Legajo",          type: "text"   },
             { key: "dni",          label: "DNI",                 type: "text"   },
             { key: "nombre",       label: "Apellido y Nombre",   type: "text"   },
+            { key: "email",        label: "Email",               type: "text"   },
             { key: "nacimiento",   label: "Fecha de Nacimiento", type: "text"   },
             { key: "cargo",        label: "Cargo",               type: "text"   },
             { key: "rol",          label: "Rol",                 type: "text"   },
@@ -70,6 +73,7 @@ const COLECCIONES = [
             { patterns: ["n legajo","nro legajo","num legajo","legajo","n° legajo"], field: "legajo"       },
             { patterns: ["dni"],                                                     field: "dni"          },
             { patterns: ["apellido y nombre","apellido nombre","nombre"],            field: "nombre"       },
+            { patterns: ["email","correo","mail"],                                   field: "email"        },
             { patterns: ["fecha de nacimiento","fecha nacimiento","nacimiento"],     field: "nacimiento"   },
             { patterns: ["cargo"],                                                   field: "cargo"        },
             { patterns: ["rol"],                                                     field: "rol"          },
@@ -136,7 +140,7 @@ const COLECCIONES = [
             { key: "numObjetivo",    label: "Objetivo"   },
             { key: "nombreProyecto", label: "Nº Proyecto" },
             { key: "nombre",         label: "Nombre objetivo", renderFn: d => fmtObjetivo(d) },
-            { key: "clienteNombre",  label: "Cliente",    renderFn: d => d.clienteNombre || d.nombreProyecto || "—" },
+            { key: "clienteNombre",  label: "Cliente",    renderFn: d => d.clienteNombre || "—" },
             { key: "clienteId",      label: "ClienteID",  renderFn: d => d.clienteId || "—" },
             { key: "domicilio",      label: "Domicilio"  },
             { key: "localidad",      label: "Localidad"  },
@@ -379,6 +383,13 @@ function ModalImportExcel({ col, empresaId, onClose, onImportado, importActual, 
             if (val) existMap[String(val).trim()] = d.id;
         });
 
+        // Para objetivos: precargar clientes para resolver clienteNombre
+        let clienteMapImport = {};
+        if (col.id === "objetivos" && empresaId) {
+            const cSnap = await getDocs(query(collection(db, "clientes"), where("empresaId", "==", empresaId)));
+            cSnap.docs.forEach(d => { clienteMapImport[d.id] = d.data().nombre || ""; });
+        }
+
         for (let i = 0; i < filas.length; i++) {
             const fila = filas[i];
             try {
@@ -400,15 +411,18 @@ function ModalImportExcel({ col, empresaId, onClose, onImportado, importActual, 
 
                 if (col.filterEmpresa && empresaId) obj.empresaId = empresaId;
 
-                // Para objetivos: generar codigo compuesto y rellenar clienteNombre
+                // Para objetivos: generar codigo compuesto y resolver clienteNombre
                 if (col.id === "objetivos") {
                     if (obj.cCosto || obj.numProyecto || obj.numObjetivo) {
                         obj.codigo = [obj.cCosto, obj.numProyecto, obj.numObjetivo]
                             .filter(Boolean).join("-");
                     }
-                    if (!obj.clienteNombre && obj.nombreProyecto) {
-                        obj.clienteNombre = obj.nombreProyecto;
+                    // Resolver clienteNombre desde la colección clientes (fuente autoritativa)
+                    if (!obj.clienteNombre && obj.clienteId) {
+                        obj.clienteNombre = clienteMapImport[obj.clienteId] || obj.clienteId || "";
                     }
+                    // clienteNombre debe venir del campo cliente del Excel → clienteMapImport
+                    // NO usar nombreProyecto como sustituto (son campos distintos)
                 }
 
                 const claveVal = col.dupKey && obj[col.dupKey] ? String(obj[col.dupKey]).trim() : null;
@@ -833,6 +847,114 @@ export default function GestionDatosAdminScreen({ onBack, coleccionInicial = 0, 
         cargarColeccion();
     };
 
+    // ── Migrar objetivos a IDs y nombres canónicos del seed ─────────────────
+    // Usa SEED_CLIENTES como única fuente de verdad.
+    // Resuelve en orden:
+    //   1. clienteId ya es un ID seed canónico → solo corrige el nombre si cambió
+    //   2. clienteId está en SEED_CLIENTES_ALIASES → mapea al ID canónico
+    //   3. clienteNombre normalizado coincide con un nombre seed → usa ese ID
+    //   4. Sin match → reporta para revisión manual
+    const repararClienteNombres = async () => {
+        if (!empresaId) return;
+        setImportando(true);
+        setImportMsg(null);
+        try {
+            const norm = s => (s || "")
+                .toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]+/g, " ").trim();
+
+            // Mapa canónico desde el seed: id → { id, nombre }
+            const seedById   = {};
+            const seedByNorm = {};
+            SEED_CLIENTES.forEach(c => {
+                seedById[c.id]       = c;
+                seedByNorm[norm(c.nombre)] = c;
+            });
+
+            const updates = [];
+            let porId = 0, porAlias = 0, porNombre = 0, sinMatch = 0;
+
+            for (const obj of todos) {
+                // 1. clienteId ya es canónico (está en el seed)
+                const canonById = seedById[obj.clienteId];
+                if (canonById) {
+                    if (obj.clienteNombre !== canonById.nombre) {
+                        updates.push({ _docId: obj._docId, clienteId: canonById.id, clienteNombre: canonById.nombre });
+                        porId++;
+                    }
+                    continue;
+                }
+
+                // 2. clienteId está en la tabla de aliases (ID legacy o nombre usado como ID)
+                const aliasTargetId = SEED_CLIENTES_ALIASES[obj.clienteId];
+                const canonByAlias  = aliasTargetId ? seedById[aliasTargetId] : null;
+                if (canonByAlias) {
+                    updates.push({ _docId: obj._docId, clienteId: canonByAlias.id, clienteNombre: canonByAlias.nombre });
+                    porAlias++;
+                    continue;
+                }
+
+                // 3. Buscar por clienteNombre normalizado contra nombres seed
+                const normNombre = norm(obj.clienteNombre);
+                let canonByName  = seedByNorm[normNombre];
+
+                if (!canonByName) {
+                    // Match parcial: nombre del objetivo contenido en el seed o viceversa
+                    for (const [normSeed, c] of Object.entries(seedByNorm)) {
+                        if (normSeed.includes(normNombre) || normNombre.includes(normSeed)) {
+                            canonByName = c;
+                            break;
+                        }
+                    }
+                }
+
+                if (!canonByName) {
+                    // 4. También probar el clienteNombre en los aliases
+                    const aliasTargetByName = SEED_CLIENTES_ALIASES[obj.clienteNombre];
+                    canonByName = aliasTargetByName ? seedById[aliasTargetByName] : null;
+                }
+
+                if (canonByName) {
+                    updates.push({ _docId: obj._docId, clienteId: canonByName.id, clienteNombre: canonByName.nombre });
+                    porNombre++;
+                } else {
+                    sinMatch++;
+                }
+            }
+
+            // Ejecutar actualizaciones en Firestore
+            for (const u of updates) {
+                await updateDoc(doc(db, "objetivos", u._docId), {
+                    clienteId:     u.clienteId,
+                    clienteNombre: u.clienteNombre,
+                });
+            }
+
+            // Reflejar en estado local
+            const updateMap = {};
+            updates.forEach(u => { updateMap[u._docId] = u; });
+            setTodos(prev => prev.map(o =>
+                updateMap[o._docId]
+                    ? { ...o, clienteId: updateMap[o._docId].clienteId, clienteNombre: updateMap[o._docId].clienteNombre }
+                    : o
+            ));
+
+            const total = porId + porAlias + porNombre;
+            let msg = total > 0
+                ? `✅ ${total} objetivo${total !== 1 ? "s" : ""} normalizados.`
+                : "✅ Todos los objetivos ya tienen el cliente correcto.";
+            if (sinMatch > 0) {
+                msg += ` ⚠️ ${sinMatch} sin match — revisá si falta dar de alta algún cliente en el seed.`;
+            }
+            setImportMsg(msg);
+        } catch (e) {
+            setImportMsg("❌ Error: " + e.message);
+        } finally {
+            setImportando(false);
+        }
+    };
+
     // ── Header del panel (igual en lista y edición) ──────────────────────────
     const panelHeader = (
         <div className="gd-panel-header">
@@ -1015,6 +1137,17 @@ export default function GestionDatosAdminScreen({ onBack, coleccionInicial = 0, 
                 >
                     📥 Importar Excel
                 </button>
+                {/* Reparar clienteNombre — solo en la tab de Objetivos */}
+                {col.id === "objetivos" && (
+                    <button
+                        className="gd-btn-import-excel"
+                        onClick={repararClienteNombres}
+                        disabled={importando}
+                        title="Normaliza clienteNombre en TODOS los objetivos usando la colección Clientes como única fuente de verdad"
+                    >
+                        {importando ? "⏳ Normalizando…" : "🔧 Normalizar clientes"}
+                    </button>
+                )}
                 {canCreate && (
                     <button className="gd-btn-nuevo" onClick={nuevo}>
                         + Nuevo

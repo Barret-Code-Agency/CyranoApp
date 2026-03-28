@@ -2,10 +2,9 @@
 import { useEffect, useState, useMemo } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
-import { useAppData } from "../../context/AppDataContext";
-import { useClientesData } from "../../hooks/useClientesData";
-import { getDias, fmtKey, MESES_ES, HORAS_KEYS, horasDeValor, r1 } from "../../utils/periodoUtils";
-import { FERIADOS_ARG } from "../../utils/feriados";
+import { useAppData }      from "../../context/AppDataContext";
+import { useHorasACubrir } from "../../hooks/useHorasACubrir";
+import { getDias, fmtKey, MESES_ES, horasDeValor, r1 } from "../../utils/periodoUtils";
 import "./AnalisisHorasPASScreen.css";
 
 // ── Colecciones Firestore ─────────────────────────────────────────────────────
@@ -46,33 +45,33 @@ function BarraCobertura({ pct, meta = 100 }) {
     );
 }
 
-function horasDiaObj(dia, obj, diasEsp) {
-    if (!obj) return null;
-    const key = fmtKey(dia);
-    if (FERIADOS_ARG[key]) return obj.horasFeriados != null ? Number(obj.horasFeriados) : null;
-    if (diasEsp?.[key] === false) return 0;
-    const hs = obj[HORAS_KEYS[dia.getDay()]];
-    return hs != null ? Number(hs) : null;
-}
 
 export default function AnalisisHorasPASScreen({ año, mes }) {
-    const { empresaNombre, empresaId } = useAppData();
-    const { objetivos } = useClientesData(empresaId);
+    const { empresaId } = useAppData();
+
+    // ── Horas a Cubrir: fuente única ──────────────────────────────────────────
+    const { porObjetivo: horasACubrir, diasPorObjetivo, cargando: cargandoHoras } = useHorasACubrir(empresaId, año, mes);
+
+    // ── Programación real: planillas PAS ─────────────────────────────────────
     const [docs,     setDocs]     = useState([]);
     const [cargando, setCargando] = useState(true);
 
     useEffect(() => {
         if (!empresaId) return;
         setCargando(true);
+        // Filtro PAS: por clienteId canónico, con fallback regex para datos legacy
         const esSantaCruz = d =>
-            /santa\s*cruz/i.test(d.clienteNombre || "") ||
-            /santa\s*cruz/i.test(d.proyectoNombre || "") ||
-            /cerro\s*moro/i.test(d.clienteNombre  || "") ||
-            /cerro\s*moro/i.test(d.proyectoNombre || "") ||
-            /panamerican/i.test(d.clienteNombre   || "") ||
-            /panamerican/i.test(d.proyectoNombre  || "") ||
-            /\bpas\b/i.test(d.clienteNombre       || "") ||
-            /\bpas\b/i.test(d.proyectoNombre      || "");
+            d.clienteId === "panamerican" ||
+            (!d.clienteId && (
+                /santa\s*cruz/i.test(d.clienteNombre  || "") ||
+                /santa\s*cruz/i.test(d.proyectoNombre || "") ||
+                /cerro\s*moro/i.test(d.clienteNombre  || "") ||
+                /cerro\s*moro/i.test(d.proyectoNombre || "") ||
+                /panamerican/i.test(d.clienteNombre   || "") ||
+                /panamerican/i.test(d.proyectoNombre  || "") ||
+                /\bpas\b/i.test(d.clienteNombre       || "") ||
+                /\bpas\b/i.test(d.proyectoNombre      || "")
+            ));
 
         getDocs(query(
             collection(db, COL_PROG),
@@ -86,7 +85,7 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
           .finally(() => setCargando(false));
     }, [empresaId, año, mes]);
 
-    const avance   = avanceMes(año, mes);
+    const avance    = avanceMes(año, mes);
     const avancePct = (avance * 100).toFixed(1);
 
     const dias = useMemo(() => getDias(año, mes), [año, mes]);
@@ -94,11 +93,11 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
     // ── Calcular filas ────────────────────────────────────────────────────────
     const filas = useMemo(() => docs.map(doc => {
         const personal = doc.personal || [];
-        const obj      = objetivos.find(o => o.id === doc.objetivoId) || null;
-        const diasEsp  = doc.diasEspeciales || {};
 
-        // Horas pedidas: suma de horas contratadas por día según el objetivo
-        const horasPedidas = r1(dias.reduce((s, dia) => s + (horasDiaObj(dia, obj, diasEsp) ?? 0), 0));
+        // Horas a cubrir: vienen del hook centralizado (HorasObjetivoMesScreen)
+        const horasPedidas = r1(horasACubrir[doc.objetivoId]?.horas ?? 0);
+        const nombre       = horasACubrir[doc.objetivoId]?.objetivoNombre
+                            || [doc.codigo, doc.proyectoNombre, doc.objetivoNombre].filter(Boolean).join(" ");
 
         // Horas prestadas: horas reales trabajadas (real → programado como fallback)
         const horasPrestadas = r1(dias.reduce((s, dia) => {
@@ -112,15 +111,26 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
             return s + personal.reduce((ps, p) => ps + (Number(p.capacitacion?.[key]) || 0), 0);
         }, 0));
 
-        const horasTraslados   = 0; // sin dato en el modelo actual
-        const horasNoPrestadas = r1(Math.max(0, horasPedidas - horasPrestadas));
-        const horasAdicionales = r1(Math.max(0, horasPrestadas - horasPedidas));
+        // Horas no prestadas / adicionales: cálculo día a día (idéntico a ControlClienteScreen)
+        const diasObj = diasPorObjetivo[doc.objetivoId] || {};
+        const horasTraslados   = 0;
+        const horasNoPrestadas = r1(dias.reduce((s, dia) => {
+            const key    = fmtKey(dia);
+            const cubrir = diasObj[key] ?? 0;
+            const real   = personal.reduce((ps, p) => ps + horasDeValor((p.real || p.programado || {})[key] || ""), 0);
+            return s + Math.max(0, cubrir - real);
+        }, 0));
+        const horasAdicionales = r1(dias.reduce((s, dia) => {
+            const key    = fmtKey(dia);
+            const cubrir = diasObj[key] ?? 0;
+            const real   = personal.reduce((ps, p) => ps + horasDeValor((p.real || p.programado || {})[key] || ""), 0);
+            return s + Math.max(0, real - cubrir);
+        }, 0));
         const totalHoras       = r1(horasPrestadas + horasCapac + horasAdicionales);
         const pctCobertura     = horasPedidas > 0 ? r1((horasPrestadas / horasPedidas) * 100) : null;
-        const totalCubierto    = pctCobertura;
 
         return {
-            nombre:          [doc.clienteNombre, doc.proyectoNombre, doc.objetivoNombre].filter(Boolean).join(" · "),
+            nombre,
             horasPedidas,
             horasTraslados,
             horasCapac,
@@ -129,9 +139,9 @@ export default function AnalisisHorasPASScreen({ año, mes }) {
             horasPrestadas,
             totalHoras,
             pctCobertura,
-            totalCubierto,
+            totalCubierto: pctCobertura,
         };
-    }), [docs, objetivos, dias]);
+    }), [docs, horasACubrir, dias]);
 
     // Totales
     const sum = key => filas.reduce((s, f) => s + (f[key] ?? 0), 0);

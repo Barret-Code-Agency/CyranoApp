@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { MESES_ES, DIAS_ES, fmtKey } from "../../utils/periodoUtils";
+import { fmtObjetivo } from "../../utils/formatters";
 import { useWhatsApp } from "../../hooks/useWhatsApp";
 import { useActividadesSemana } from "../../hooks/useActividadesSemana";
 import { buildResumenDiario } from "../../utils/whatsapp";
@@ -21,6 +22,7 @@ import VerCapacitacionesScreen    from "../../forms/VerCapacitacionesScreen";
 import SubirCapacitacionScreen    from "../../forms/SubirCapacitacionScreen";
 import DashboardPersonalScreen  from "../administrativo/DashboardPersonalScreen";
 import GestionDatosAdminScreen    from "../administrativo/GestionDatosAdminScreen";
+import GestionUsuariosScreen      from "./GestionUsuariosScreen";
 import DashboardsGestionScreen    from "./DashboardsGestionScreen";
 import PlanCapacitacionScreen          from "../shared/PlanCapacitacionScreen";
 import PlanObjetivoScreen             from "./PlanObjetivoScreen";
@@ -38,10 +40,70 @@ import GestionPremiosScreen          from "./GestionPremiosScreen";
 import AdminScreen                   from "../AdminScreen";
 import DesignarSupervisoresPanel     from "./DesignarSupervisoresPanel";
 import PedidoInsumosScreen           from "../shared/PedidoInsumosScreen";
+import PlanillasVisorScreen          from "../shared/PlanillasVisorScreen";
 import { tieneAcceso }               from "../../config/roles";
 import AppHeader                     from "../../components/AppHeader";
+import { useClientesData }           from "../../hooks/useClientesData";
 import "../../styles/SupervisorHome.css";
 import "../../styles/ConsolidadoScreen.css";
+
+// ── Selector de objetivo ────────────────────────────────────────────────────
+// Muestra la lista de objetivos como cards (estilo "Ver procedimientos").
+// Se usa como paso previo en secciones que operan por objetivo.
+function SelectorObjetivo({ objetivos, onSelect, onBack, titulo, color = "blue" }) {
+    const [filtro, setFiltro] = useState("");
+    const filtrados = filtro.length >= 2
+        ? objetivos.filter(o => {
+            const nom = fmtObjetivo(o).toLowerCase();
+            const cli = (o.clienteNombre || "").toLowerCase();
+            const f   = filtro.toLowerCase();
+            return nom.includes(f) || cli.includes(f);
+          })
+        : objetivos;
+    return (
+        <div className="vh-subpanel">
+            <button className="vh-back" onClick={onBack}>← Volver al panel</button>
+            <div className="vh-subpanel-title">{titulo}</div>
+            <p style={{ color: "var(--color-muted)", fontSize: "var(--text-sm)", margin: "0 0 var(--space-3)" }}>
+                Seleccioná el objetivo para continuar
+            </p>
+            {objetivos.length > 6 && (
+                <input
+                    type="text"
+                    placeholder="Buscar objetivo…"
+                    value={filtro}
+                    onChange={e => setFiltro(e.target.value)}
+                    style={{ marginBottom: "var(--space-3)" }}
+                />
+            )}
+            <div className="sh-grid">
+                {filtrados.map(o => {
+                    const nombre = fmtObjetivo(o) || o.objetivoNombre || "Sin nombre";
+                    const desc   = o.clienteNombre || "";
+                    return (
+                        <button
+                            key={o.id}
+                            className={`sh-modulo sh-modulo--${color}`}
+                            onClick={() => onSelect(o)}
+                        >
+                            <span className={`sh-modulo-icon sh-modulo-icon--${color}`}>📍</span>
+                            <div className="sh-modulo-info">
+                                <strong>{nombre}</strong>
+                                {desc && <small>{desc}</small>}
+                            </div>
+                            <span className="sh-modulo-arrow">›</span>
+                        </button>
+                    );
+                })}
+                {filtrados.length === 0 && (
+                    <div style={{ color: "var(--color-muted)", padding: "var(--space-3)" }}>
+                        Sin resultados para "{filtro}"
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 
 function CalendarioSemanal({ actividades = {}, legajos = [] }) {
@@ -102,7 +164,7 @@ function CalendarioSemanal({ actividades = {}, legajos = [] }) {
                             <span className="sh-cal-daynum">{d.getDate()}</span>
                             <div className="sh-cal-dia-acts">
                                 {acts.map((a, i) => (
-                                    <span key={i} className={`sh-cal-dia-chip sh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.label}</span>
+                                    <span key={i} className={`sh-cal-dia-chip sh-cal-dia-chip--${a.tipo ?? "default"}`}>{a.labelCorto ?? a.label}</span>
                                 ))}
                                 {(cumplesPorKey[key] || []).map((ap, i) => (
                                     <span key={`c${i}`} className="sh-cal-dia-chip sh-cal-dia-chip--cumple">🎂 {ap}</span>
@@ -217,10 +279,21 @@ const GRUPOS_MENU = [
 export default function AdminContratoHome({ onExit }) {
     const { user, logout }                              = useAuth();
     const { empresaModulos, empresaId, data, updateConfig, userZona } = useAppData();
+    const { objetivos: objLista, clientes: clientesLista } = useClientesData(empresaId);
     const [seccion, setSeccion]               = useState(null);
     const [subSeccion, setSubSeccion]         = useState(null);
     const [periodoSel, setPeriodoSel]         = useState(null);
     const [consolidadoFull, setConsolidadoFull] = useState(false);
+    const [clienteSel,  setClienteSel]        = useState(null); // cliente seleccionado (paso 1)
+    const [objetivoSel, setObjetivoSel]       = useState(null); // objetivo seleccionado (paso 2)
+
+    // Resetear selecciones al cambiar de sección
+    useEffect(() => { setClienteSel(null); setObjetivoSel(null); }, [seccion]);
+
+    // Objetivos del cliente seleccionado
+    const objDeCliente = clienteSel
+        ? objLista.filter(o => o.clienteId === clienteSel.id)
+        : [];
 
     const handleLogout = async () => { await logout(); onExit?.(); };
 
@@ -231,7 +304,7 @@ export default function AdminContratoHome({ onExit }) {
             .then(snap => setLegajos(snap.docs.map(d => d.data())))
             .catch(err => console.error("Error cargando legajos:", err));
     }, [empresaId]);
-    const actividadesSemana = useActividadesSemana(empresaId, legajos);
+    const actividadesSemana = useActividadesSemana(empresaId, legajos, user?.uid);
 
     const modActivo   = MODULOS[seccion];
     const subline     = seccion
@@ -256,10 +329,42 @@ export default function AdminContratoHome({ onExit }) {
         { id: "ver_informes",          icon: "📄", titulo: "Ver Informes",               desc: "Consultá los informes redactados"                       },
     ];
     if (seccion === "control_actividades_vigilador") {
+        // Paso 1: seleccionar cliente
+        if (!clienteSel) return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <SelectorObjetivo
+                    objetivos={clientesLista}
+                    onSelect={setClienteSel}
+                    onBack={() => setSeccion(null)}
+                    titulo="👁️ Control de Actividades"
+                    color="cyan"
+                />
+            </div>
+        );
+        // Paso 2: seleccionar objetivo del cliente
+        if (!objetivoSel) return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <SelectorObjetivo
+                    objetivos={objDeCliente}
+                    onSelect={setObjetivoSel}
+                    onBack={() => setClienteSel(null)}
+                    titulo={`👁️ Control de Actividades — ${clienteSel.nombre}`}
+                    color="cyan"
+                />
+            </div>
+        );
         if (subSeccion === "rondas_monitor") return (
             <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
                 <MonitorRondasScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+        if (subSeccion === "planillas") return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <PlanillasVisorScreen onBack={() => setSubSeccion(null)} />
             </div>
         );
         if (subSeccion === "ver_informes") return (
@@ -310,7 +415,7 @@ export default function AdminContratoHome({ onExit }) {
 
     // Muro de comunicación → submenú ver / crear
     if (seccion === "muro_comunicacion") {
-        if (subSeccion === "ver")   return <div className="sh-root">{renderHeader()}<VerComunicacionesScreen onBack={() => setSubSeccion(null)} /></div>;
+        if (subSeccion === "ver")   return <div className="sh-root">{renderHeader()}<VerComunicacionesScreen onBack={() => setSubSeccion(null)} canDelete currentUserId={user?.uid} /></div>;
         if (subSeccion === "crear") return <div className="sh-root">{renderHeader()}<CrearComunicacionScreen onBack={() => setSubSeccion(null)} /></div>;
         const MURO_MENUS = [
             { id: "ver",   icon: "📋", titulo: "Ver novedades y comunicaciones", desc: "Consultá las comunicaciones publicadas para el personal" },
@@ -402,12 +507,40 @@ export default function AdminContratoHome({ onExit }) {
         );
     }
 
-    // Monitor de rondas
+    // Monitor de rondas — paso 1: cliente / paso 2: objetivo del cliente
     if (seccion === "rondas_monitor") {
+        if (!clienteSel) return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <SelectorObjetivo
+                    objetivos={clientesLista}
+                    onSelect={setClienteSel}
+                    onBack={() => setSeccion(null)}
+                    titulo="📡 Monitor de Rondas"
+                    color="green"
+                />
+            </div>
+        );
+        if (!objetivoSel) return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <SelectorObjetivo
+                    objetivos={objDeCliente}
+                    onSelect={setObjetivoSel}
+                    onBack={() => setClienteSel(null)}
+                    titulo={`📡 Monitor de Rondas — ${clienteSel.nombre}`}
+                    color="green"
+                />
+            </div>
+        );
         return (
             <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
                 {renderHeader()}
-                <MonitorRondasScreen onBack={() => { setSeccion(null); setSubSeccion(null); }} />
+                <MonitorRondasScreen
+                    objetivoId={objetivoSel.id}
+                    objetivoNombre={objetivoSel.nombre || objetivoSel.objetivoNombre}
+                    onBack={() => setObjetivoSel(null)}
+                />
             </div>
         );
     }
@@ -469,10 +602,18 @@ export default function AdminContratoHome({ onExit }) {
                 </div>
             </div>
         );
+        if (subSeccion === "gestion_usuarios") return (
+            <div className="sh-supervision-wrapper sh-supervision-wrapper--full">
+                {renderHeader()}
+                <GestionUsuariosScreen onBack={() => setSubSeccion(null)} />
+            </div>
+        );
+
         // Menú de Gestión de datos
         const SUB_GESTION = [
             { id: "datos_maestros",   icon: "🗄️", titulo: "Datos maestros",          desc: "Personal (legajos), clientes, objetivos y vehículos — importar Excel o editar uno por uno", color: "teal" },
             { id: "config_operativa", icon: "👤", titulo: "Supervisores",              desc: "Designar qué personas del personal actúan como supervisores", color: "teal" },
+            { id: "gestion_usuarios", icon: "🔐", titulo: "Gestión de usuarios",       desc: "Alta, baja y modificación de usuarios del sistema — roles y accesos", color: "teal" },
         ];
         return (
             <div className="vh-root">
@@ -537,7 +678,7 @@ export default function AdminContratoHome({ onExit }) {
                     <div className="vh-subpanel">
                         <button className="vh-back" onClick={() => setSubSeccion(null)}>← Volver al panel</button>
                     </div>
-                    <PlanCapacitacionScreen onBack={() => setSubSeccion(null)} />
+                    <PlanCapacitacionScreen onBack={() => setSubSeccion(null)} zona="Santa Cruz" />
                 </div>
             );
         }
@@ -733,10 +874,78 @@ export default function AdminContratoHome({ onExit }) {
 
 
     if (seccion === "gestion_premios") {
+        if (!objetivoSel) return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <SelectorObjetivo
+                    objetivos={clientesLista}
+                    onSelect={setObjetivoSel}
+                    onBack={() => setSeccion(null)}
+                    titulo="🎁 Premios y Tokens"
+                    color="pink"
+                />
+            </div>
+        );
         return (
             <div className="vh-root">
                 {renderHeader()}
-                <GestionPremiosScreen onBack={() => setSeccion(null)} />
+                <GestionPremiosScreen
+                    clienteId={objetivoSel.id}
+                    clienteNombre={objetivoSel.nombre}
+                    onBack={() => setObjetivoSel(null)}
+                />
+            </div>
+        );
+    }
+
+    // Plan de seguridad — requiere selección de CLIENTE
+    if (seccion === "plan_seguridad") {
+        if (!objetivoSel) return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <SelectorObjetivo
+                    objetivos={clientesLista}
+                    onSelect={setObjetivoSel}
+                    onBack={() => setSeccion(null)}
+                    titulo="🛡️ Plan de Seguridad"
+                    color="red"
+                />
+            </div>
+        );
+        return (
+            <div className="vh-root">
+                {renderHeader()}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setObjetivoSel(null)}>← Volver</button>
+                    <div className="vh-subpanel-title">🛡️ Plan de Seguridad — {fmtObjetivo(objetivoSel)}</div>
+                    <div className="vh-coming-soon">Próximamente</div>
+                </div>
+            </div>
+        );
+    }
+
+    // Análisis de riesgos — requiere selección de CLIENTE
+    if (seccion === "analisis_riesgos") {
+        if (!objetivoSel) return (
+            <div className="sh-supervision-wrapper">
+                {renderHeader()}
+                <SelectorObjetivo
+                    objetivos={clientesLista}
+                    onSelect={setObjetivoSel}
+                    onBack={() => setSeccion(null)}
+                    titulo="⚠️ Análisis de Riesgos"
+                    color="gold"
+                />
+            </div>
+        );
+        return (
+            <div className="vh-root">
+                {renderHeader()}
+                <div className="vh-subpanel">
+                    <button className="vh-back" onClick={() => setObjetivoSel(null)}>← Volver</button>
+                    <div className="vh-subpanel-title">⚠️ Análisis de Riesgos — {fmtObjetivo(objetivoSel)}</div>
+                    <div className="vh-coming-soon">Próximamente</div>
+                </div>
             </div>
         );
     }

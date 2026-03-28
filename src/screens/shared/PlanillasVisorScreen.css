@@ -1,0 +1,73 @@
+/* PlanillasVisorScreen.css */
+.pvr-root { display: flex; flex-direction: column; gap: 12px; padding: 0 0 24px; }
+.pvr-back {
+    background: none; border: none; color: #2563eb;
+    font-size: 0.88rem; cursor: pointer; padding: 0; align-self: flex-start;
+    display: flex; align-items: center; gap: 4px;
+}
+.pvr-titulo { font-size: 1.15rem; font-weight: 700; color: #1e3a5f; }
+
+/* Tabs */
+.pvr-tabs { display: flex; gap: 6px; border-bottom: 2px solid #e2e8f0; padding-bottom: 2px; }
+.pvr-tab {
+    background: none; border: none; padding: 8px 14px; font-size: 0.88rem;
+    font-weight: 600; color: #64748b; cursor: pointer; border-radius: 6px 6px 0 0;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+}
+.pvr-tab--active { color: #1e3a5f; border-bottom-color: #1e3a5f; background: #f8fafc; }
+
+/* Filtros */
+.pvr-filtros {
+    display: flex; flex-wrap: wrap; gap: 8px;
+}
+.pvr-filtros select {
+    padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+    font-size: 0.85rem; background: #fff; min-width: 130px;
+}
+
+.pvr-loading { text-align: center; color: #94a3b8; padding: 24px; font-style: italic; }
+.pvr-empty   { text-align: center; color: #94a3b8; padding: 32px; font-style: italic; }
+
+/* Tabla */
+.pvr-tabla-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #e2e8f0; }
+.pvr-tabla { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+.pvr-tabla th {
+    background: #f1f5f9; color: #475569;
+    font-weight: 600; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; white-space: nowrap;
+}
+.pvr-th-num { text-align: center !important; }
+.pvr-tabla td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.pvr-tr:hover td { background: #f8fafc; }
+.pvr-tr--pend td { background: #fff7ed; }
+.pvr-td-codigo { font-family: monospace; font-size: 0.78rem; color: #64748b; }
+
+/* Badge */
+.pvr-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+}
+.pvr-badge--ok   { background: #d1fae5; color: #065f46; }
+.pvr-badge--pend { background: #fef3c7; color: #92400e; }
+
+/* Botón ver */
+.pvr-btn-ver {
+    background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe;
+    border-radius: 6px; padding: 4px 10px; font-size: 0.78rem;
+    cursor: pointer; white-space: nowrap;
+}
+.pvr-btn-ver:hover { background: #bfdbfe; }
+
+/* Detalle */
+.pvr-detalle { display: flex; flex-direction: column; gap: 12px; padding: 0 0 24px; }
+.pvr-detalle-header {
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 10px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.pvr-detalle-titulo { font-size: 1.1rem; font-weight: 700; color: #1e3a5f; }
+.pvr-detalle-meta   { font-size: 0.85rem; color: #475569; }
+.pvr-detalle-firma  { font-size: 0.82rem; padding: 6px 10px; border-radius: 6px; }
+.pvr-detalle-firma--ok   { background: #d1fae5; color: #065f46; }
+.pvr-detalle-firma--pend { background: #fef3c7; color: #92400e; }
+.pvr-codigo { font-family: monospace; font-weight: 600; font-size: 0.9em; }

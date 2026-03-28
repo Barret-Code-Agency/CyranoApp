@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { todayDate, nowTime } from "../../utils/helpers";
 import "./ControlVehicularScreen.css";
 import { generarPDFControlVehicular } from "../../utils/generarPDF_ControlVehicular";
+import FirmaPanel from "../../components/FirmaPanel";
 
 // ── Secciones del checklist (basado en el formulario original) ─────────────
 const SECCIONES = [
@@ -72,9 +73,10 @@ const initChecks = () => {
 };
 
 export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirmar, onOmitir }) {
-    const [checks,     setChecks]     = useState(initChecks);
-    const [novedades,  setNovedades]  = useState("");
-    const [fotos,      setFotos]      = useState([]);
+    const [checks,          setChecks]          = useState(initChecks);
+    const [novedades,       setNovedades]       = useState("");
+    const [fotos,           setFotos]           = useState([]);
+    const [datosConfirmados,setDatosConfirmados] = useState(null); // para FirmaPanel
     const [sinNovedad, setSinNovedad] = useState(null); // true/false
     const [seccionAbierta, setSeccion] = useState("exterior");
     const [pdfLoading,   setPdfLoading] = useState(false);
@@ -126,10 +128,45 @@ export default function ControlVehicularScreen({ vehiculo, supervisor, onConfirm
         } finally {
             setPdfLoading(false);
         }
-        onConfirmar(datos);
+        // Mostrar FirmaPanel antes de continuar
+        setDatosConfirmados(datos);
     };
 
     const puedeConfirmar = respondidos === TOTAL_ITEMS && sinNovedad !== null;
+
+    // ── Paso firma: entre PDF y onConfirmar ───────────────────────────────────
+    if (datosConfirmados) {
+        return (
+            <div className="cv-root">
+                <div className="cv-header">
+                    <div className="cv-header-icon">🚙</div>
+                    <div>
+                        <div className="cv-header-title">Control completado</div>
+                        <div className="cv-header-sub">{datosConfirmados.vehiculo}</div>
+                    </div>
+                </div>
+                <FirmaPanel
+                    tipo="control_vehicular"
+                    referenciaId={datosConfirmados.jornadaID || null}
+                    datos={{
+                        jornadaID:   datosConfirmados.jornadaID,
+                        vehiculo:    datosConfirmados.vehiculo,
+                        supervisor:  datosConfirmados.supervisor,
+                        fecha:       datosConfirmados.fecha,
+                        hora:        datosConfirmados.hora,
+                        respondidos: datosConfirmados.respondidos,
+                        conNovedad:  datosConfirmados.conNovedad,
+                        sinNovedad:  datosConfirmados.sinNovedad,
+                        novedades:   datosConfirmados.novedades || null,
+                    }}
+                    label="Firmar control vehicular"
+                    obligatoria={false}
+                    onFirmado={() => onConfirmar(datosConfirmados)}
+                    onOmitir={()  => onConfirmar(datosConfirmados)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="cv-root">

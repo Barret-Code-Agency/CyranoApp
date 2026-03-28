@@ -59,9 +59,47 @@
     flex-direction: column;
     gap: var(--space-3);
     padding: var(--space-4);
-    max-width: 50%;
+    width: calc(100% - var(--space-4) * 2);
     margin: 0 auto;
-    width: 100%;
+}
+
+/* ── Card wrap (incluye botón borrar) ── */
+.vc-card-wrap {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+.vc-card-wrap--leida {
+    opacity: 0.7;
+}
+.vc-card-wrap .vc-card {
+    flex: 1;
+}
+
+/* ── Botón borrar ── */
+.vc-btn-borrar {
+    flex-shrink: 0;
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    border-radius: var(--radius-lg);
+    color: #b91c1c;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 14px;
+    transition: background 0.15s;
+    align-self: stretch;
+}
+.vc-btn-borrar:hover:not(:disabled) { background: #fecaca; }
+.vc-btn-borrar:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Punto "no leída" ── */
+.vc-unread-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #2563eb;
+    flex-shrink: 0;
 }
 
 /* ── Card ── */
@@ -159,9 +197,8 @@
     display: flex;
     flex-direction: column;
     padding: var(--space-4);
-    max-width: 50%;
+    width: calc(100% - var(--space-4) * 2);
     margin: 0 auto;
-    width: 100%;
 }
 
 .vc-detail-card {

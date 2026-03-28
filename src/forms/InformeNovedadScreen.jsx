@@ -10,6 +10,7 @@ import { db }         from "../firebase";
 import { generarPDFInformeNovedad } from "../utils/generarPDFInforme";
 import { fmtObjetivo } from "../utils/formatters";
 import { useClientesData } from "../hooks/useClientesData";
+import FirmaPanel from "../components/FirmaPanel";
 import "./InformeNovedadScreen.css";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -276,6 +277,22 @@ export default function InformeNovedadScreen({ onBack }) {
                         <div className="in-success-codigo">{guardadoCodigo}</div>
                     )}
                     <p className="in-success-sub">El informe de novedad quedó registrado y no puede modificarse.</p>
+                    <FirmaPanel
+                        tipo="informe_novedad"
+                        referenciaId={guardadoId}
+                        datos={{
+                            informeId:      guardadoId,
+                            codigo:         guardadoCodigo,
+                            clienteNombre:  clienteObj?.nombre    || "",
+                            objetivoNombre: objetivoObj?.nombre   || "",
+                            fecha:          datos.fecha           || "",
+                            hechoDenunciado,
+                            producidoPor:   user?.name            || "",
+                        }}
+                        label="Firmar informe de novedad"
+                        obligatoria={false}
+                        onOmitir={() => {}}
+                    />
                     <button className="in-btn in-btn--primary" onClick={handlePDF}>📄 Descargar PDF</button>
                     <button className="in-btn in-btn--ghost" onClick={onBack}>← Volver al panel</button>
                 </div>

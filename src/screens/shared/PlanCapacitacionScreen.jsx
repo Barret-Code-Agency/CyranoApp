@@ -7,8 +7,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import "./PlanCapacitacionScreen.css";
 
-const ANIO   = 2026;
-const ZONA   = "Santa Cruz";
+const ANIO   = new Date().getFullYear();   // dinámico — no hardcodeado
 const MESES  = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const MK     = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 
@@ -57,7 +56,7 @@ function mesProg(items, m) { return items.reduce((s, it) => s + (it.prog[m] || 0
 function mesEjec(items, m) { return items.reduce((s, it) => s + (it.ejec[m] || 0), 0); }
 
 // ── Componente ─────────────────────────────────────────────────────────────────
-export default function PlanCapacitacionScreen({ onBack }) {
+export default function PlanCapacitacionScreen({ onBack, zona = "Santa Cruz" }) {
     const { empresaNombre } = useAppData();
     const [items,       setItems]       = useState(null);
     const [cargando,    setCargando]    = useState(true);
@@ -65,7 +64,7 @@ export default function PlanCapacitacionScreen({ onBack }) {
     const [guardado,    setGuardado]    = useState(false);
     const [editResp,    setEditResp]    = useState({ idx: null, val: "" });
 
-    const docId = `${empresaNombre}_santacruz_${ANIO}`;
+    const docId = `${empresaNombre}_${zona.toLowerCase().replace(/\s+/g, "_")}_${ANIO}`;
 
     // ── Carga ────────────────────────────────────────────────────
     useEffect(() => {
@@ -95,7 +94,7 @@ export default function PlanCapacitacionScreen({ onBack }) {
         setGuardando(true);
         try {
             await setDoc(doc(db, "planCapacitacion", docId), {
-                empresa: empresaNombre, zona: ZONA, anio: ANIO,
+                empresa: empresaNombre, zona, anio: ANIO,
                 items, actualizadoEn: serverTimestamp(),
             });
             setGuardado(true);

@@ -1,6 +1,7 @@
 // src/config/constants.js — Constantes globales del sistema
 
 // ── Super admin ────────────────────────────────────────────────────────────────
+// TODO: mover a Firestore (colección "config_global") para no hardcodear por empresa
 export const SUPER_ADMIN_EMAIL = "supervision.brinks@gmail.com";
 
 // ── Empresa fallback ───────────────────────────────────────────────────────────
